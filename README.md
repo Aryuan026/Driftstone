@@ -1,2 +1,5 @@
 # Hippocove
-Memory extraction, traceability, and anchor system
+
+Where traces come home.
+
+Hippocove is a memory cove for extraction, traceability, anchors, and return.
