@@ -1,0 +1,12 @@
+{
+  "name": "hippocove-backend",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "start": "node index.js",
+    "mcp": "node mcp-server.js",
+    "materialize:sql-roots": "node scripts/materialize-sql-roots.js",
+    "materialize:sql-vines": "node scripts/materialize-sql-vines.js"
+  }
+}

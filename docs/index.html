@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hippocove</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --panel: rgba(255,255,255,0.86);
+      --panel-strong: rgba(255,255,255,0.94);
+      --text: #1f2533;
+      --muted: #6b7280;
+      --line: rgba(99,102,241,0.16);
+      --accent: #111827;
+      --shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "SF Pro Text", "PingFang SC", "Helvetica Neue", "Noto Sans CJK SC", -apple-system, sans-serif;
+      background:
+        radial-gradient(circle at 10% 20%, rgba(59,130,246,0.09), transparent 30%),
+        radial-gradient(circle at 85% 12%, rgba(99,102,241,0.08), transparent 26%),
+        linear-gradient(180deg, #fbfcff 0%, #f4f6fb 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 42px 22px 64px;
+    }
+    .hero {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      border-radius: 28px;
+      padding: 34px 34px 28px;
+      backdrop-filter: blur(16px);
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.86);
+      border: 1px solid rgba(99,102,241,0.16);
+      color: #475569;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    h1 {
+      font-size: clamp(34px, 6vw, 64px);
+      line-height: 1.05;
+      margin: 18px 0 12px;
+      letter-spacing: -0.035em;
+    }
+    .lead {
+      margin: 0;
+      max-width: 820px;
+      font-size: 17px;
+      line-height: 1.8;
+      color: #3c4658;
+    }
+    .hero-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 22px;
+    }
+    .hero-links a,
+    .cta {
+      text-decoration: none;
+      padding: 11px 16px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      border: 1px solid rgba(15,23,42,0.08);
+      background: var(--panel-strong);
+      color: var(--text);
+    }
+    .cta.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 22px;
+    }
+    .card {
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+      border-radius: 22px;
+      padding: 22px;
+    }
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 19px;
+    }
+    .card p, .card li {
+      font-size: 14px;
+      line-height: 1.75;
+      color: #455065;
+    }
+    ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+    .meta {
+      margin-top: 20px;
+      padding: 18px 20px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.74);
+      border: 1px solid var(--line);
+      color: #4b5563;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+    .meta strong { color: #111827; }
+    footer {
+      margin-top: 26px;
+      color: #667085;
+      font-size: 13px;
+    }
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: 1fr; }
+      .hero { padding: 24px 22px 22px; }
+      .wrap { padding: 22px 14px 44px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="eyebrow">Hippocove · open alpha · memory workbench</div>
+      <h1>给人格型 AI 搭一张<br />不会轻易失忆的桌子</h1>
+      <p class="lead">
+        Hippocove 想做的，不是把聊天压成几条摘要。它更像一间还在施工、但已经能开工的工坊：原始对话先落进缓存，切片、去冗余、保留溯源，再慢慢长成能放进 Obsidian 的记忆卡。
+      </p>
+      <div class="hero-links">
+        <a class="cta primary" href="../README.md">先读 README</a>
+        <a class="cta" href="../PROJECT_STATUS.md">看项目状态</a>
+        <a class="cta" href="./HIPPOCOVE_TECH_HANDOFF.md">技术交底</a>
+        <a class="cta" href="./HIPPOCOVE_MCP_AGENT_HANDOFF.md">MCP / agent handoff</a>
+        <a class="cta" href="./HIPPOCOVE_HAND_TEST_MAP.md">手测地图</a>
+      </div>
+    </section>
+
+    <div class="grid">
+      <article class="card">
+        <h2>它在试什么</h2>
+        <p>
+          这套仓真正难的，不是某一句 prompt，而是工作台本身：怎么让原料不丢、上下文不爆、人格种子能继续活、记忆生长能记账、原文溯源还能回去。
+        </p>
+      </article>
+      <article class="card">
+        <h2>现在已经通到哪</h2>
+        <ul>
+          <li>ingest / reviewed / growth / export 主链连通</li>
+          <li>共享人格工位与语言指纹可复用</li>
+          <li>MCP 工具可驱动任务推进</li>
+          <li>旧实验台保留明文核对与调参能力</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h2>怎么看这个仓</h2>
+        <p>
+          把它当成一套可继续长的半成品工位来看，而不是最终答案。正式前台像入口，旧实验台像工坊，后端和 MCP 像心脏与机械臂。
+        </p>
+      </article>
+      <article class="card">
+        <h2>怎么先手测</h2>
+        <p>
+          先看首页，再进旧实验台核人格工位和批次结果，最后看主卡生长和导出。别一上来只盯 UI，也别一头扎进代码。
+        </p>
+      </article>
+      <article class="card">
+        <h2>谁适合接手</h2>
+        <p>
+          想自己调模型、调提示词、调人格种子、调旧实验台流程的人，会比只想开箱即用的人更适合它。
+        </p>
+      </article>
+    </div>
+
+    <section class="meta">
+      <strong>联合开发署名</strong><br />
+      主导、判断、调参、取舍：阿鸢<br />
+      联合开发与实现：Codex（OpenAI GPT-5，桌面代理协作环境）
+    </section>
+
+    <section class="meta">
+      <strong>快速入口</strong><br />
+      公开版首页、旧实验台、技术交底、MCP handoff、手测地图，这五处合起来，才是别人第一次接手时最顺的全景图。
+    </section>
+
+    <footer>
+      这一版公开的不是“封顶产品”，而是一个已经能跑、也欢迎别人继续改的记忆工作台。
+    </footer>
+  </div>
+</body>
+</html>

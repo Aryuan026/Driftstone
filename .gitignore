@@ -1,0 +1,41 @@
+.DS_Store
+
+# local runtime save
+data/runtime_save/**
+!data/runtime_save/
+!data/runtime_save/README.md
+!data/runtime_save/truth_layer/
+!data/runtime_save/truth_layer/README.md
+!data/runtime_save/truth_layer/sql_roots/
+!data/runtime_save/truth_layer/sql_roots/latest.json
+!data/runtime_save/truth_layer/sql_vines/
+!data/runtime_save/truth_layer/sql_vines/latest.json
+!data/runtime_save/truth_layer/scopes/
+!data/runtime_save/truth_layer/scopes/README.md
+!data/runtime_save/truth_layer/ingest_packets/
+!data/runtime_save/truth_layer/ingest_packets/README.md
+
+# private local fixtures and inbox payloads
+data/local_fixtures/**
+!data/local_fixtures/
+!data/local_fixtures/README.md
+!data/local_fixtures/stage_dropbox/
+!data/local_fixtures/stage_dropbox/README.md
+data/inbox/*.json
+
+# local exports and audit packets
+outbox/**
+!outbox/
+!outbox/README.md
+docs/audits/checkpoints/**
+!docs/audits/checkpoints/
+!docs/audits/checkpoints/README.md
+
+# scratch space
+tmp/**
+!tmp/
+!tmp/README.md
+
+# desktop shell
+node_modules/
+dist/
