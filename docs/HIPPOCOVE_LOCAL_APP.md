@@ -126,7 +126,10 @@
 
 1. 在仓根目录跑 `npm install`
 2. 本地调试：`npm run dev`
-3. Windows 安装包：`npm run pack:win`
-4. mac 安装包：`npm run pack:mac`
+3. Windows x64 便携版 `exe`：`npm run pack:win`
+4. Windows 安装器：`npm run pack:win:installer`
+5. mac 安装包：`npm run pack:mac`
+
+默认产物会落在仓根目录的 `dist/` 里。当前最适合直接发人的，是 `npm run pack:win` 打出来的 Windows x64 便携版 `exe`。
 
 这代表它已经开始从“脚本启动的本地工位”往“可打包桌面应用”长过去了。

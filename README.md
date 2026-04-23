@@ -138,14 +138,16 @@ Hippocove 不是一把“帮你总结聊天记录”的快刀。
 - `npm install`
 - `npm run dev`
 - `npm run pack:win`
+- `npm run pack:win:installer`
 - `npm run pack:mac`
 
 我也把边界继续说死：
 
-- 现在已经是**能往桌面应用打包的骨架**
-- 但我还没在这台机器上直接产出 Windows 的 `.exe`
+- 现在已经是**能往桌面应用打包、并且已经能产出 Windows portable `.exe` 的骨架**
+- `npm run pack:win` 默认产出更稳的 Windows x64 便携版 `exe`
+- 如果后面还想继续追 Windows 安装器，再跑 `npm run pack:win:installer`
 
-也就是说，这一刀是把船骨架和引擎架好了，不是嘴上说“以后能开”。真要出给别人下载的安装包，下一步就是在有 Electron 依赖和对应打包环境的机器上把它打出来。
+也就是说，这一刀已经不是“以后能开”的口头承诺了，仓里已经能打出真包。当前更像是先把最稳、最适合直接发人的 portable `exe` 抓在手里；安装器这一支还可以后面再长。
 
 ## 本地运行
 
