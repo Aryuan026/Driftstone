@@ -2,13 +2,16 @@
   "name": "hippocove-desktop",
   "private": true,
   "version": "0.1.0",
+  "description": "Hippocove local workbench desktop shell",
+  "author": "Aryuan026",
   "type": "module",
   "main": "main.mjs",
   "scripts": {
-    "dev": "electron .",
-    "pack:dir": "electron-builder --dir",
-    "pack:win": "electron-builder --win nsis portable",
-    "pack:mac": "electron-builder --mac dmg zip"
+    "dev": "node ./node_modules/electron/cli.js .",
+    "pack:dir": "node ./node_modules/electron-builder/cli.js --dir",
+    "pack:win": "node ./node_modules/electron-builder/cli.js --win portable --x64",
+    "pack:win:installer": "node ./node_modules/electron-builder/cli.js --win nsis --x64",
+    "pack:mac": "node ./node_modules/electron-builder/cli.js --mac dmg zip"
   },
   "devDependencies": {
     "electron": "^36.3.0",
@@ -17,6 +20,7 @@
   "build": {
     "appId": "com.hippocove.desktop",
     "productName": "Hippocove",
+    "electronVersion": "35.7.5",
     "directories": {
       "output": "dist"
     },
@@ -43,9 +47,14 @@
       "category": "public.app-category.productivity"
     },
     "win": {
+      "artifactName": "Hippocove-${version}-${arch}.${ext}",
       "target": [
-        "nsis",
-        "portable"
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
