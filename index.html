@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Hippocove</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" />
+  <link rel="stylesheet" href="./ui/app.css?v=20260420k" />
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <h1>Hippocove</h1>
+        <p class="topbar-subtitle">把聊天记录整理成可导入 Obsidian 的结果</p>
+      </div>
+      <div class="topbar-actions">
+        <span class="runtime-stamp" id="runtimeStamp">build 20260420k</span>
+        <button class="text-link reset-link" id="resetLocalWorkspaceBtn" type="button" title="清空本机 API 方案、提取缓存和导出草稿">重置本地工作台</button>
+        <a class="text-link" href="./legacy/index.html" target="_blank" rel="noopener noreferrer">旧实验台</a>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <article class="panel flow-step generation-step">
+        <div class="panel-head">
+          <div>
+            <h2>API 设置</h2>
+          </div>
+          <span class="status-pill" id="apiStatusPill">未测试</span>
+        </div>
+
+        <div class="step-main">
+          <form class="api-form" onsubmit="return false;">
+            <div class="api-grid">
+              <div class="field">
+                <div class="field-label-row">
+                  <label for="apiProfileSelect">已保存方案</label>
+                  <span class="field-meta" id="apiProfilesMeta">正在读取</span>
+                </div>
+                <select id="apiProfileSelect">
+                  <option value="">请选择方案</option>
+                </select>
+              </div>
+              <div class="field">
+                <div class="field-label-row">
+                  <label for="apiModelDisplay">当前模型</label>
+                </div>
+                <input id="apiModelDisplay" type="text" readonly placeholder="跟随所选方案显示" />
+              </div>
+              <div class="api-row-inline api-test-row">
+                <div class="action-row action-row-single api-button-wrap">
+                  <button class="btn secondary" id="testApiBtn" type="button">测试连接</button>
+                </div>
+                <p class="hint api-inline-result" id="apiTestResultText">当前还没测试。</p>
+              </div>
+            </div>
+          </form>
+
+          <div class="setup-callout">
+            <div class="setup-callout-head">
+              <p class="setup-callout-title">开跑前先去旧实验台确认这四件事</p>
+              <a class="text-link small" href="./legacy/index.html?tab=t2&focus=memo-settings" target="_blank" rel="noopener noreferrer">去旧实验台设置</a>
+            </div>
+            <div class="setup-callout-list">
+              <p><strong>默认分片：</strong>首页默认按“分片提取”理解。</p>
+              <p><strong>默认原文追溯：</strong>首页默认按“开启原文追溯”理解，后面写卡会继续用这条线索。</p>
+              <p><strong>步骤 3 身份锚点：</strong>别忘了填 `{{char}} / {{user}}`，不然人称和关系位容易漂。</p>
+              <p><strong>步骤 4 提取间隔：</strong>这是跑感受和 token 消耗的关键旋钮，开跑前最好先定下来。</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel flow-step">
+        <div class="panel-head">
+          <div>
+            <h2>上传原始记录</h2>
+          </div>
+          <span class="status-pill" id="parseStatusPill">未开始</span>
+        </div>
+
+        <div class="step-main parse-main">
+          <div class="field">
+            <input id="conversationFile" type="file" accept=".md,.txt,.json,text/markdown,text/plain,application/json" multiple />
+            <p class="hint" id="fileStatus">上传提取源文件（.md / .txt / .json）。</p>
+            <p class="hint">单次建议不超过 20MB；更大的原始导出先去 <a class="text-link small" href="./legacy/index.html?tab=t1" target="_blank" rel="noopener noreferrer">旧实验台</a> 做窗口拆分。已经拆好的月内窗口包可以直接多选上传。</p>
+          </div>
+
+          <div class="action-row action-row-parse">
+            <button class="btn primary" id="startParseBtn" type="button">开始解析</button>
+            <button class="btn secondary" id="pauseParseBtn" type="button" disabled>暂停处理</button>
+            <button class="btn secondary" id="resumeParseBtn" type="button" disabled>从断点继续</button>
+            <button class="btn secondary" id="exportMaterialsBtn" type="button">下载原料</button>
+          </div>
+
+          <p class="lead-hint" id="parseSummary">开始后会先做智能分片，再用当前 API 逐片处理并完成本次去重。</p>
+
+          <div class="progress-block">
+            <div class="progress-track">
+              <div class="progress-fill" id="parseProgressFill"></div>
+            </div>
+            <div class="progress-meta">
+              <span id="parseProgressText">0%</span>
+              <span id="parseProgressDetail">未开始</span>
+            </div>
+          </div>
+
+          <div class="parse-status-band" id="parseStatusBand" aria-live="polite"></div>
+
+          <p class="hint" id="materialNote"></p>
+        </div>
+      </article>
+
+      <article class="panel flow-step">
+        <div class="panel-head">
+          <div>
+            <h2>人格记忆生成</h2>
+          </div>
+          <span class="status-pill" id="generationStatusPill">未开始</span>
+        </div>
+
+        <div class="callout-card persona-bridge-card">
+          <div class="persona-bridge-line">
+            <p class="bridge-meta" id="personaBridgeMeta">请在旧实验台收集表达指纹、汇总人格卡草稿。</p>
+            <a class="text-link bridge-link" id="legacyPersonaLink" href="./legacy/index.html?tab=t8&focus=persona-style" target="_blank" rel="noopener noreferrer">打开人格工位</a>
+          </div>
+          <p class="bridge-summary" id="personaBridgeSummary">还没读到当前人格档案，请先去旧实验台补人设卡。</p>
+        </div>
+
+        <div class="callout-card persona-bridge-card">
+          <div class="persona-bridge-line">
+            <p class="bridge-meta" id="compactBridgeMeta">主卡写完后，会先在旧实验台的“记忆整编”里收成更适合召回的主记忆。</p>
+            <a class="text-link bridge-link" id="legacyCompactLink" href="./legacy/index.html?tab=t9" target="_blank" rel="noopener noreferrer">打开记忆整编</a>
+          </div>
+          <p class="bridge-summary" id="compactBridgeSummary">这一步会先把太像的卡收一遍，再把整编后的包交给你。</p>
+        </div>
+
+        <div class="reminder-card" id="generationApiReminder">
+          <p class="mini-title">生成提醒</p>
+          <div class="detail-list reminder-list">
+            <p>提取人格和语言指纹的准确度会受素材影响，尽量选择你最满意、最像它自己的那段时期来跑。</p>
+            <p>⚠️ 提取效果受所用模型影响。不同模型对情感浓度、亲密表达、冲突语言的容忍阈值不同，可能会把高情感内容转译或稀释，也可能跳过亲密场景，或者把冲突语言洗软。</p>
+            <p>首轮提取尽量选限制更少的模型。整个过程会消耗大量 token，跑完之后最好人工校对，把被模型回避的部分补回来。</p>
+          </div>
+        </div>
+
+        <div class="generation-block">
+          <div class="progress-block">
+            <div class="progress-track">
+              <div class="progress-fill" id="generationProgressFill"></div>
+            </div>
+            <div class="progress-meta">
+              <span id="generationProgressText">0%</span>
+              <span id="generationProgressDetail">未开始</span>
+            </div>
+          </div>
+
+          <div class="action-row action-row-main">
+            <button class="btn primary" id="generateMemoryBtn" type="button">开始生成</button>
+            <button class="btn secondary" id="downloadBundleBtn" type="button" disabled>下载整编 Obsidian 包</button>
+          </div>
+          <p class="hint">如谈话涉及真实世界信息，请到 <a class="text-link small" href="./legacy/index.html?tab=t6" target="_blank" rel="noopener noreferrer">旧实验台</a> 做去隐私筛查后，再单独导出。</p>
+        </div>
+      </article>
+
+      <article class="panel flow-step growth-watch-panel">
+        <div class="panel-head compact-head">
+          <div>
+            <h2>Obsidian 星图</h2>
+          </div>
+          <span class="status-pill" id="frontGrowthStatusPill">待命</span>
+        </div>
+
+        <div class="growth-watch-visual">
+          <div class="front-growth-visual" id="frontGrowthVisual">
+            <div class="hint">半壁星河与卿度，一念灵犀两心知</div>
+          </div>
+        </div>
+      </article>
+    </main>
+  </div>
+
+    <script type="module" src="./ui/app.js?v=20260420k"></script>
+  </body>
+</html>

@@ -1,0 +1,56 @@
+{
+  "name": "hippocove-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "dev": "electron .",
+    "pack:dir": "electron-builder --dir",
+    "pack:win": "electron-builder --win nsis portable",
+    "pack:mac": "electron-builder --mac dmg zip"
+  },
+  "devDependencies": {
+    "electron": "^36.3.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.hippocove.desktop",
+    "productName": "Hippocove",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.mjs",
+      "index.html",
+      "ui/**/*",
+      "legacy/**/*",
+      "server/**/*",
+      "docs/**/*",
+      "README.md",
+      "PROJECT_STATUS.md",
+      "!data/**",
+      "!output/**",
+      "!tmp/**",
+      "!**/.DS_Store"
+    ],
+    "asar": true,
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
