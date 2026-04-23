@@ -1,4 +1,4 @@
-# Hippocove
+# Part of the Hippocove memory ecosystem
 
 Where traces come home.
 
