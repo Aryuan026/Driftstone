@@ -1,5 +1,7 @@
 # Hippocove
 
+Where traces come home.
+
 Hippocove 不是一把“帮你总结聊天记录”的快刀。
 
 它更像一张被人和 AI 一起磨出来的工作台：原始对话先落进缓存，切片、去冗余、保留溯源，再慢慢长成能放进 Obsidian 的记忆卡。
