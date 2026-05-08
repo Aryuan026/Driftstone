@@ -120,6 +120,19 @@ Hippocove 不是一把“帮你总结聊天记录”的快刀。
 
 也就是说，用户机器上仍然需要先有 `Node.js 20+`。如果你要追求那种连 Node 都不用装、双击就像普通桌面软件一样起来，那下一阶段就不是脚本整理，而是打包成真正的桌面应用。
 
+## 上传原料的边界
+
+Hippocove / Driftstone 适合吃已经整理过的素材：`.md`、`.txt`、Driftstone 原料包 JSON，或者 PawTrail 导出的窗口/月包。
+
+如果手里是 ChatGPT 官方导出的原始 `conversations.json`，尤其是超大 JSON，不要直接上传到这里。先用 [PawTrail](https://aryuan026.github.io/PawTrail/) 读取和拆分，再把拆好的窗口/月包带回 Hippocove 继续做人格记忆生成。
+
+前台会做几层护栏：
+
+- 单个文件超过 20MB 会直接提示先拆分，不再尝试整包读入浏览器。
+- 检测到 ChatGPT 原始 `conversations.json` 会提示先走 PawTrail。
+- JSON 损坏、后端请求过大、本地后端没连接等问题会转成用户能照做的提示。
+- 本地后端的解析启动请求上限已和前台 20MB 建议对齐，避免“前台说可以、后端却拒收”的错位。
+
 ## 桌面打包骨架
 
 这仓现在已经补了桌面壳骨架：

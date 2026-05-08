@@ -2,7 +2,9 @@ import { getJson, postJson } from './api-client.js';
 import { buildRuntimeMaterialsExport } from './bridges/memo-runtime-bridge.js';
 
 const STORAGE_KEY = 'hippocove-runtime-flow-v7';
-const RUNTIME_BUILD_LABEL = 'build 20260420k';
+const RUNTIME_BUILD_LABEL = 'build 20260508a';
+const DIRECT_SOURCE_FILE_LIMIT_BYTES = 20 * 1024 * 1024;
+const START_PARSE_PAYLOAD_LIMIT_BYTES = 28 * 1024 * 1024;
 const SHARED_API_STORAGE_KEY = 'hippocove_api_config';
 const API_PROFILES_STORAGE_KEY = 'hippocove_api_profiles';
 const LEGACY_PERSONA_CARD_STORAGE_KEY = 'hippocove_main_persona_card';
@@ -158,6 +160,56 @@ function prettyChars(count) {
   if (!Number.isFinite(num) || num <= 0) return '0 字';
   if (num >= 10000) return `${(num / 10000).toFixed(1)} 万字`;
   return `${num} 字`;
+}
+
+function prettyBytes(bytes) {
+  const num = Number(bytes || 0);
+  if (!Number.isFinite(num) || num <= 0) return '0 B';
+  if (num >= 1024 * 1024 * 1024) return `${(num / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  if (num >= 1024 * 1024) return `${(num / 1024 / 1024).toFixed(1)} MB`;
+  if (num >= 1024) return `${(num / 1024).toFixed(1)} KB`;
+  return `${num} B`;
+}
+
+function createSourceError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function describeSourceError(error, file) {
+  const raw = safeText(error?.message || error, '文件读取失败。');
+  let reason = raw;
+  let action = '请重新选择 `.md`、`.txt`、Driftstone 原料包 JSON，或 PawTrail 导出的窗口/月包。';
+
+  if (error?.code === 'SOURCE_TOO_LARGE') {
+    reason = '这个文件太大，不适合直接丢进 Driftstone 前台。';
+    action = '请先用 PawTrail 处理原始 ChatGPT 导出，再上传拆好的窗口/月包；单次文件控制在 20MB 以内。';
+  } else if (error?.code === 'CHATGPT_EXPORT') {
+    reason = '检测到这是 ChatGPT 原始 conversations.json。';
+    action = '请先打开 PawTrail，把它拆成窗口/月包，再回到 Driftstone 上传处理后的素材。';
+  } else if (error?.code === 'INVALID_JSON') {
+    reason = '这个 JSON 没有读完整，或格式已经损坏。';
+    action = '请重新下载/导出文件；如果是 ChatGPT 原始导出，请先用 PawTrail 读取。';
+  } else if (error?.code === 'PAYLOAD_TOO_LARGE' || /request body too large/i.test(raw)) {
+    reason = '这批素材太大，启动解析时没法一次送进本地后端。';
+    action = '请减少本次上传文件数量，或先在 PawTrail / 旧实验台拆成更小的窗口包后分批处理。';
+  } else if (/failed to fetch|networkerror|load failed/i.test(raw)) {
+    reason = '前台没有连上本地后端。';
+    action = '请确认本地启动脚本还开着，然后刷新页面重试。';
+  }
+
+  const name = file && file.name ? `\n文件：${file.name}` : '';
+  const detail = raw && raw !== reason ? `\n排查细节：${raw}` : '';
+  return `读取失败：${reason}\n下一步：${action}${name}${detail}`;
+}
+
+function estimateJsonBytes(value) {
+  try {
+    return new TextEncoder().encode(JSON.stringify(value)).length;
+  } catch {
+    return 0;
+  }
 }
 
 function createSessionId() {
@@ -874,9 +926,26 @@ function detectJsonInput(parsed) {
   return null;
 }
 
+function looksLikeChatGptExport(parsed) {
+  const conversations = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed?.conversations)
+      ? parsed.conversations
+      : parsed?.mapping
+        ? [parsed]
+        : [];
+  return conversations.some((item) => item && item.mapping && typeof item.mapping === 'object');
+}
+
 async function normalizeConversationFile(file) {
   const name = safeText(file?.name, 'upload');
   const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+  if (Number(file?.size || 0) > DIRECT_SOURCE_FILE_LIMIT_BYTES) {
+    throw createSourceError(
+      'SOURCE_TOO_LARGE',
+      `${name} 有 ${prettyBytes(file.size)}，超过 Driftstone 前台建议的 ${prettyBytes(DIRECT_SOURCE_FILE_LIMIT_BYTES)}。`
+    );
+  }
   const text = await file.text();
   const defaultFormat = file?.type
     || (ext === 'json'
@@ -890,6 +959,9 @@ async function normalizeConversationFile(file) {
   if (ext === 'json' || defaultFormat === 'application/json') {
     try {
       const parsed = JSON.parse(text);
+      if (looksLikeChatGptExport(parsed)) {
+        throw createSourceError('CHATGPT_EXPORT', '这是 ChatGPT 原始 conversations.json。');
+      }
       const detected = detectJsonInput(parsed);
       if (detected) {
         return {
@@ -902,8 +974,9 @@ async function normalizeConversationFile(file) {
           description: detected.description
         };
       }
-    } catch {
-      // fall through
+    } catch (error) {
+      if (error?.code) throw error;
+      throw createSourceError('INVALID_JSON', error?.message || 'Invalid JSON');
     }
   }
 
@@ -1483,6 +1556,13 @@ function deriveParseModel() {
   } else if (state.parseRunning) {
     tone = 'live';
     label = '处理中';
+  }
+
+  if (state.parseError) {
+    percent = Math.max(percent, hasSource ? 10 : 0);
+    label = '解析失败';
+    detail = state.parseError;
+    tone = 'error';
   }
 
   const steps = [
@@ -2312,6 +2392,19 @@ async function startParse() {
   };
   state.generationProgress = 0;
   state.generationLabel = '未开始';
+  const scope = buildParseScope();
+  const payloadBytes = estimateJsonBytes({
+    scope,
+    source_envelope: envelope,
+    parse_plan: state.parsePlan,
+    api_config: activeApi
+  });
+  if (payloadBytes > START_PARSE_PAYLOAD_LIMIT_BYTES) {
+    throw createSourceError(
+      'PAYLOAD_TOO_LARGE',
+      `本次解析请求约 ${prettyBytes(payloadBytes)}，超过建议上限 ${prettyBytes(START_PARSE_PAYLOAD_LIMIT_BYTES)}。`
+    );
+  }
 
   setParseRunning(true);
   startPolling();
@@ -2324,7 +2417,6 @@ async function startParse() {
   });
 
   try {
-    const scope = buildParseScope();
     await startParseRuntimeRequest({
       scope,
       sourceEnvelope: envelope,
@@ -2334,7 +2426,7 @@ async function startParse() {
     await refreshParseDashboard();
     refreshFingerprintCandidates();
   } catch (error) {
-    state.parseError = error.message;
+    state.parseError = describeSourceError(error, state.loadedFile);
     stopPolling();
     state.parsePaused = false;
     state.parsePauseRequested = false;
@@ -2382,7 +2474,7 @@ async function resumeParse() {
     await refreshParseDashboard();
     refreshFingerprintCandidates();
   } catch (error) {
-    state.parseError = error.message;
+    state.parseError = describeSourceError(error, state.loadedFile);
     stopPolling();
     state.parsePaused = true;
     state.parsePauseRequested = false;
@@ -2896,7 +2988,7 @@ function bindInputs() {
     } catch (error) {
       state.loadedFile = null;
       state.parsePlan = null;
-      els.fileStatus.textContent = `文件读取失败：${error.message}`;
+      els.fileStatus.textContent = describeSourceError(error, files[0]);
     }
   });
 
@@ -2916,7 +3008,7 @@ function bindButtons() {
 
   els.startParseBtn.addEventListener('click', () => {
     startParse().catch((error) => {
-      state.parseError = error.message;
+      state.parseError = describeSourceError(error, state.loadedFile);
       stopPolling();
       state.parsePaused = false;
       state.parsePauseRequested = false;
@@ -2937,7 +3029,7 @@ function bindButtons() {
   if (els.resumeParseBtn) {
     els.resumeParseBtn.addEventListener('click', () => {
       resumeParse().catch((error) => {
-        state.parseError = error.message;
+        state.parseError = describeSourceError(error, state.loadedFile);
         stopPolling();
         state.parsePaused = true;
         state.parsePauseRequested = false;

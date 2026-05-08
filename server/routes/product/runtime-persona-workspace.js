@@ -294,7 +294,7 @@ export async function handleRuntimePersonaWorkspaceRoute(req, res, url) {
         || url.pathname === '/api/runtime/parse-runtime/start'
         || url.pathname === '/api/runtime/parse-runtime/resume'
       )
-        ? 12 * 1024 * 1024
+        ? 32 * 1024 * 1024
         : 2 * 1024 * 1024
     );
     const scope = readScopeFromBody(body);

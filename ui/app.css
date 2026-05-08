@@ -249,6 +249,10 @@ input[readonly] {
   color: #596579;
 }
 
+#fileStatus {
+  white-space: pre-line;
+}
+
 .hint-action-row {
   display: flex;
   align-items: center;
