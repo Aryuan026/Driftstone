@@ -126,6 +126,8 @@ Hippocove / Driftstone 适合吃已经整理过的素材：`.md`、`.txt`、Drif
 
 如果手里是 ChatGPT 官方导出的原始 `conversations.json`，尤其是超大 JSON，不要直接上传到这里。先用 [PawTrail](https://aryuan026.github.io/PawTrail/) 读取和拆分，再把拆好的窗口/月包带回 Hippocove 继续做人格记忆生成。
 
+和 PawTrail 不一样，Hippocove / Driftstone 不是纯静态网页工具。完整流程需要本地 Node 后端；GitHub Pages 最多作为项目说明页，不能替代本地启动后的工作台。
+
 前台会做几层护栏：
 
 - 单个文件超过 20MB 会直接提示先拆分，不再尝试整包读入浏览器。
