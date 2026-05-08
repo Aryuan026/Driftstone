@@ -2,7 +2,7 @@ import { getJson, postJson } from './api-client.js';
 import { buildRuntimeMaterialsExport } from './bridges/memo-runtime-bridge.js';
 
 const STORAGE_KEY = 'hippocove-runtime-flow-v7';
-const RUNTIME_BUILD_LABEL = 'build 20260508a';
+const RUNTIME_BUILD_LABEL = 'build 20260508b';
 const DIRECT_SOURCE_FILE_LIMIT_BYTES = 20 * 1024 * 1024;
 const START_PARSE_PAYLOAD_LIMIT_BYTES = 28 * 1024 * 1024;
 const SHARED_API_STORAGE_KEY = 'hippocove_api_config';
@@ -184,16 +184,16 @@ function describeSourceError(error, file) {
 
   if (error?.code === 'SOURCE_TOO_LARGE') {
     reason = '这个文件太大，不适合直接丢进 Driftstone 前台。';
-    action = '请先用 PawTrail 处理原始 ChatGPT 导出，再上传拆好的窗口/月包；单次文件控制在 20MB 以内。';
+    action = '请先到旧实验台的“对话导出器”做按月拼接，再把生成的窗口/月包带回这里；PawTrail 也可以作为在线拆包入口。';
   } else if (error?.code === 'CHATGPT_EXPORT') {
     reason = '检测到这是 ChatGPT 原始 conversations.json。';
-    action = '请先打开 PawTrail，把它拆成窗口/月包，再回到 Driftstone 上传处理后的素材。';
+    action = '请先点右上角“旧实验台”，在第一个“对话导出器”页面做按月拼接；之后再把导出的窗口/月包上传到这里。';
   } else if (error?.code === 'INVALID_JSON') {
     reason = '这个 JSON 没有读完整，或格式已经损坏。';
-    action = '请重新下载/导出文件；如果是 ChatGPT 原始导出，请先用 PawTrail 读取。';
+    action = '请重新下载/导出文件；如果是 ChatGPT 原始导出，请先用旧实验台“对话导出器”读取。';
   } else if (error?.code === 'PAYLOAD_TOO_LARGE' || /request body too large/i.test(raw)) {
     reason = '这批素材太大，启动解析时没法一次送进本地后端。';
-    action = '请减少本次上传文件数量，或先在 PawTrail / 旧实验台拆成更小的窗口包后分批处理。';
+    action = '请减少本次上传文件数量，或先在旧实验台按月/按窗口拆成更小的包后分批处理。';
   } else if (/failed to fetch|networkerror|load failed/i.test(raw)) {
     reason = '前台没有连上本地后端。';
     action = '请确认本地启动脚本还开着，然后刷新页面重试。';

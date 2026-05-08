@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Hippocove</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" />
-  <link rel="stylesheet" href="./ui/app.css?v=20260508a" />
+  <link rel="stylesheet" href="./ui/app.css?v=20260508b" />
 </head>
 <body>
   <div class="page">
@@ -15,7 +15,7 @@
         <p class="topbar-subtitle">把聊天记录整理成可导入 Obsidian 的结果</p>
       </div>
       <div class="topbar-actions">
-        <span class="runtime-stamp" id="runtimeStamp">build 20260508a</span>
+        <span class="runtime-stamp" id="runtimeStamp">build 20260508b</span>
         <button class="text-link reset-link" id="resetLocalWorkspaceBtn" type="button" title="清空本机 API 方案、提取缓存和导出草稿">重置本地工作台</button>
         <a class="text-link" href="./legacy/index.html" target="_blank" rel="noopener noreferrer">旧实验台</a>
       </div>
@@ -84,7 +84,7 @@
           <div class="field">
             <input id="conversationFile" type="file" accept=".md,.txt,.json,text/markdown,text/plain,application/json" multiple />
             <p class="hint" id="fileStatus">上传提取源文件（.md / .txt / .json）。</p>
-            <p class="hint">单次建议不超过 20MB；原始 ChatGPT 导出的 conversations.json 请先用 <a class="text-link small" href="https://aryuan026.github.io/PawTrail/" target="_blank" rel="noopener noreferrer">PawTrail</a> 拆成窗口/月包，再回到这里上传。</p>
+            <p class="hint">这里适合上传已整理素材；原始 ChatGPT conversations.json 或更大的 JSON，请先到 <a class="text-link small" href="./legacy/index.html?tab=t1" target="_blank" rel="noopener noreferrer">旧实验台 · 对话导出器</a> 做按月拼接。PawTrail 也可作为在线拆包入口。</p>
           </div>
 
           <div class="action-row action-row-parse">
@@ -181,6 +181,6 @@
     </main>
   </div>
 
-    <script type="module" src="./ui/app.js?v=20260508a"></script>
+    <script type="module" src="./ui/app.js?v=20260508b"></script>
   </body>
 </html>

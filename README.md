@@ -122,18 +122,20 @@ Hippocove 不是一把“帮你总结聊天记录”的快刀。
 
 ## 上传原料的边界
 
-Hippocove / Driftstone 适合吃已经整理过的素材：`.md`、`.txt`、Driftstone 原料包 JSON，或者 PawTrail 导出的窗口/月包。
+Hippocove / Driftstone 有两层入口：
 
-如果手里是 ChatGPT 官方导出的原始 `conversations.json`，尤其是超大 JSON，不要直接上传到这里。先用 [PawTrail](https://aryuan026.github.io/PawTrail/) 读取和拆分，再把拆好的窗口/月包带回 Hippocove 继续做人格记忆生成。
+- 旧实验台第一个页面「对话导出器」：负责吃 ChatGPT 官方导出的原始 `conversations.json`，做窗口预览、按日期筛选、按窗口拆分和按月拼接。这个入口本来就可以处理较大的 OpenAI JSON。
+- 正式前台「上传原始记录」：更适合吃已经整理过的素材，例如 `.md`、`.txt`、Driftstone 原料包 JSON，或者旧实验台 / PawTrail 导出的窗口包、月包。
 
-和 PawTrail 不一样，Hippocove / Driftstone 不是纯静态网页工具。完整流程需要本地 Node 后端；GitHub Pages 最多作为项目说明页，不能替代本地启动后的工作台。
+如果手里是 ChatGPT 官方导出的原始 `conversations.json`，先走旧实验台「对话导出器」是 Driftstone 内部最顺的路线。[PawTrail](https://aryuan026.github.io/PawTrail/) 也可以作为纯在线拆包入口，尤其适合用户只想上传大 JSON 并快速导出窗口/月包的时候。
+
+和 PawTrail 不一样，Hippocove / Driftstone 的完整记忆生成流程需要本地 Node 后端；GitHub Pages 最多作为项目说明页，不能替代本地启动后的工作台。
 
 前台会做几层护栏：
 
-- 单个文件超过 20MB 会直接提示先拆分，不再尝试整包读入浏览器。
-- 检测到 ChatGPT 原始 `conversations.json` 会提示先走 PawTrail。
+- 正式前台检测到大文件或 ChatGPT 原始 `conversations.json` 会提示先走旧实验台「对话导出器」。
 - JSON 损坏、后端请求过大、本地后端没连接等问题会转成用户能照做的提示。
-- 本地后端的解析启动请求上限已和前台 20MB 建议对齐，避免“前台说可以、后端却拒收”的错位。
+- 本地后端的解析启动请求上限已和正式前台建议对齐，避免“前台说可以、后端却拒收”的错位。
 
 ## 桌面打包骨架
 

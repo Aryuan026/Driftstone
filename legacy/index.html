@@ -1012,7 +1012,7 @@
       font-size: 11px;
       margin-right: 6px;
     }
-    .warn { color: var(--warn); font-size: 12px; }
+    .warn { color: var(--warn); font-size: 12px; white-space: pre-line; }
     .hidden { display: none; }
     .block-card {
       border: 1px solid var(--line);
@@ -1438,8 +1438,8 @@
     <div class="panel left-panel">
       <h2>对话导出器</h2>
       <div class="field">
-        <label>上传 conversation.json（OpenAI 导出）</label>
-        <input id="convFile" type="file" accept="application/json" />
+        <label>上传 conversations.json（OpenAI 导出）</label>
+        <input id="convFile" type="file" accept=".json,application/json" />
       </div>
       <button class="btn spacer-top spacer-bottom" id="renderBtn">解析并预览</button>
       <div class="row">
@@ -1455,7 +1455,7 @@
       <div class="row">
         <button class="btn secondary" id="filterByDateBtn">按日期范围筛选窗口</button>
       </div>
-      <div class="hint">说明：.doc 为 Word 可打开的 HTML 文档格式，适合快速查看与二次编辑。</div>
+      <div class="hint">说明：这里可以直接处理 ChatGPT 官方导出的 conversations.json，并支持按窗口拆分、跨窗口拼接与按月拼接。.doc 为 Word 可打开的 HTML 文档格式，适合快速查看与二次编辑。</div>
       <div class="warn" id="parseWarn"></div>
       <div class="row">
         <button class="btn secondary" id="selectAllBtn">全选窗口</button>
@@ -1505,7 +1505,7 @@
       </div>
       <div class="hint">预览窗口来自左侧日期筛选后的窗口集合；左侧勾选用于批量导出，右侧只负责当前窗口预览与单窗口导出。大文件建议先用左侧日期范围筛选，避免一次性渲染全部对话。</div>
       <div class="viewer" id="chatViewer">
-        <div class="meta">请先上传 conversation.json 并点击“解析并预览”</div>
+        <div class="meta">请先上传 conversations.json 并点击“解析并预览”</div>
       </div>
     </div>
   </section>
@@ -2502,7 +2502,7 @@
       let conversations = [];
       if (Array.isArray(json)) conversations = json;
       else if (json && json.conversations && Array.isArray(json.conversations)) conversations = json.conversations;
-      else if (json && json.mapping) conversations = [json];
+      else if (json && (json.mapping || Array.isArray(json.messages))) conversations = [json];
       const all = [];
       conversations.forEach(c => {
         const messages = c.mapping ? linearizeConversation(c) : ((c.messages || []).map(normalizeMessage));
@@ -2526,6 +2526,184 @@
         }
       });
       return all;
+    }
+
+    const OPENAI_STREAM_PARSE_THRESHOLD = 80 * 1024 * 1024;
+    const OPENAI_FULL_PARSE_FALLBACK_LIMIT = 260 * 1024 * 1024;
+
+    function prettyBytes(bytes) {
+      const num = Number(bytes || 0);
+      if (!Number.isFinite(num) || num <= 0) return '0 B';
+      if (num >= 1024 * 1024 * 1024) return `${(num / 1024 / 1024 / 1024).toFixed(1)} GB`;
+      if (num >= 1024 * 1024) return `${(num / 1024 / 1024).toFixed(1)} MB`;
+      if (num >= 1024) return `${(num / 1024).toFixed(1)} KB`;
+      return `${num} B`;
+    }
+
+    function createImportError(code, message) {
+      const err = new Error(message);
+      err.code = code;
+      return err;
+    }
+
+    function describeOpenAIImportError(error, file) {
+      const raw = String((error && error.message) || error || '解析失败').replace(/\s+/g, ' ').trim();
+      let reason = raw || '没有成功读取这个文件。';
+      let action = '请确认上传的是 ChatGPT 官方导出的 conversations.json，或 Driftstone 已导出的窗口/月包 JSON。';
+      if (error && error.code === 'NO_FILE') {
+        reason = '还没有选择文件。';
+        action = '请先点“上传 conversations.json”，选择 ChatGPT 导出的 JSON 文件。';
+      } else if (error && error.code === 'NO_CONVERSATIONS') {
+        reason = '文件读到了，但没有识别到对话窗口。';
+        action = '请确认不是 message_feedback.json、model_comparisons.json 或其它导出文件；需要 conversations.json。';
+      } else if (error instanceof SyntaxError || /unexpected|json/i.test(raw)) {
+        reason = 'JSON 内容不完整或格式损坏。';
+        action = '请重新下载 / 重新导出 ChatGPT 数据；如果文件正在同步，等同步完成后再选。';
+      } else if (/还没读完整|unexpected end/i.test(raw)) {
+        reason = '文件还没读完整，可能下载不完整或被截断。';
+        action = '请重新下载导出文件，确认文件大小稳定后再上传。';
+      } else if (/top-level array|数组项|格式不符合预期/i.test(raw)) {
+        reason = '这个 JSON 结构不像 ChatGPT conversations.json。';
+        action = '请回到 ChatGPT 导出包里，选择名字为 conversations.json 的文件。';
+      } else if (/memory|allocation/i.test(raw)) {
+        reason = '浏览器内存不够，没能完成解析。';
+        action = '请关闭其它标签页后重试；如果仍然不行，再用 PawTrail 先拆成更小的窗口/月包。';
+      }
+      const name = file && file.name ? `\n文件：${file.name}` : '';
+      const detail = raw && raw !== reason ? `\n排查细节：${raw}` : '';
+      return `解析失败：${reason}\n下一步：${action}${name}${detail}`;
+    }
+
+    function progressText(prefix, loaded, total, parsed) {
+      return `${prefix}：${prettyBytes(loaded)} / ${total ? prettyBytes(total) : '?'}，已识别 ${parsed || 0} 个窗口`;
+    }
+
+    async function* textChunksFromFile(file, onProgress) {
+      if (!file || !file.stream || typeof file.stream !== 'function') {
+        yield await file.text();
+        return;
+      }
+      const reader = file.stream().getReader();
+      const decoder = new TextDecoder('utf-8');
+      let loaded = 0;
+      while (true) {
+        const result = await reader.read();
+        if (result.done) break;
+        loaded += result.value.byteLength;
+        if (onProgress) onProgress({ loaded, total: file.size || 0 });
+        const text = decoder.decode(result.value, { stream: true });
+        if (text) yield text;
+      }
+      const tail = decoder.decode();
+      if (tail) yield tail;
+    }
+
+    async function* iterJsonArrayItemsFromChunks(chunks) {
+      let buf = '';
+      let started = false;
+      let itemStart = -1;
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+      let scanPos = 0;
+
+      for await (const chunk of chunks) {
+        buf += chunk;
+        if (!started) {
+          const trimmed = buf.trimStart();
+          if (trimmed && trimmed[0] && trimmed[0] !== '[') {
+            throw createImportError('NOT_TOP_LEVEL_ARRAY', '流式读取只支持顶层数组格式。');
+          }
+          const arrayStart = buf.indexOf('[');
+          if (arrayStart === -1) {
+            if (buf.length > 1024 * 1024) buf = buf.slice(-128);
+            continue;
+          }
+          buf = buf.slice(arrayStart + 1);
+          started = true;
+          scanPos = 0;
+        }
+
+        for (let i = scanPos; i < buf.length; i += 1) {
+          const ch = buf[i];
+          if (itemStart < 0) {
+            if (ch === ']') return;
+            if (ch === ',' || /\s/.test(ch)) continue;
+            if (ch !== '{' && ch !== '[') {
+              throw createImportError('BAD_ARRAY_ITEM', 'conversations.json 格式不符合预期：数组项不是对象。');
+            }
+            itemStart = i;
+            depth = 0;
+            inString = false;
+            escaped = false;
+          }
+          if (inString) {
+            if (escaped) escaped = false;
+            else if (ch === '\\') escaped = true;
+            else if (ch === '"') inString = false;
+            continue;
+          }
+          if (ch === '"') {
+            inString = true;
+          } else if (ch === '{' || ch === '[') {
+            depth += 1;
+          } else if (ch === '}' || ch === ']') {
+            depth -= 1;
+            if (depth === 0) {
+              const itemText = buf.slice(itemStart, i + 1);
+              yield JSON.parse(itemText);
+              buf = buf.slice(i + 1);
+              i = -1;
+              scanPos = 0;
+              itemStart = -1;
+            }
+          }
+        }
+        scanPos = buf.length;
+        if (itemStart < 0 && buf.length > 1024 * 1024) {
+          buf = buf.slice(-1024);
+          scanPos = buf.length;
+        }
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+
+      if (itemStart >= 0) throw createImportError('INCOMPLETE_JSON', 'conversations.json 还没读完整，文件可能损坏。');
+    }
+
+    async function parseOpenAIInputFile(file, warnEl) {
+      if (!file) throw createImportError('NO_FILE', '还没有选择文件。');
+      if (Number(file.size || 0) >= OPENAI_STREAM_PARSE_THRESHOLD && file.stream) {
+        const all = [];
+        let parsed = 0;
+        try {
+          const chunks = textChunksFromFile(file, p => {
+            if (warnEl) warnEl.textContent = progressText('正在读取大 JSON', p.loaded, p.total, parsed);
+          });
+          for await (const item of iterJsonArrayItemsFromChunks(chunks)) {
+            const convs = parseOpenAIJson(item);
+            all.push(...convs);
+            parsed += 1;
+            if (parsed % 20 === 0) {
+              if (warnEl) warnEl.textContent = `正在整理窗口：已识别 ${parsed} 个窗口`;
+              await new Promise(resolve => setTimeout(resolve, 0));
+            }
+          }
+          if (!all.length) throw createImportError('NO_CONVERSATIONS', '没有识别到对话内容。');
+          return all;
+        } catch (error) {
+          if (Number(file.size || 0) > OPENAI_FULL_PARSE_FALLBACK_LIMIT) throw error;
+          if (warnEl) warnEl.textContent = '流式读取未命中顶层数组，正在改用兼容模式读取…';
+        }
+      }
+
+      if (warnEl && Number(file.size || 0) >= OPENAI_STREAM_PARSE_THRESHOLD) {
+        warnEl.textContent = `正在读取 JSON：${prettyBytes(file.size || 0)}。浏览器可能需要一点时间。`;
+      }
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const conversations = parseOpenAIJson(json);
+      if (!conversations.length) throw createImportError('NO_CONVERSATIONS', '没有识别到对话内容。');
+      return conversations;
     }
 
     function normalizeTimestamp(ts) {
@@ -3474,13 +3652,7 @@
         return;
       }
       try {
-        const text = await file.text();
-        const json = JSON.parse(text);
-        const conversations = parseOpenAIJson(json);
-        if (!conversations.length) {
-          warn.textContent = '未识别到对话内容，请检查格式。';
-          return;
-        }
+        const conversations = await parseOpenAIInputFile(file, warn);
         allConversations = conversations.map((c, i) => ({ ...c, id: c.id || `conv-${i}` }));
         const allTs = allConversations
           .flatMap(c => timelineCandidateMessages(c.messages).map(m => normalizeTimestamp(m.ts)))
@@ -3503,7 +3675,7 @@
         updatePreviewFromSelection();
         warn.textContent = parseMessage;
       } catch (e) {
-        warn.textContent = '解析失败：' + e.message;
+        warn.textContent = describeOpenAIImportError(e, file);
       }
     });
 
