@@ -1441,6 +1441,15 @@
         <label>上传 conversations.json（OpenAI 导出）</label>
         <input id="convFile" type="file" accept=".json,application/json" />
       </div>
+      <div class="field">
+        <label>ChatGPT 编辑 / 分支处理</label>
+        <select id="branchMode">
+          <option value="edits" selected>当前版本 + 编辑记录（推荐）</option>
+          <option value="active">只看当前版本</option>
+          <option value="latest">只看时间最新版本</option>
+          <option value="all">全部版本（编辑记录 + 重新生成）</option>
+        </select>
+      </div>
       <button class="btn spacer-top spacer-bottom" id="renderBtn">解析并预览</button>
       <div class="row">
         <div class="field">
@@ -1455,7 +1464,7 @@
       <div class="row">
         <button class="btn secondary" id="filterByDateBtn">按日期范围筛选窗口</button>
       </div>
-      <div class="hint">说明：这里可以直接处理 ChatGPT 官方导出的 conversations.json，并支持按窗口拆分、跨窗口拼接与按月拼接。.doc 为 Word 可打开的 HTML 文档格式，适合快速查看与二次编辑。</div>
+      <div class="hint">说明：这里可以直接处理 ChatGPT 官方导出的 conversations.json，并支持按窗口拆分、跨窗口拼接与按月拼接。点“编辑”改过某句消息时，推荐模式会带出当前版本和用户编辑记录；信息来自 conversations.json，不需要额外上传 zip。</div>
       <div class="warn" id="parseWarn"></div>
       <div class="row">
         <button class="btn secondary" id="selectAllBtn">全选窗口</button>
@@ -2392,13 +2401,23 @@
     let selectedConversationIds = new Set();
     let activePreviewConversationId = '';
 
-    function normalizeMessage(msg) {
+    function extractOpenAIContent(content) {
+      if (content && Array.isArray(content.parts)) {
+        return content.parts.map(part => {
+          if (typeof part === 'string') return part;
+          if (part && typeof part === 'object') return part.text || part.content || part.name || '';
+          return '';
+        }).filter(Boolean).join('\n');
+      }
+      if (typeof content === 'string') return content;
+      if (content && typeof content.text === 'string') return content.text;
+      return '';
+    }
+
+    function normalizeMessage(msg, nodeId = '') {
       const role = (msg && msg.author && msg.author.role) || (msg && msg.role) || 'assistant';
-      let content = '';
-      if (msg && msg.content && msg.content.parts) content = msg.content.parts.join('\n');
-      else if (msg && typeof msg.content === 'string') content = msg.content;
-      else if (msg && msg.content && msg.content.text) content = msg.content.text;
-      const rawTs = msg && msg.create_time
+      const content = extractOpenAIContent(msg && msg.content);
+      const rawTs = msg && msg.create_time !== undefined && msg.create_time !== null
         ? msg.create_time
         : (msg && msg.metadata && (msg.metadata.timestamp || msg.metadata.timestamp_))
           ? (msg.metadata.timestamp || msg.metadata.timestamp_)
@@ -2423,6 +2442,7 @@
         || (msg && msg.metadata && (msg.metadata.source_msg_index || msg.metadata.sourceMsgIndex))
         || 0;
       const out = { role, content: normalized, ts };
+      if (nodeId) out.source_node_id = nodeId;
       if (sourceWindowId) out.source_window_id = sourceWindowId;
       if (sourceWindowTitle) out.source_window_title = sourceWindowTitle;
       const sourceMsgIndex = normalizePositiveSourceMsgIndex(sourceMsgIndexRaw);
@@ -2448,68 +2468,294 @@
       return parseFlexibleTimestamp(rawTs);
     }
 
-    function getLatestSubtreeTimestamp(nodeId, mapping, cache, stack) {
+    function getLatestSubtreeTimestamp(nodeId, mapping, cache) {
       if (!nodeId || !mapping[nodeId]) return 0;
       if (cache[nodeId] !== undefined) return cache[nodeId];
-      if (stack.has(nodeId)) return getNodeMessageTimestamp(mapping[nodeId]);
 
-      stack.add(nodeId);
-      const node = mapping[nodeId];
-      let bestTs = getNodeMessageTimestamp(node);
-      const children = (node && node.children) ? node.children : [];
-      for (let i = 0; i < children.length; i += 1) {
-        const childId = children[i];
-        const childTs = getLatestSubtreeTimestamp(childId, mapping, cache, stack);
-        if (childTs > bestTs) bestTs = childTs;
+      const visiting = new Set();
+      const stack = [{ id: nodeId, phase: 0 }];
+      while (stack.length) {
+        const frame = stack[stack.length - 1];
+        const id = frame.id;
+        const node = mapping[id];
+        if (!id || !node) {
+          stack.pop();
+          continue;
+        }
+        if (cache[id] !== undefined) {
+          stack.pop();
+          continue;
+        }
+        if (frame.phase === 0) {
+          if (visiting.has(id)) {
+            cache[id] = getNodeMessageTimestamp(node);
+            stack.pop();
+            continue;
+          }
+          visiting.add(id);
+          frame.phase = 1;
+          const children = (node && node.children) ? node.children : [];
+          for (let i = children.length - 1; i >= 0; i -= 1) {
+            const childId = children[i];
+            if (!mapping[childId] || cache[childId] !== undefined) continue;
+            stack.push({ id: childId, phase: 0 });
+          }
+          continue;
+        }
+
+        let bestTs = getNodeMessageTimestamp(node);
+        const children = (node && node.children) ? node.children : [];
+        for (let i = 0; i < children.length; i += 1) {
+          const childId = children[i];
+          const childTs = cache[childId] !== undefined
+            ? cache[childId]
+            : (mapping[childId] ? getNodeMessageTimestamp(mapping[childId]) : 0);
+          if (childTs > bestTs) bestTs = childTs;
+        }
+        cache[id] = bestTs;
+        visiting.delete(id);
+        stack.pop();
       }
-      stack.delete(nodeId);
-      cache[nodeId] = bestTs;
-      return bestTs;
+      return cache[nodeId] || 0;
+    }
+
+    function findRootIds(mapping) {
+      const roots = Object.keys(mapping || {}).filter(id => {
+        const parentId = mapping[id] && mapping[id].parent;
+        return parentId === null || !mapping[parentId];
+      });
+      return roots.length ? roots : Object.keys(mapping || {}).slice(0, 1);
+    }
+
+    function collectPathToRoot(mapping, nodeId) {
+      if (!nodeId || !mapping[nodeId]) return [];
+      const ids = [];
+      const seen = new Set();
+      while (nodeId && !seen.has(nodeId) && mapping[nodeId]) {
+        seen.add(nodeId);
+        ids.push(nodeId);
+        nodeId = mapping[nodeId].parent;
+      }
+      ids.reverse();
+      return ids;
+    }
+
+    function collectLatestBranchPath(mapping) {
+      const ids = [];
+      const allIds = Object.keys(mapping || {});
+      if (!allIds.length) return ids;
+      const cache = {};
+      const rootIds = findRootIds(mapping);
+      let rootId = rootIds[0];
+      rootIds.forEach(id => {
+        if (getLatestSubtreeTimestamp(id, mapping, cache) > getLatestSubtreeTimestamp(rootId, mapping, cache)) rootId = id;
+      });
+      const visited = new Set();
+      let nodeId = rootId;
+      while (nodeId && !visited.has(nodeId) && mapping[nodeId]) {
+        visited.add(nodeId);
+        ids.push(nodeId);
+        const node = mapping[nodeId];
+        const children = ((node && node.children) ? node.children : []).filter(childId => mapping[childId]);
+        if (!children.length) break;
+        let nextId = children[0];
+        children.forEach(childId => {
+          if (getLatestSubtreeTimestamp(childId, mapping, cache) > getLatestSubtreeTimestamp(nextId, mapping, cache)) nextId = childId;
+        });
+        nodeId = nextId;
+      }
+      return ids;
+    }
+
+    function collectLeafBranchPaths(mapping) {
+      const cache = {};
+      const paths = [];
+      const stack = findRootIds(mapping).reverse().map(rootId => ({ nodeId: rootId, path: [rootId] }));
+      while (stack.length) {
+        const item = stack.pop();
+        const node = mapping[item.nodeId] || {};
+        const children = ((node && node.children) ? node.children : [])
+          .filter(childId => mapping[childId] && !item.path.includes(childId));
+        if (!children.length) {
+          paths.push(item.path);
+          continue;
+        }
+        children
+          .sort((a, b) => getLatestSubtreeTimestamp(b, mapping, cache) - getLatestSubtreeTimestamp(a, mapping, cache))
+          .forEach(childId => stack.push({ nodeId: childId, path: item.path.concat(childId) }));
+      }
+      return paths;
+    }
+
+    function getNodeRole(mapping, nodeId) {
+      const node = mapping[nodeId] || {};
+      const msg = node.message || {};
+      return (msg.author && msg.author.role) || msg.role || '';
+    }
+
+    function getSiblingChoiceIds(mapping, nodeId, role) {
+      const node = mapping[nodeId] || {};
+      const parentId = node.parent;
+      const parent = parentId ? mapping[parentId] : null;
+      if (!parent) return [];
+      return ((parent.children || []) || []).filter(childId => {
+        if (!mapping[childId]) return false;
+        if (role) return getNodeRole(mapping, childId) === role;
+        return true;
+      });
+    }
+
+    function getPathVersionEvents(mapping, pathIds) {
+      const events = [];
+      pathIds.forEach((nodeId, idx) => {
+        const role = getNodeRole(mapping, nodeId);
+        if (role !== 'user' && role !== 'assistant') return;
+        const choices = getSiblingChoiceIds(mapping, nodeId, role);
+        if (choices.length < 2) return;
+        events.push({
+          type: role === 'user' ? 'edit' : 'regenerate',
+          node_id: nodeId,
+          parent_node: (mapping[nodeId] || {}).parent || '',
+          choice_count: choices.length,
+          choice_index: Math.max(0, choices.indexOf(nodeId)) + 1,
+          message_index: idx
+        });
+      });
+      return events;
+    }
+
+    function pathHasUserEdit(mapping, pathIds) {
+      return getPathVersionEvents(mapping, pathIds).some(item => item.type === 'edit');
+    }
+
+    function collectEditedBranchPaths(mapping, currentPath) {
+      const paths = collectLeafBranchPaths(mapping).filter(path => pathHasUserEdit(mapping, path));
+      const currentKey = (currentPath || []).join('/');
+      if (currentKey && pathHasUserEdit(mapping, currentPath) && !paths.some(path => path.join('/') === currentKey)) {
+        paths.push(currentPath);
+      }
+      return paths.length ? paths : [(currentPath || []).length ? currentPath : collectLatestBranchPath(mapping)];
+    }
+
+    function pathToMessages(mapping, pathIds) {
+      const out = [];
+      for (let i = 0; i < pathIds.length; i += 1) {
+        const node = mapping[pathIds[i]];
+        if (!node || !node.message) continue;
+        const m = normalizeMessage(node.message, pathIds[i]);
+        if (m.content) out.push(m);
+      }
+      return out;
+    }
+
+    function firstPathDifference(pathIds, currentPath) {
+      const maxLen = Math.max(pathIds.length, currentPath.length);
+      for (let i = 0; i < maxLen; i += 1) {
+        if (pathIds[i] !== currentPath[i]) return i;
+      }
+      return -1;
+    }
+
+    function buildBranchRecord(conv, pathIds, index, isCurrent, mapping, currentPath) {
+      const leafId = pathIds[pathIds.length - 1] || '';
+      const convId = conv.id || conv.conversation_id || conv.title || 'conversation';
+      const versionEvents = mapping ? getPathVersionEvents(mapping, pathIds) : [];
+      const editEvents = versionEvents.filter(item => item.type === 'edit');
+      const regenerateEvents = versionEvents.filter(item => item.type === 'regenerate');
+      const diffIndex = currentPath && currentPath.length ? firstPathDifference(pathIds, currentPath) : -1;
+      const divergenceNode = diffIndex >= 0 ? pathIds[diffIndex] : '';
+      const divergenceRole = divergenceNode && mapping ? getNodeRole(mapping, divergenceNode) : '';
+      let branchKind = 'branch';
+      if (isCurrent) branchKind = editEvents.length ? 'current_edit' : 'current';
+      else if (divergenceRole === 'user') branchKind = 'edit';
+      else if (divergenceRole === 'assistant') branchKind = 'regenerate';
+      else if (editEvents.length) branchKind = 'edit';
+      else if (regenerateEvents.length) branchKind = 'regenerate';
+
+      const serial = String(index).padStart(3, '0');
+      const branchLabel = isCurrent
+        ? 'current'
+        : (branchKind === 'edit' ? `edit-${serial}` : (branchKind === 'regenerate' ? `regenerate-${serial}` : `alternate-${serial}`));
+      const displayLabel = isCurrent
+        ? (branchKind === 'current_edit' ? '当前编辑版本' : '当前版本')
+        : (branchKind === 'edit' ? `编辑版本-${serial}` : (branchKind === 'regenerate' ? `重新生成-${serial}` : `分支-${serial}`));
+      return {
+        branch_id: `${slugifySourceToken(convId, 'conversation')}__b${serial}__${slugifySourceToken(String(leafId).slice(0, 12), 'leaf')}`,
+        branch_label: branchLabel,
+        display_label: displayLabel,
+        branch_kind: branchKind,
+        leaf_node: leafId,
+        divergence_node: divergenceNode,
+        divergence_parent: divergenceNode && mapping && mapping[divergenceNode] ? (mapping[divergenceNode].parent || '') : '',
+        divergence_message_index: diffIndex,
+        edit_count: editEvents.length,
+        regenerate_count: regenerateEvents.length,
+        edit_nodes: editEvents.map(item => item.node_id),
+        regenerate_nodes: regenerateEvents.map(item => item.node_id),
+        is_current_branch: Boolean(isCurrent),
+        node_path: pathIds.slice(),
+        node_count: pathIds.length
+      };
+    }
+
+    function linearizeConversationBranches(conv, branchMode) {
+      if (!conv || !conv.mapping) {
+        const messages = ((conv && conv.messages) || []).map(msg => normalizeMessage(msg)).filter(m => m.content);
+        return messages.length ? [{ messages, branch: null }] : [];
+      }
+      const mapping = conv.mapping;
+      const currentPath = collectPathToRoot(mapping, conv.current_node);
+      const latestPath = collectLatestBranchPath(mapping);
+      let paths = [];
+      if (branchMode === 'all') {
+        paths = collectLeafBranchPaths(mapping);
+        const currentKey = currentPath.join('/');
+        if (currentPath.length && !paths.some(path => path.join('/') === currentKey)) paths.push(currentPath);
+      } else if (branchMode === 'edits') {
+        paths = collectEditedBranchPaths(mapping, currentPath);
+      } else if (branchMode === 'latest') {
+        paths = [latestPath];
+      } else {
+        paths = [currentPath.length ? currentPath : latestPath];
+      }
+
+      const currentKey = currentPath.join('/');
+      const seen = new Set();
+      return paths.filter(path => path && path.length).map((path, idx) => {
+        const key = path.join('/');
+        if (seen.has(key)) return null;
+        seen.add(key);
+        const branch = buildBranchRecord(conv, path, idx + 1, Boolean(currentKey && key === currentKey), mapping, currentPath);
+        const messages = pathToMessages(mapping, path);
+        return messages.length ? { messages, branch } : null;
+      }).filter(Boolean);
     }
 
     function linearizeConversation(conv) {
-      if (!conv || !conv.mapping) return [];
-      const mapping = conv.mapping;
-      const out = [];
-      let order = 0;
-      Object.keys(mapping).forEach((id) => {
-        const node = mapping[id];
-        if (!node || !node.message) return;
-        const m = normalizeMessage(node.message);
-        if (!m.content) return;
-        out.push({ ...m, _order: order });
-        order += 1;
-      });
-      out.sort((a, b) => {
-        const ta = normalizeTimestamp(a.ts);
-        const tb = normalizeTimestamp(b.ts);
-        if (ta && tb && ta !== tb) return ta - tb;
-        if (ta && !tb) return -1;
-        if (!ta && tb) return 1;
-        return (a._order || 0) - (b._order || 0);
-      });
-      return out.map((m) => ({
-        role: m.role,
-        content: m.content,
-        ts: m.ts,
-        source_window_id: m.source_window_id,
-        source_window_title: m.source_window_title,
-        source_msg_index: m.source_msg_index
-      }));
+      const branches = linearizeConversationBranches(conv, 'active');
+      return branches.length ? branches[0].messages : [];
     }
 
-    function parseOpenAIJson(json) {
+    function parseOpenAIJson(json, branchMode = 'edits') {
       let conversations = [];
       if (Array.isArray(json)) conversations = json;
       else if (json && json.conversations && Array.isArray(json.conversations)) conversations = json.conversations;
       else if (json && (json.mapping || Array.isArray(json.messages))) conversations = [json];
       const all = [];
-      conversations.forEach(c => {
-        const messages = c.mapping ? linearizeConversation(c) : ((c.messages || []).map(normalizeMessage));
-        if (messages.length) {
+      conversations.forEach((c, i) => {
+        const branches = c.mapping ? linearizeConversationBranches(c, branchMode) : linearizeConversationBranches(c, 'active');
+        branches.forEach((item, branchIdx) => {
+          const branch = item.branch || {};
+          const messages = item.messages || [];
+          if (!messages.length) return;
+          const suffix = (branchMode === 'all' || branchMode === 'edits') && (branch.display_label || branch.branch_label)
+            ? ` [${branch.display_label || branch.branch_label}]`
+            : '';
+          const idBase = c.id || c.window_id || `conv-${i}`;
+          const idSuffix = branch.branch_id ? `-${branch.branch_id}` : `-${branchIdx}`;
           all.push({
-            id: c.id || c.window_id || '',
-            title: c.title || c.window_title || 'Conversation',
+            id: `${idBase}${(branchMode === 'all' || branchMode === 'edits') ? idSuffix : ''}`,
+            title: `${c.title || c.window_title || 'Conversation'}${suffix}`,
             month: c.month || c.month_key || '',
             time_node: c.time_node || c.time_node_key || '',
             source_ref: c.source_ref || '',
@@ -2521,9 +2767,10 @@
             source_window_count: Number.isFinite(Number(c.source_window_count))
               ? Number(c.source_window_count)
               : (Array.isArray(c.source_windows) ? c.source_windows.length : 0),
-            messages
+            messages,
+            branch
           });
-        }
+        });
       });
       return all;
     }
@@ -2670,7 +2917,7 @@
       if (itemStart >= 0) throw createImportError('INCOMPLETE_JSON', 'conversations.json 还没读完整，文件可能损坏。');
     }
 
-    async function parseOpenAIInputFile(file, warnEl) {
+    async function parseOpenAIInputFile(file, warnEl, branchMode = 'edits') {
       if (!file) throw createImportError('NO_FILE', '还没有选择文件。');
       if (Number(file.size || 0) >= OPENAI_STREAM_PARSE_THRESHOLD && file.stream) {
         const all = [];
@@ -2680,11 +2927,11 @@
             if (warnEl) warnEl.textContent = progressText('正在读取大 JSON', p.loaded, p.total, parsed);
           });
           for await (const item of iterJsonArrayItemsFromChunks(chunks)) {
-            const convs = parseOpenAIJson(item);
+            const convs = parseOpenAIJson(item, branchMode);
             all.push(...convs);
             parsed += 1;
             if (parsed % 20 === 0) {
-              if (warnEl) warnEl.textContent = `正在整理窗口：已识别 ${parsed} 个窗口`;
+              if (warnEl) warnEl.textContent = `正在整理窗口：已识别 ${parsed} 个窗口 / ${all.length} 条版本`;
               await new Promise(resolve => setTimeout(resolve, 0));
             }
           }
@@ -2701,7 +2948,7 @@
       }
       const text = await file.text();
       const json = JSON.parse(text);
-      const conversations = parseOpenAIJson(json);
+      const conversations = parseOpenAIJson(json, branchMode);
       if (!conversations.length) throw createImportError('NO_CONVERSATIONS', '没有识别到对话内容。');
       return conversations;
     }
@@ -2827,7 +3074,10 @@
         title.textContent = conv.title || `Conversation ${idx + 1}`;
         const range = document.createElement('div');
         range.className = 'window-meta';
-        range.textContent = `${formatDate(start)} ~ ${formatDate(end)} · ${validCount} 条`;
+        const branchText = conv.branch && conv.branch.branch_id
+          ? ` · ${branchKindLabel(conv.branch.branch_kind)}`
+          : '';
+        range.textContent = `${formatDate(start)} ~ ${formatDate(end)} · ${validCount} 条${branchText}`;
         meta.appendChild(title);
         meta.appendChild(range);
         item.appendChild(checkbox);
@@ -2915,12 +3165,36 @@
       }
       const { start, end } = getConversationRange(conv);
       const validCount = conv.messages.filter(m => m.content).length;
-      stats.textContent = `已勾选 ${chosen.length} 个窗口；当前预览：${conv.title || 'Conversation'} · ${formatDate(start)} ~ ${formatDate(end)} · ${validCount} 条`;
+      const branchText = conv.branch && conv.branch.branch_id
+        ? ` · ${branchKindLabel(conv.branch.branch_kind)}`
+        : '';
+      stats.textContent = `已勾选 ${chosen.length} 个窗口；当前预览：${conv.title || 'Conversation'} · ${formatDate(start)} ~ ${formatDate(end)} · ${validCount} 条${branchText}`;
     }
 
     function updatePreviewFromSelection() {
       syncSingleWindowSelect();
       renderActivePreviewConversation();
+    }
+
+    function branchKindLabel(kind) {
+      if (kind === 'current_edit') return '当前编辑版本';
+      if (kind === 'current') return '当前版本';
+      if (kind === 'edit') return '编辑记录';
+      if (kind === 'regenerate') return '重新生成';
+      return '普通分支';
+    }
+
+    function appendBranchInfoLines(lines, conv, prefix = '') {
+      const branch = conv && conv.branch ? conv.branch : null;
+      if (!branch || !branch.branch_id) return;
+      const parts = [
+        `版本: ${branch.display_label || branch.branch_label || branch.branch_id}`,
+        `类型: ${branchKindLabel(branch.branch_kind)}`,
+        `当前版本: ${branch.is_current_branch ? '是' : '否'}`
+      ];
+      if (branch.edit_count) parts.push(`编辑记录数: ${branch.edit_count}`);
+      if (branch.regenerate_count) parts.push(`重新生成记录数: ${branch.regenerate_count}`);
+      lines.push(`${prefix}${parts.join(' | ')}`);
     }
 
     function buildExportText(allConversations) {
@@ -2934,6 +3208,7 @@
         if (Array.isArray(conv.source_windows) && conv.source_windows.length) {
           lines.push(`SOURCE_WINDOWS: ${conv.source_windows.join(' | ')}`);
         }
+        appendBranchInfoLines(lines, conv);
         conv.messages.filter(m => m.content).forEach(m => {
           const marker = [];
           if (m.source_window_title || m.source_window_id) marker.push(`window="${m.source_window_title || m.source_window_id}"`);
@@ -2962,6 +3237,7 @@
         if (Array.isArray(conv.source_windows) && conv.source_windows.length) {
           lines.push(`> SOURCE_WINDOWS: ${conv.source_windows.join(' | ')}`);
         }
+        appendBranchInfoLines(lines, conv, '> ');
         conv.messages.filter(m => m.content).forEach((m) => {
           const role = String(m.role || 'assistant').toUpperCase();
           lines.push('');
@@ -3226,6 +3502,7 @@
         if (Array.isArray(c.source_windows) && c.source_windows.length) out.source_windows = c.source_windows.slice();
         if (Array.isArray(c.source_window_ranges) && c.source_window_ranges.length) out.source_window_ranges = c.source_window_ranges.map(item => ({ ...item }));
         if (Number.isFinite(Number(c.source_window_count))) out.source_window_count = Number(c.source_window_count);
+        if (c.branch && c.branch.branch_id) out.branch = { ...c.branch };
         return out;
       });
     }
@@ -3652,12 +3929,18 @@
         return;
       }
       try {
-        const conversations = await parseOpenAIInputFile(file, warn);
+        const branchMode = document.getElementById('branchMode')?.value || 'edits';
+        const conversations = await parseOpenAIInputFile(file, warn, branchMode);
         allConversations = conversations.map((c, i) => ({ ...c, id: c.id || `conv-${i}` }));
         const allTs = allConversations
           .flatMap(c => timelineCandidateMessages(c.messages).map(m => normalizeTimestamp(m.ts)))
           .filter(Boolean);
-        let parseMessage = '已解析完成。请在窗口列表中勾选要预览/导出的窗口。';
+        const modeLabel = branchMode === 'edits'
+          ? '当前版本 + 编辑记录'
+          : (branchMode === 'all'
+            ? '全部版本'
+            : (branchMode === 'latest' ? '时间最新版本' : '当前版本'));
+        let parseMessage = `已解析完成（${modeLabel}）。请在窗口列表中勾选要预览/导出的窗口。`;
         if (allTs.length) {
           const bounds = pickAutoDateBounds(allTs, { minTs: OPENAI_EXPORT_MIN_TS });
           const start = formatDate(bounds.start);

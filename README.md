@@ -124,10 +124,10 @@ Hippocove 不是一把“帮你总结聊天记录”的快刀。
 
 Hippocove / Driftstone 有两层入口：
 
-- 旧实验台第一个页面「对话导出器」：负责吃 ChatGPT 官方导出的原始 `conversations.json`，做窗口预览、按日期筛选、按窗口拆分和按月拼接。这个入口本来就可以处理较大的 OpenAI JSON。
+- 旧实验台第一个页面「对话导出器」：负责吃 ChatGPT 官方导出的原始 `conversations.json`，做窗口预览、按日期筛选、按窗口拆分和按月拼接。这个入口会流式读取较大的 OpenAI JSON，也能按 `current_node` 识别 ChatGPT 的当前版本、用户编辑记录和重新生成分支；900MB 级文件仍然取决于浏览器内存，不建议对外承诺“必定稳吃”。
 - 正式前台「上传原始记录」：更适合吃已经整理过的素材，例如 `.md`、`.txt`、Driftstone 原料包 JSON，或者旧实验台 / PawTrail 导出的窗口包、月包。
 
-如果手里是 ChatGPT 官方导出的原始 `conversations.json`，先走旧实验台「对话导出器」是 Driftstone 内部最顺的路线。[PawTrail](https://aryuan026.github.io/PawTrail/) 也可以作为纯在线拆包入口，尤其适合用户只想上传大 JSON 并快速导出窗口/月包的时候。
+如果手里是 ChatGPT 官方导出的原始 `conversations.json`，先走旧实验台「对话导出器」是 Driftstone 内部最顺的路线。[PawTrail](https://aryuan026.github.io/PawTrail/) 也可以作为纯在线拆包入口，尤其适合用户只想上传 900MB 级 JSON 并快速导出窗口/月包的时候。
 
 和 PawTrail 不一样，Hippocove / Driftstone 的完整记忆生成流程需要本地 Node 后端；GitHub Pages 最多作为项目说明页，不能替代本地启动后的工作台。
 
