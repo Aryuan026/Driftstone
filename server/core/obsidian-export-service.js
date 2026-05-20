@@ -161,6 +161,104 @@ function sanitizeSourceRefs(values = []) {
   ));
 }
 
+function chooseLongerTraceText(left = '', right = '') {
+  const leftText = safeText(left);
+  const rightText = safeText(right);
+  if (!leftText) return rightText;
+  if (!rightText) return leftText;
+  return rightText.length > leftText.length ? rightText : leftText;
+}
+
+function canonicalSourceContentKey(source = {}) {
+  const rawText = chooseLongerTraceText(source.text, source.preview);
+  const normalized = canonicalSemanticKey(rawText).slice(0, 2048);
+  if (normalized) return normalized;
+  return safeText(source.source_ref || source.slice_id || source.doc_id || source.source_title);
+}
+
+function mergeSourceItem(base = {}, incoming = {}) {
+  const preferIncoming = safeText(incoming.relation) === 'primary' && safeText(base.relation) !== 'primary';
+  const relation = preferIncoming || safeText(base.relation) === 'primary' ? 'primary' : 'related';
+  return {
+    ...base,
+    relation,
+    relation_label: relation === 'primary' ? '主证据' : '关联溯源',
+    source_ref: preferIncoming ? safeText(incoming.source_ref, base.source_ref) : safeText(base.source_ref, incoming.source_ref),
+    source_refs: sanitizeSourceRefs([
+      ...safeArray(base.source_refs, 512),
+      base.source_ref,
+      ...safeArray(incoming.source_refs, 512),
+      incoming.source_ref
+    ]),
+    source_packet_id: preferIncoming
+      ? safeText(incoming.source_packet_id, base.source_packet_id)
+      : safeText(base.source_packet_id, incoming.source_packet_id),
+    source_packet_ids: uniqueStrings([
+      ...safeArray(base.source_packet_ids, 64),
+      base.source_packet_id,
+      ...safeArray(incoming.source_packet_ids, 64),
+      incoming.source_packet_id
+    ], 64),
+    slice_id: preferIncoming ? safeText(incoming.slice_id, base.slice_id) : safeText(base.slice_id, incoming.slice_id),
+    slice_ids: uniqueStrings([
+      ...safeArray(base.slice_ids, 128),
+      base.slice_id,
+      ...safeArray(incoming.slice_ids, 128),
+      incoming.slice_id
+    ], 128),
+    slice_tail: preferIncoming ? safeText(incoming.slice_tail, base.slice_tail) : safeText(base.slice_tail, incoming.slice_tail),
+    source_title: preferIncoming
+      ? safeText(incoming.source_title, base.source_title)
+      : safeText(base.source_title, incoming.source_title),
+    source_titles: uniqueStrings([
+      ...safeArray(base.source_titles, 64),
+      base.source_title,
+      ...safeArray(incoming.source_titles, 64),
+      incoming.source_title
+    ], 64),
+    created_at: preferIncoming ? safeText(incoming.created_at, base.created_at) : safeText(base.created_at, incoming.created_at),
+    created_ats: uniqueStrings([
+      ...safeArray(base.created_ats, 64),
+      base.created_at,
+      ...safeArray(incoming.created_ats, 64),
+      incoming.created_at
+    ], 64),
+    prompt_hint: preferIncoming ? safeText(incoming.prompt_hint, base.prompt_hint) : safeText(base.prompt_hint, incoming.prompt_hint),
+    prompt_hints: uniqueStrings([
+      ...safeArray(base.prompt_hints, 32),
+      base.prompt_hint,
+      ...safeArray(incoming.prompt_hints, 32),
+      incoming.prompt_hint
+    ], 32),
+    preview: chooseLongerTraceText(base.preview, incoming.preview),
+    text: chooseLongerTraceText(base.text, incoming.text),
+    merged_source_count: Math.max(1, Number(base.merged_source_count || 1)) + Math.max(1, Number(incoming.merged_source_count || 1))
+  };
+}
+
+function dedupeSourceItems(items = []) {
+  const groups = new Map();
+  for (const item of Array.isArray(items) ? items : []) {
+    const key = canonicalSourceContentKey(item);
+    if (!key) continue;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        ...item,
+        source_refs: sanitizeSourceRefs([item.source_ref]),
+        source_packet_ids: uniqueStrings([item.source_packet_id], 64),
+        slice_ids: uniqueStrings([item.slice_id], 128),
+        source_titles: uniqueStrings([item.source_title], 64),
+        created_ats: uniqueStrings([item.created_at], 64),
+        prompt_hints: uniqueStrings([item.prompt_hint], 32),
+        merged_source_count: 1
+      });
+      continue;
+    }
+    groups.set(key, mergeSourceItem(groups.get(key), item));
+  }
+  return Array.from(groups.values());
+}
+
 function buildFamilyTag(family = '') {
   const text = safeScopeSegment(family, '');
   return text ? `family/${text}` : '';
@@ -647,7 +745,7 @@ async function loadSourceItems(artifact = {}) {
       text: text.replace(/\[object Object\]/g, '').trim()
     });
   }
-  return items;
+  return dedupeSourceItems(items);
 }
 
 function renderBulletSection(lines, heading, values = []) {
@@ -718,6 +816,24 @@ function renderMemoCardMarkdown(meta = {}, sourceFiles = []) {
 
 function renderSourceTraceMarkdown(source = {}, memoMeta = {}, memoBundlePath = '', sourceTopics = []) {
   const noteTitle = safeText(source.title, buildSourceNoteTitle(source));
+  const sourceRefs = sanitizeSourceRefs([
+    ...safeArray(source.source_refs, 512),
+    source.source_ref
+  ]);
+  const sourceSliceIds = uniqueStrings([
+    ...safeArray(source.slice_ids, 128),
+    source.slice_id
+  ], 128);
+  const sourceTitles = uniqueStrings([
+    ...safeArray(source.source_titles, 64),
+    source.source_title
+  ], 64);
+  const mergedSourceCount = Math.max(
+    1,
+    Number(source.merged_source_count || 0) || 0,
+    sourceRefs.length,
+    sourceSliceIds.length
+  );
   const noteTags = uniqueStrings([
     'source-backtrace',
     `trace/${safeText(source.relation, 'related')}`,
@@ -735,6 +851,10 @@ function renderSourceTraceMarkdown(source = {}, memoMeta = {}, memoBundlePath = 
   lines.push(`source_title: ${renderYamlScalar(source.source_title)}`);
   lines.push(`source_created_at: ${renderYamlScalar(source.created_at)}`);
   lines.push(`source_ref: ${renderYamlScalar(source.source_ref)}`);
+  lines.push(`merged_source_count: ${renderYamlScalar(String(mergedSourceCount))}`);
+  lines.push(renderYamlArray('source_slice_ids', sourceSliceIds));
+  lines.push(renderYamlArray('source_refs', sourceRefs));
+  lines.push(renderYamlArray('source_titles', sourceTitles));
   lines.push(renderYamlArray('tags', noteTags));
   lines.push(renderYamlArray('source_topics', sourceTopics));
   lines.push('---', '', `# ${noteTitle}`, '');
@@ -742,12 +862,22 @@ function renderSourceTraceMarkdown(source = {}, memoMeta = {}, memoBundlePath = 
   lines.push(`- ${toObsidianLink(memoBundlePath, memoMeta.title)}`, '');
   lines.push('## 溯源标签', '');
   lines.push(`- 角色：${source.relation_label}`);
-  lines.push(`- 切片：${source.slice_id || '未知切片'}`);
+  lines.push(`- 合并来源：${mergedSourceCount} 份`);
+  lines.push(`- 切片：${source.slice_id || sourceSliceIds[0] || '未知切片'}`);
   if (source.source_title) lines.push(`- 来源窗口：${source.source_title}`);
   if (source.created_at) lines.push(`- 时间：${source.created_at}`);
   if (source.prompt_hint) lines.push(`- 提示：${source.prompt_hint}`);
   if (source.source_ref) lines.push(`- 原始文件：\`${source.source_ref}\``);
   lines.push('');
+  if (sourceSliceIds.length > 1) {
+    renderBulletSection(lines, '合并切片', sourceSliceIds);
+  }
+  if (sourceTitles.length > 1) {
+    renderBulletSection(lines, '关联来源窗口', sourceTitles);
+  }
+  if (sourceRefs.length > 1) {
+    renderBulletSection(lines, '合并原始文件', sourceRefs.map((item) => `\`${item}\``));
+  }
   renderBulletSection(lines, '主题标签', sourceTopics);
   if (source.preview) {
     lines.push('## 摘要', '');

@@ -72,6 +72,7 @@ Hippocove 不是一把“帮你总结聊天记录”的快刀。
 - [项目状态](./PROJECT_STATUS.md)
 - [技术交底](./docs/HIPPOCOVE_TECH_HANDOFF.md)
 - [MCP / agent handoff](./docs/HIPPOCOVE_MCP_AGENT_HANDOFF.md)
+- [Mossbridge 导出说明](./docs/HIPPOCOVE_MOSSBRIDGE_EXPORT.md)
 - [手测地图](./docs/HIPPOCOVE_HAND_TEST_MAP.md)
 - [GitHub Pages 首页](./docs/index.html)
 

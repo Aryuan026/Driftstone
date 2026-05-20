@@ -201,3 +201,35 @@ Hippocove 现在最适合被当成：
 代码管搬运和缓存，
 AI 管判断和生成，
 这就是当前最稳的分工。
+
+## 11. Mossbridge 机读导出
+
+如果目标不是继续在 Hippocove 内部生成 Obsidian / Notion 投影，而是把旧历史交给 Mossbridge、AsherieHome 或别的记忆网关，优先使用 Mossbridge export profile：
+
+```bash
+node scripts/debug/build_mossbridge_ingest_bundle.mjs --months 2025-02,2025-03,2025-04
+```
+
+默认会生成：
+
+```text
+output/mossbridge_ingest/driftstone_2025-02_to_2025-04_mossbridge_ingest_bundle/
+```
+
+这里的 schema 是：
+
+```text
+driftstone_mossbridge_ingest_bundle_v0.1
+```
+
+它是保守中间包，不是直接写入 Mossbridge live memory 的包：
+
+- 不写 Notion
+- 不写 Mossbridge warm memory
+- 不导入 overflow links
+- 不直接激活运行态记忆
+- 当前 `accepted_records` 固定为 0
+
+Notion 仍然只是人读 / ChatGPT 复核投影；Mossbridge 接收端不应该直接吃 Notion 页面。更详细的字段和边界见：
+
+- [Mossbridge 导出说明](./HIPPOCOVE_MOSSBRIDGE_EXPORT.md)

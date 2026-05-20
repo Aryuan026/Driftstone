@@ -9,6 +9,7 @@ import { getMemoryShadowPacket } from '../../core/memory-shadow-service.js';
 import { getMemoryHomePacket } from '../../core/memory-home-service.js';
 import { auditMemoryRecall } from '../../core/memory-recall-audit-service.js';
 import { getMemoryScopePacket, listMemoryScopes } from '../../core/memory-scope-service.js';
+import { buildNotionRecallPreviewPacket } from '../../core/notion-export-service.js';
 
 function json(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -22,11 +23,19 @@ const MEMORY_READ_PATHS = new Set([
   '/api/memory/search',
   '/api/memory/root',
   '/api/memory/context',
+  '/api/memory/recall-preview',
   '/api/memory/home',
   '/api/memory/entry',
   '/api/memory/shadow',
   '/api/memory/audit/recall'
 ]);
+
+function splitParamList(value = '') {
+  return String(value || '')
+    .split(/[,，|｜\s]+/u)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 export async function handleMemoryReadRoute(req, res, url) {
   if (!MEMORY_READ_PATHS.has(url.pathname)) return false;
@@ -99,6 +108,29 @@ export async function handleMemoryReadRoute(req, res, url) {
       botId,
       userId,
       charId
+    });
+    json(res, payload.ok ? 200 : 404, payload);
+    return true;
+  }
+
+  if (url.pathname === '/api/memory/recall-preview') {
+    const monthHints = [
+      ...url.searchParams.getAll('month'),
+      ...splitParamList(url.searchParams.get('month_hints') || '')
+    ];
+    const maxEntries = Number.parseInt(url.searchParams.get('limit') || url.searchParams.get('max_entries') || '12', 10);
+    const minChars = Number.parseInt(url.searchParams.get('min_chars') || '1200', 10);
+    const maxChars = Number.parseInt(url.searchParams.get('max_chars') || '2200', 10);
+    const payload = await buildNotionRecallPreviewPacket({
+      monthHints,
+      query: url.searchParams.get('q') || url.searchParams.get('query') || '',
+      rootId: url.searchParams.get('root_id') || '',
+      rootKey: url.searchParams.get('key') || url.searchParams.get('root_key') || '',
+      rootPath: url.searchParams.get('root_path') || '',
+      rootName: url.searchParams.get('root_name') || '',
+      maxEntries,
+      minChars,
+      maxChars
     });
     json(res, payload.ok ? 200 : 404, payload);
     return true;

@@ -87,6 +87,7 @@ const ROUTE_GROUPS = [
       { method: 'GET', path: '/api/memory/search', summary: '按 query 搜索根。' },
       { method: 'GET', path: '/api/memory/root', summary: '读单个 root。' },
       { method: 'GET', path: '/api/memory/context', summary: '组装 bot/context 包。' },
+      { method: 'GET', path: '/api/memory/recall-preview', summary: '按 query/root 生成关系树召回小包。' },
       { method: 'GET', path: '/api/memory/shadow', summary: '回场读影层切片。' },
       { method: 'GET', path: '/api/memory/audit/recall', summary: '召回自检。' }
     ]

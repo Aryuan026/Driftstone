@@ -19,6 +19,53 @@ function stableEntryList(values = [], limit = 24) {
   return uniqueStrings(values, limit);
 }
 
+function isGenericActorName(value = '') {
+  return /^(user|assistant|system|bot|char|用户|助手|模型|ai)$/iu.test(safeText(value));
+}
+
+function actorLabelForEntry(entry = {}, fallback = '这位使用者') {
+  const owner = safeText(entry.slot_owner_hint);
+  if (owner && !isGenericActorName(owner)) return owner;
+  const name = safeText(entry.canonical_name);
+  if (
+    safeText(entry.anchor_type).toLowerCase() === 'person'
+    && name
+    && !isGenericActorName(name)
+    && !/^[a-z][a-z0-9_]{5,80}$/iu.test(name)
+  ) return name;
+  return fallback;
+}
+
+function cleanRecallFacingText(value = '', entry = {}) {
+  const actorLabel = actorLabelForEntry(entry, '这位使用者');
+  const companionLabel = actorLabelForEntry({ canonical_name: safeText(entry.companion_name) }, '这个 AI 伙伴');
+  let text = safeText(value)
+    .replace(/\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\s*[:：]\s*/gu, '')
+    .replace(/^(摘要|背景|关系位|stable|update|fact)\s*[:：]\s*/iu, '')
+    .replace(/^[a-z][a-z0-9_ -]{2,90}\s*=\s*/iu, '')
+    .replace(/^(true|false)\s*[;；,，]?\s*/iu, '')
+    .trim();
+  if (!text || /^[a-z][a-z0-9_]{2,90}$/iu.test(text)) return '';
+  text = text
+    .replace(/\buser\b/giu, actorLabel)
+    .replace(/\bassistant\b/giu, companionLabel)
+    .replace(/\bsystem\b/giu, '系统');
+  if (actorLabel !== '这位使用者') {
+    text = text.replace(/用户(?=在|会|曾|希望|认为|表示|计划|拥有|多次|长期|强烈|明确|自称|称|把|将|与|对|喜欢|不|可以|已经|正在|正|仍|尤其|担心|倾向|优先|需要|关注|想|给|通过|平时|和|说明)/gu, actorLabel);
+  }
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function cleanRecallList(values = [], entry = {}, limit = 24) {
+  return stableEntryList(
+    (Array.isArray(values) ? values : [])
+      .flatMap((item) => String(item || '').split(/\s+\|\s+/u))
+      .map((item) => cleanRecallFacingText(item, entry))
+      .filter(Boolean),
+    limit
+  );
+}
+
 function buildRootKey(entry = {}) {
   return `${safeText(entry.anchor_type).toLowerCase()}::${normalizeCompact(entry.canonical_name) || 'unnamed'}`;
 }
@@ -40,14 +87,14 @@ function buildClusterId(rootKey) {
   return `cluster::${rootKey}`;
 }
 
-function normalizeRecentUpdates(updates = []) {
+function normalizeRecentUpdates(updates = [], context = {}) {
   const list = Array.isArray(updates) ? updates : [];
   return list.map((item) => ({
     batch: safeText(item?.batch),
     first_seen_at: safeText(item?.first_seen_at),
     last_seen_at: safeText(item?.last_seen_at),
-    summaries: stableEntryList(item?.summaries || item?.summary || [], 8),
-    stable_facts: stableEntryList(item?.stable_facts || [], 8),
+    summaries: cleanRecallList(item?.summaries || item?.summary || [], context, 8),
+    stable_facts: cleanRecallList(item?.stable_facts || [], context, 8),
     persona_refs: stableEntryList(item?.persona_refs || [], 8),
     conflict_hint: Boolean(item?.conflict_hint)
   })).filter((item) => (
@@ -59,6 +106,11 @@ function normalizeRecentUpdates(updates = []) {
 }
 
 function normalizeReviewedEntry(entry = {}) {
+  const context = {
+    anchor_type: safeText(entry.anchor_type),
+    canonical_name: safeText(entry.canonical_name),
+    slot_owner_hint: safeText(entry.slot_owner_hint)
+  };
   return {
     anchor_type: safeText(entry.anchor_type).toLowerCase(),
     canonical_name: safeText(entry.canonical_name),
@@ -68,8 +120,8 @@ function normalizeReviewedEntry(entry = {}) {
     slot_owner_hint: safeText(entry.slot_owner_hint),
     first_seen_at: safeText(entry.first_seen_at),
     last_seen_at: safeText(entry.last_seen_at),
-    stable_facts: stableEntryList(entry.stable_facts || [], 24),
-    recent_updates: normalizeRecentUpdates(entry.recent_updates),
+    stable_facts: cleanRecallList(entry.stable_facts || [], context, 24),
+    recent_updates: normalizeRecentUpdates(entry.recent_updates, context),
     provenance: {
       source_batches: stableEntryList(entry?.provenance?.source_batches || [], 24),
       source_refs: stableEntryList(entry?.provenance?.source_refs || [], 48),

@@ -155,7 +155,10 @@ async function requestReviewedMerge(cluster = {}, api = {}) {
     '目标：把同一个 cluster 里的多条记忆条目合并成 1 条，不丢失关键事实、时间边界、近期更新和溯源信息。',
     '输出要求：只输出 1 个 JSON 对象，不要解释，不要 markdown。',
     '字段要求：尽量沿用输入字段，必须保留 anchor_type、canonical_name、first_seen_at、last_seen_at、stable_facts、recent_updates、provenance、conflict_hint。',
-    '合并原则：优先保留信息更多、更具体、更可追溯的内容；冲突保留 conflict_hint=true。'
+    '合并原则：优先保留信息更多、更具体、更可追溯的内容；冲突保留 conflict_hint=true。',
+    '召回口径：stable_facts 和 recent_updates 将进入后续主记忆召回，必须改写成自然中文，不要保留 key=value、snake_case、user/assistant/system、字段名或数据库口吻。',
+    '主体口径：能确定名字就写名字；不能确定时写“这位使用者”或“这个 AI 伙伴”，不要把 User/Assistant 当成角色名。',
+    '证据口径：source_ref、source_window、topic_id 等只留在 provenance，不要塞进 stable_facts。'
   ].join('\n');
 
   const rawOutput = await requestModelCompletion({

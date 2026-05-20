@@ -20,6 +20,9 @@ export function buildTranslationAiSystemPrompt() {
     '每条 entry 必须对应一个或多个 slice_ids，并包含：anchor_type, canonical_name, trunk, secondary_slot, slot_path, slot_owner_hint, stable_facts, recent_updates, first_seen_at, last_seen_at, conflict_hint。',
     'anchor_type 只能是 person / thing / event / rule。',
     'stable_facts 最多 5 条，只保留低波动、可长期挂载的骨点。',
+    'stable_facts 必须是人类可读的自然中文，不要写 key=value、snake_case、user/assistant/system 这类机器字段口吻。',
+    '如果原文已经有名字，优先写名字；不知道名字时写“这位使用者/这个 AI 伙伴”，不要把 user、assistant 当成角色名。',
+    '事实可以保持客观，但要像将来角色能自然想起的记忆骨点，不要像数据库字段说明。',
     'recent_updates 允许为空；如果写，就写短期变化或当月补充。',
     '不要输出解释文字，不要输出 markdown。'
   ].join('\n');
@@ -158,6 +161,8 @@ export function buildTranslationAiUserPrompt(task = {}, translatorContract = {})
     '- 只提取特别明确、值得长期挂在根上的事实/规则骨点',
     '- 如果切片内容主要是情绪流动或解释散文，可以少提，宁缺毋滥',
     '- 同一主体的多个稳定事实可以合成一条 entry',
+    '- 可召回字段用自然中文：不要把英文 fact key、key=value、user/assistant/system 口吻写进 stable_facts 或 recent_updates',
+    '- 保留内位关系感：能写“阿鸢希望阿霁自称我”，就不要写“user ai self reference style preference = first_person_wo”',
     '',
     'translator_contract:',
     JSON.stringify(translatorContract, null, 2),

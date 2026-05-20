@@ -67,6 +67,8 @@ export function buildTranslatorContract() {
       'anchor_type 只能是 person / thing / event / rule。',
       '一个 entry 可对应一个或多个 slice_ids。',
       'stable_facts 放低波动、可长期挂在根上的事实。',
+      'stable_facts 和 recent_updates 是未来召回正文的原料，必须写自然中文，不写 key=value、snake_case、user/assistant/system。',
+      '能确定名字就写名字；不能确定时写“这位使用者”或“这个 AI 伙伴”，不要把 User/Assistant 当作角色名。',
       'recent_updates 放短期变化或当月补充。',
       '如果只想补一条近况，也可以把 recent_updates 写成字符串，后端会转成标准 update。'
     ],
@@ -75,13 +77,13 @@ export function buildTranslatorContract() {
         {
           slice_ids: ['2025-02_3_窗口__001'],
           anchor_type: 'person',
-          canonical_name: 'User',
+          canonical_name: '这位使用者',
           trunk: '人物',
           secondary_slot: '偏好与价值观',
-          slot_path: '人物/User/偏好与价值观',
-          slot_owner_hint: 'User',
-          stable_facts: ['用户喜欢与 AI 长期磨合，观察它自然长出个性。'],
-          recent_updates: '这段对话里，用户进一步明确了对成长型 AI 伙伴关系的期待。',
+          slot_path: '人物/这位使用者/偏好与价值观',
+          slot_owner_hint: '这位使用者',
+          stable_facts: ['这位使用者喜欢与 AI 长期磨合，观察它自然长出个性。'],
+          recent_updates: '这段对话里，这位使用者进一步明确了对成长型 AI 伙伴关系的期待。',
           first_seen_at: '2025-02-17T04:46:59.000Z',
           last_seen_at: '2025-02-17T04:46:59.000Z',
           conflict_hint: false

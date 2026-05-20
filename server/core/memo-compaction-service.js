@@ -267,6 +267,67 @@ function renderRawSection(lines, heading, rawSection = '') {
   lines.push(text, '');
 }
 
+function chooseLongerTraceText(left = '', right = '') {
+  const leftText = safeText(left);
+  const rightText = safeText(right);
+  if (!leftText) return rightText;
+  if (!rightText) return leftText;
+  return rightText.length > leftText.length ? rightText : leftText;
+}
+
+function buildTraceMergeIdentity(trace = {}, fallback = '') {
+  const excerptKey = canonicalSemanticKey(chooseLongerTraceText(trace.excerpt_block, trace.summary_block)).slice(0, 2048);
+  if (excerptKey) return excerptKey;
+  return safeText(trace.source_ref || trace.source_slice_id || trace.trace_id || fallback);
+}
+
+function mergeTraceRecord(base = {}, incoming = {}) {
+  return {
+    ...base,
+    trace_role: safeText(base.trace_role, incoming.trace_role),
+    source_packet_id: safeText(base.source_packet_id, incoming.source_packet_id),
+    source_packet_ids: uniqueStrings([
+      ...safeArray(base.source_packet_ids, 64),
+      base.source_packet_id,
+      ...safeArray(incoming.source_packet_ids, 64),
+      incoming.source_packet_id
+    ], 64),
+    source_slice_id: safeText(base.source_slice_id, incoming.source_slice_id),
+    source_slice_ids: uniqueStrings([
+      ...safeArray(base.source_slice_ids, 128),
+      base.source_slice_id,
+      ...safeArray(incoming.source_slice_ids, 128),
+      incoming.source_slice_id
+    ], 128),
+    source_title: safeText(base.source_title, incoming.source_title),
+    source_titles: uniqueStrings([
+      ...safeArray(base.source_titles, 64),
+      base.source_title,
+      ...safeArray(incoming.source_titles, 64),
+      incoming.source_title
+    ], 64),
+    source_created_at: safeText(base.source_created_at, incoming.source_created_at),
+    source_ref: safeText(base.source_ref, incoming.source_ref),
+    source_refs: uniqueStrings([
+      ...safeArray(base.source_refs, 512),
+      base.source_ref,
+      ...safeArray(incoming.source_refs, 512),
+      incoming.source_ref
+    ], 512),
+    tags: uniqueStrings([
+      ...safeArray(base.tags, 32),
+      ...safeArray(incoming.tags, 32)
+    ], 32),
+    source_topics: uniqueStrings([
+      ...safeArray(base.source_topics, 32),
+      ...safeArray(incoming.source_topics, 32)
+    ], 32),
+    summary_block: chooseLongerTraceText(base.summary_block, incoming.summary_block),
+    excerpt_block: chooseLongerTraceText(base.excerpt_block, incoming.excerpt_block),
+    merged_source_count: Math.max(1, Number(base.merged_source_count || 1)) + Math.max(1, Number(incoming.merged_source_count || 1))
+  };
+}
+
 function buildFamilyTag(family = '') {
   const text = safeScopeSegment(family, '');
   return text ? `family/${text}` : '';
@@ -331,10 +392,15 @@ async function loadRawBundleNotes(rawRoot = '') {
         title: parseMarkdownTitle(raw, basename(filePath, '.md')),
         trace_role: parseFrontmatterScalar(raw, 'trace_role', ''),
         source_packet_id: parseFrontmatterScalar(raw, 'source_packet_id', ''),
+        source_packet_ids: parseFrontmatterArray(raw, 'source_packet_ids'),
         source_slice_id: parseFrontmatterScalar(raw, 'source_slice_id', ''),
+        source_slice_ids: parseFrontmatterArray(raw, 'source_slice_ids'),
         source_title: parseFrontmatterScalar(raw, 'source_title', ''),
+        source_titles: parseFrontmatterArray(raw, 'source_titles'),
         source_created_at: parseFrontmatterScalar(raw, 'source_created_at', ''),
         source_ref: parseFrontmatterScalar(raw, 'source_ref', ''),
+        source_refs: parseFrontmatterArray(raw, 'source_refs'),
+        merged_source_count: Number(parseFrontmatterScalar(raw, 'merged_source_count', '1')) || 1,
         tags: parseFrontmatterArray(raw, 'tags'),
         source_topics: parseFrontmatterArray(raw, 'source_topics'),
         summary_block: extractMarkdownSection(raw, '摘要'),
@@ -374,8 +440,14 @@ async function loadRawBundleNotes(rawRoot = '') {
         .flatMap((line) => parseWikiLinks(line))
         .map((item) => normalizePathValue(item.bundle_path)),
       trace_links: traceLinks,
-      source_slice_ids: uniqueStrings(traceNotes.map((item) => item.source_slice_id), 256),
-      source_refs: uniqueStrings(traceNotes.map((item) => item.source_ref), 256),
+      source_slice_ids: uniqueStrings(traceNotes.flatMap((item) => [
+        ...safeArray(item.source_slice_ids, 128),
+        item.source_slice_id
+      ]), 256),
+      source_refs: uniqueStrings(traceNotes.flatMap((item) => [
+        ...safeArray(item.source_refs, 512),
+        item.source_ref
+      ]), 256),
       source_topics: uniqueStrings(traceNotes.flatMap((item) => safeArray(item.source_topics, 16)), 64),
       raw: entry.raw,
       export_file: entry.file_path,
@@ -577,6 +649,24 @@ function buildCompactTraceBundlePath(trace = {}) {
 }
 
 function renderCompactTraceMarkdown(trace = {}, memoMeta = {}) {
+  const sourceRefs = uniqueStrings([
+    ...safeArray(trace.source_refs, 512),
+    trace.source_ref
+  ], 512);
+  const sourceSliceIds = uniqueStrings([
+    ...safeArray(trace.source_slice_ids, 128),
+    trace.source_slice_id
+  ], 128);
+  const sourceTitles = uniqueStrings([
+    ...safeArray(trace.source_titles, 64),
+    trace.source_title
+  ], 64);
+  const mergedSourceCount = Math.max(
+    1,
+    Number(trace.merged_source_count || 0) || 0,
+    sourceRefs.length,
+    sourceSliceIds.length
+  );
   const traceTags = uniqueStrings([
     ...safeArray(trace.tags, 16),
     'source-backtrace',
@@ -594,6 +684,10 @@ function renderCompactTraceMarkdown(trace = {}, memoMeta = {}) {
   lines.push(`source_title: ${renderYamlScalar(trace.source_title)}`);
   lines.push(`source_created_at: ${renderYamlScalar(trace.source_created_at)}`);
   lines.push(`source_ref: ${renderYamlScalar(trace.source_ref)}`);
+  lines.push(`merged_source_count: ${renderYamlScalar(String(mergedSourceCount))}`);
+  lines.push(renderYamlArray('source_slice_ids', sourceSliceIds));
+  lines.push(renderYamlArray('source_refs', sourceRefs));
+  lines.push(renderYamlArray('source_titles', sourceTitles));
   lines.push(renderYamlArray('tags', traceTags));
   lines.push(renderYamlArray('source_topics', safeArray(trace.source_topics, 24)));
   lines.push('---', '', `# ${safeText(trace.title, '原文回溯')}`, '');
@@ -601,11 +695,21 @@ function renderCompactTraceMarkdown(trace = {}, memoMeta = {}) {
   lines.push(`- ${toObsidianLink(memoMeta.bundle_path, memoMeta.title)}`, '');
   lines.push('## 溯源标签', '');
   lines.push(`- 角色：${safeText(trace.trace_role, '关联溯源')}`);
-  lines.push(`- 切片：${safeText(trace.source_slice_id, '未标注切片')}`);
+  lines.push(`- 合并来源：${mergedSourceCount} 份`);
+  lines.push(`- 切片：${safeText(trace.source_slice_id || sourceSliceIds[0], '未标注切片')}`);
   lines.push(`- 来源窗口：${safeText(trace.source_title, '未标注来源窗口')}`);
   if (safeText(trace.source_created_at)) lines.push(`- 时间：${safeText(trace.source_created_at)}`);
   if (safeText(trace.source_ref)) lines.push(`- 原始文件：\`${safeText(trace.source_ref)}\``);
   lines.push('');
+  if (sourceSliceIds.length > 1) {
+    renderBulletSection(lines, '合并切片', sourceSliceIds);
+  }
+  if (sourceTitles.length > 1) {
+    renderBulletSection(lines, '关联来源窗口', sourceTitles);
+  }
+  if (sourceRefs.length > 1) {
+    renderBulletSection(lines, '合并原始文件', sourceRefs.map((item) => `\`${item}\``));
+  }
   renderBulletSection(lines, '主题标签', safeArray(trace.source_topics, 24));
   renderRawSection(lines, '摘要', trace.summary_block);
   renderRawSection(lines, '原文节选', trace.excerpt_block);
@@ -619,9 +723,32 @@ function buildCompactTraceFiles(cluster = [], traceMap = new Map(), compactRoot 
   for (const bundlePath of traceTargets) {
     const trace = traceMap.get(bundlePath);
     if (!trace) continue;
-    const identity = safeText(trace.source_ref || trace.source_slice_id || trace.trace_id || bundlePath);
-    if (!identity || traceIdentityMap.has(identity)) continue;
-    traceIdentityMap.set(identity, trace);
+    const identity = buildTraceMergeIdentity(trace, bundlePath);
+    if (!identity) continue;
+    if (!traceIdentityMap.has(identity)) {
+      traceIdentityMap.set(identity, {
+        ...trace,
+        source_packet_ids: uniqueStrings([
+          ...safeArray(trace.source_packet_ids, 64),
+          trace.source_packet_id
+        ], 64),
+        source_slice_ids: uniqueStrings([
+          ...safeArray(trace.source_slice_ids, 128),
+          trace.source_slice_id
+        ], 128),
+        source_titles: uniqueStrings([
+          ...safeArray(trace.source_titles, 64),
+          trace.source_title
+        ], 64),
+        source_refs: uniqueStrings([
+          ...safeArray(trace.source_refs, 512),
+          trace.source_ref
+        ], 512),
+        merged_source_count: Math.max(1, Number(trace.merged_source_count || 1))
+      });
+      continue;
+    }
+    traceIdentityMap.set(identity, mergeTraceRecord(traceIdentityMap.get(identity), trace));
   }
   return Array.from(traceIdentityMap.values())
     .map((trace) => {
