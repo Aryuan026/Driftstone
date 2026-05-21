@@ -1473,7 +1473,13 @@ function scoreRecallRootForQuery(root = {}, entries = [], queryTerms = []) {
 
 function recallPreviewEntryScore(entry = {}, root = {}, queryTerms = []) {
   let score = 0;
-  if (safeText(entry.front_recall_tier) === 'front_ready') score += 80;
+  const deliveryTier = effectiveFrontendDeliveryTier(entry);
+  if (deliveryTier === 'default_front') score += 80;
+  if (['explicit_context_only', 'project_context_only', 'creative_context_only', 'engineering_context_only'].includes(deliveryTier)) {
+    score -= queryTerms.length ? 8 : 28;
+  }
+  if (deliveryTier === 'guarded_candidate') score -= 36;
+  if (['audit_only', 'source_only', 'graph_only', 'graph_candidate_only', 'graph_audit_only'].includes(deliveryTier)) score -= 1000;
   if (safeText(entry.companion_voice_tier) === 'voice_ready') score += 36;
   if (safeText(entry.companion_voice_tier) === 'neutral_usable') score += 16;
   if (safeText(entry.primary_root_id) === safeText(root.root_id)) score += 24;
@@ -1623,6 +1629,7 @@ function buildRecallPreviewForRoot({
       recall_lane: item.entry.recall_lane,
       primary_root_path: item.entry.primary_root_path,
       companion_voice_tier: item.entry.companion_voice_tier,
+      frontend_delivery_tier: effectiveFrontendDeliveryTier(item.entry),
       front_recall_tier: item.entry.front_recall_tier,
       score: item.score,
       front_recall_text: item.text,
@@ -2088,11 +2095,13 @@ function buildRecallPotentialQa(entries = []) {
     title: entry.title,
     primary_root_path: entry.primary_root_path,
     recall_lane: entry.recall_lane,
+    frontend_delivery_tier: effectiveFrontendDeliveryTier(entry),
     front_recall_tier: entry.front_recall_tier || classifyEntryRecallPotential(entry).front_recall_tier,
     front_recall_chars: Number(entry.front_recall_chars || safeText(entry.recall_payload).length || 0),
     front_recall_flags: safeArray(entry.front_recall_flags, 24)
   }));
   const byTier = countBy(assessed, 'front_recall_tier');
+  const byFrontendDeliveryTier = countBy(assessed, 'frontend_delivery_tier');
   const totalChars = assessed.reduce((sum, item) => sum + Number(item.front_recall_chars || 0), 0);
   const needsCompaction = assessed.filter((item) => item.front_recall_tier === 'needs_compaction');
   const auditOnly = assessed.filter((item) => item.front_recall_tier === 'audit_only');
@@ -2107,11 +2116,13 @@ function buildRecallPotentialQa(entries = []) {
       recommended_chars_per_recall: '1200-2200',
       delivery_fields: ['title', 'summary', 'recall_payload', 'primary_root_path', 'recall_lane', 'activation_triggers'],
       audit_only_fields: ['source_trace_ids', 'source_ref', 'source_trace_warehouse', 'raw source excerpts'],
-      rule: '只递送检索命中的小切片；原文存证只在需要核验时再展开。'
+      rule: '只递送检索命中的小切片；原文存证只在需要核验时再展开。',
+      reading_gate_rule: '如果存在 frontend_delivery_tier，前台读取必须优先按它决策；recall_guard 只保留历史/兼容参考。'
     },
     estimated_all_payload_chars: totalChars,
     average_payload_chars: rows.length ? Number((totalChars / rows.length).toFixed(1)) : 0,
     tier_distribution: byTier,
+    frontend_delivery_tier_distribution: byFrontendDeliveryTier,
     recall_lane_distribution: laneDistribution,
     front_ready_count: Number(byTier.front_ready || 0),
     needs_compaction_count: needsCompaction.length,
@@ -3472,6 +3483,50 @@ function frontendDeliveryTierForLayer({ layer = 'memory', archiveBucket = '', re
   if (guard === 'engineering_context_only') return 'engineering_context_only';
   if (guard === 'normal_candidate') return 'default_front';
   return archiveBucket === 'stable' ? 'guarded_candidate' : 'audit_only';
+}
+
+function normalizeFrontendDeliveryTier(value = '') {
+  const text = safeText(value);
+  if ([
+    'default_front',
+    'guarded_candidate',
+    'explicit_context_only',
+    'project_context_only',
+    'creative_context_only',
+    'engineering_context_only',
+    'audit_only',
+    'source_only',
+    'graph_only',
+    'graph_candidate_only',
+    'graph_audit_only'
+  ].includes(text)) return text;
+  if (text === 'front_ready') return 'default_front';
+  if (text === 'needs_compaction' || text === 'contextual_sampling') return 'guarded_candidate';
+  if (text === 'source_only' || text === 'graph_only' || text === 'audit_only') return text;
+  return '';
+}
+
+function effectiveFrontendDeliveryTier(record = {}) {
+  const quality = record.quality || {};
+  const props = record.properties || {};
+  const explicitTier = normalizeFrontendDeliveryTier(
+    quality.frontend_delivery_tier ||
+    record.frontend_delivery_tier ||
+    props.frontend_delivery_tier
+  );
+  if (explicitTier) return explicitTier;
+  const legacyTier = normalizeFrontendDeliveryTier(
+    quality.front_recall_tier ||
+    record.front_recall_tier ||
+    props.front_recall_tier
+  );
+  if (legacyTier) return legacyTier;
+  return frontendDeliveryTierForLayer({
+    layer: safeText(record.layer || record.target_layer, 'memory'),
+    archiveBucket: safeText(quality.archive_bucket || record.archive_bucket || props.archive_bucket),
+    recallGuard: safeText(quality.recall_guard || record.recall_guard || props.recall_guard),
+    reviewStatus: safeText(quality.review_status || record.review_status || props.review_status)
+  });
 }
 
 function compactPathToken(value = '') {

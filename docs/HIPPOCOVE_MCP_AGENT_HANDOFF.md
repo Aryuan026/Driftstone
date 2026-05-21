@@ -233,3 +233,5 @@ driftstone_mossbridge_ingest_bundle_v0.1
 Notion 仍然只是人读 / ChatGPT 复核投影；Mossbridge 接收端不应该直接吃 Notion 页面。更详细的字段和边界见：
 
 - [Mossbridge 导出说明](./HIPPOCOVE_MOSSBRIDGE_EXPORT.md)
+
+如果 agent 要读取 Notion / JSON 投影作为前台上下文，门禁字段以 `frontend_delivery_tier` 为准。`recall_guard` 只做历史兼容参考；两者冲突时，不允许用旧的 `recall_guard=normal_candidate` 覆盖新的 `frontend_delivery_tier=explicit_context_only`。

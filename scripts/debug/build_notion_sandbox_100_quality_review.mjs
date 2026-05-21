@@ -119,11 +119,23 @@ function issue(row = {}, status = 'quality_pass', reason = '', suggestion = '') 
   };
 }
 
+function effectiveFrontendDeliveryTier(row = {}) {
+  const p = row.properties || {};
+  const explicit = safeText(p.frontend_delivery_tier);
+  if (explicit) return explicit;
+  const legacy = safeText(p.front_recall_tier);
+  if (legacy) return legacy;
+  const guard = safeText(p.recommended_recall_guard || p.recall_guard);
+  if (guard === 'normal_candidate') return 'default_front';
+  if (guard === 'contextual_sampling') return 'guarded_candidate';
+  if (guard === 'graph_audit_only' || guard === 'graph_candidate_only') return 'graph_only';
+  return guard;
+}
+
 function stableIssues(row = {}) {
   const p = row.properties || {};
   const text = textOf(row);
-  const tier = safeText(p.frontend_delivery_tier || p.front_recall_tier);
-  const guard = safeText(p.recommended_recall_guard || p.recall_guard);
+  const tier = effectiveFrontendDeliveryTier(row);
   const out = [];
   if (safeText(p.review_status) === 'needs_review') {
     out.push(issue(row, 'audit_only', 'Stable projection contains a needs_review page.', 'Move to review_queue / audit_only before frontend use.'));
@@ -135,9 +147,6 @@ function stableIssues(row = {}) {
     const next = ENGINEERING_RE.test(text) ? 'engineering_context_only' : CREATIVE_RE.test(text) ? 'creative_context_only' : 'project_context_only';
     out.push(issue(row, 'needs_guard_tightening', 'Project / creative / engineering memory should not be ordinary default_front.', `Set frontend_delivery_tier=${next} and recommended_recall_guard=${next}.`));
   }
-  if (guard === 'normal_candidate' && tier !== 'default_front') {
-    out.push(issue(row, 'needs_guard_tightening', 'recall_guard still says normal_candidate while frontend_delivery_tier is guarded.', `Align recall_guard/recommended_recall_guard with ${tier}.`));
-  }
   if (['project_context_only', 'creative_context_only', 'engineering_context_only'].includes(tier) && !safeText(p.project_fact)) {
     out.push(issue(row, 'needs_text_rewrite', 'Project/creative/engineering card has no project_fact, so useful task memory is buried in prose.', 'Fill project_fact with the concrete project / creative / engineering decision.'));
   }
@@ -148,7 +157,7 @@ function stableIssues(row = {}) {
 }
 
 function samplingIssues(row = {}) {
-  const tier = safeText(row.properties?.frontend_delivery_tier || row.properties?.front_recall_tier);
+  const tier = effectiveFrontendDeliveryTier(row);
   if (!['guarded_candidate', 'explicit_context_only', 'project_context_only', 'creative_context_only', 'engineering_context_only', 'audit_only'].includes(tier)) {
     return [issue(row, 'needs_guard_tightening', 'Sampling row is not clearly guarded.', 'Use frontend_delivery_tier=guarded_candidate or a context-only tier; never front_ready/default_front.')];
   }
@@ -159,7 +168,7 @@ function samplingIssues(row = {}) {
 }
 
 function reviewIssues(row = {}) {
-  const tier = safeText(row.properties?.frontend_delivery_tier || row.properties?.front_recall_tier);
+  const tier = effectiveFrontendDeliveryTier(row);
   if (tier !== 'audit_only') {
     return [issue(row, 'audit_only', 'Review row can be misread as frontend-usable.', 'Set frontend_delivery_tier=audit_only and front_recall_tier=needs_compaction/audit_only.')];
   }
@@ -167,7 +176,7 @@ function reviewIssues(row = {}) {
 }
 
 function sourceIssues(row = {}) {
-  const tier = safeText(row.properties?.frontend_delivery_tier || row.properties?.front_recall_tier);
+  const tier = effectiveFrontendDeliveryTier(row);
   if (tier !== 'source_only') {
     return [issue(row, 'audit_only', 'Source trace should only be a verification layer.', 'Set frontend_delivery_tier=source_only and recall_guard=source_only.')];
   }
@@ -175,7 +184,7 @@ function sourceIssues(row = {}) {
 }
 
 function graphIssues(row = {}) {
-  const tier = safeText(row.properties?.frontend_delivery_tier || row.properties?.front_recall_tier);
+  const tier = effectiveFrontendDeliveryTier(row);
   if (tier !== 'graph_only' && tier !== 'graph_candidate_only' && tier !== 'graph_audit_only') {
     return [issue(row, 'audit_only', 'Relation graph row can be misread as stable memory.', 'Set frontend_delivery_tier=graph_only; roots use graph_candidate_only labels, edges use graph_audit_only labels.')];
   }
@@ -212,11 +221,11 @@ function simulationRows(rows = []) {
     const row = stable.find((item) => !pick.includes(item) && predicate(item));
     if (row) pick.push(row);
   };
-  push((row) => safeText(row.properties?.frontend_delivery_tier) === 'default_front');
-  push((row) => safeText(row.properties?.frontend_delivery_tier) === 'explicit_context_only');
-  push((row) => safeText(row.properties?.frontend_delivery_tier) === 'creative_context_only');
-  push((row) => safeText(row.properties?.frontend_delivery_tier) === 'project_context_only');
-  push((row) => safeText(row.properties?.frontend_delivery_tier) === 'engineering_context_only');
+  push((row) => effectiveFrontendDeliveryTier(row) === 'default_front');
+  push((row) => effectiveFrontendDeliveryTier(row) === 'explicit_context_only');
+  push((row) => effectiveFrontendDeliveryTier(row) === 'creative_context_only');
+  push((row) => effectiveFrontendDeliveryTier(row) === 'project_context_only');
+  push((row) => effectiveFrontendDeliveryTier(row) === 'engineering_context_only');
   push((row) => HIGH_PULL_RE.test(textOf(row)));
   push((row) => CREATIVE_RE.test(textOf(row)));
   push((row) => PROJECT_RE.test(textOf(row)));
@@ -230,7 +239,7 @@ function simulationRows(rows = []) {
 
 function simulationVerdict(row = {}) {
   const text = textOf(row);
-  const tier = safeText(row.properties?.frontend_delivery_tier || row.properties?.front_recall_tier);
+  const tier = effectiveFrontendDeliveryTier(row);
   if (tier === 'default_front' && HIGH_PULL_RE.test(text)) {
     return ['needs_guard_tightening', 'Neutral prompts would likely be pulled into old relationship / identity tone.'];
   }
@@ -258,7 +267,7 @@ function renderIssueTable(issues = [], limit = 60) {
 function buildMarkdown({ payload, rows, issues }) {
   const lines = [];
   const byDb = countBy(rows, (row) => row.target_database);
-  const byTier = countBy(rows, (row) => row.properties?.frontend_delivery_tier || row.properties?.front_recall_tier);
+  const byTier = countBy(rows, effectiveFrontendDeliveryTier);
   const byArchive = countBy(rows, (row) => row.properties?.archive_bucket || row.target_database);
   const overallStatus = !issues.length
     ? 'quality_pass'
@@ -280,6 +289,8 @@ function buildMarkdown({ payload, rows, issues }) {
   lines.push(`Status: \`${overallStatus}\``);
   lines.push('');
   lines.push('The important split is now explicit: `archive_bucket` says where the page belongs in the cold archive, while `frontend_delivery_tier` says whether a frontend model may receive it by default. Stable archive membership no longer means default frontend delivery.');
+  lines.push('');
+  lines.push('Reading gate rule: if `frontend_delivery_tier` exists, frontend readers must use it before `recall_guard`. `recall_guard` remains a historical / compatibility hint and must not by itself decide default recall.');
   lines.push('');
   lines.push('## Distribution');
   lines.push('');
@@ -305,7 +316,7 @@ function buildMarkdown({ payload, rows, issues }) {
   lines.push('| --- | --- | --- | --- |');
   for (const row of simulationRows(rows)) {
     const [status, reason] = simulationVerdict(row);
-    lines.push(`| ${clip(titleOf(row), 40)} | \`${safeText(row.properties?.frontend_delivery_tier || row.properties?.front_recall_tier)}\` | \`${status}\` | ${clip(reason, 94)} |`);
+    lines.push(`| ${clip(titleOf(row), 40)} | \`${effectiveFrontendDeliveryTier(row)}\` | \`${status}\` | ${clip(reason, 94)} |`);
   }
   lines.push('');
   lines.push('## Direct Patch Rules');

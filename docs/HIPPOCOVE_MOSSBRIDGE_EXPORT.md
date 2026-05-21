@@ -172,6 +172,12 @@ Mossbridge 需要的运行层字段，例如：
 
 应该优先留在 JSON bundle 里，而不是挤进人类默认阅读页。
 
+前台读取还有一条硬规则：
+
+**如果一条记录同时有 `frontend_delivery_tier` 和 `recall_guard`，读取器必须优先按 `frontend_delivery_tier` 决定是否递送。**
+
+`recall_guard` 只保留为历史字段 / 兼容参考，不能单独决定默认召回。比如旧字段仍写着 `normal_candidate`，但 `frontend_delivery_tier` 已经是 `explicit_context_only` 时，前台必须按 `explicit_context_only` 收紧。
+
 ## 接收端建议
 
 Mossbridge adapter 不要直接吃 Notion projection。
