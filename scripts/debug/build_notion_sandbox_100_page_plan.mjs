@@ -6,8 +6,9 @@ import { join } from 'path';
 const BASELINE_DIR = 'output/notion_import_baseline/driftstone_2025-02_to_2025-04_baseline';
 const SOURCE_WRITE_PLAN = join(BASELINE_DIR, 'notion_baseline_write_plan.jsonl');
 const DEFAULT_VARIANT = 'v3';
+const DEFAULT_TOTAL = 100;
 
-const SELECT_COUNTS = {
+const BASE_SELECT_COUNTS = {
   stable_memory_cards: 30,
   sampling_memory_cards: 10,
   review_queue: 10,
@@ -22,7 +23,8 @@ const MONTH_ORDER = ['2025-02', '2025-03', '2025-04'];
 function parseArgs(argv = []) {
   const args = {
     variant: DEFAULT_VARIANT,
-    legacy: false
+    legacy: false,
+    total: DEFAULT_TOTAL
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = safeString(argv[index]);
@@ -32,28 +34,72 @@ function parseArgs(argv = []) {
       continue;
     }
     if (arg === '--legacy') args.legacy = true;
+    if ((arg === '--total' || arg === '--pages') && argv[index + 1]) {
+      args.total = Math.max(1, Number.parseInt(argv[index + 1], 10) || DEFAULT_TOTAL);
+      index += 1;
+    }
   }
   if (args.legacy) args.variant = '';
   return args;
 }
 
-function batchIdForVariant(variant = '') {
+function batchIdForVariant(variant = '', total = DEFAULT_TOTAL) {
+  const size = Number(total || DEFAULT_TOTAL);
+  if (size === DEFAULT_TOTAL) {
+    return variant
+      ? `driftstone_sandbox_100_${variant}_plan_2026-05-19`
+      : 'driftstone_sandbox_100_plan_2026-05-18';
+  }
   return variant
-    ? `driftstone_sandbox_100_${variant}_plan_2026-05-19`
-    : 'driftstone_sandbox_100_plan_2026-05-18';
+    ? `driftstone_sandbox_${size}_${variant}_plan_2026-05-21`
+    : `driftstone_sandbox_${size}_plan_2026-05-21`;
 }
 
-function suffixForVariant(variant = '') {
-  return variant ? `sandbox_100_${variant}_plan` : 'sandbox_100_plan';
+function suffixForVariant(variant = '', total = DEFAULT_TOTAL) {
+  const size = Number(total || DEFAULT_TOTAL);
+  const middle = size === DEFAULT_TOTAL ? 'sandbox_100' : `sandbox_${size}`;
+  return variant ? `${middle}_${variant}_plan` : `${middle}_plan`;
 }
 
-function outputFilesForVariant(variant = '') {
-  const mid = variant ? `_sandbox_100_${variant}` : '_sandbox_100';
+function outputFilesForVariant(variant = '', total = DEFAULT_TOTAL) {
+  const size = Number(total || DEFAULT_TOTAL);
+  const base = size === DEFAULT_TOTAL ? '_sandbox_100' : `_sandbox_${size}`;
+  const mid = variant ? `${base}_${variant}` : base;
   return {
     payload: join(BASELINE_DIR, `notion${mid}_write_payload.json`),
     rollback: join(BASELINE_DIR, `rollback_manifest${mid}_seed.json`),
     plan: join(BASELINE_DIR, `notion${mid}_page_write_plan.md`)
   };
+}
+
+function scaleSelectCounts(total = DEFAULT_TOTAL) {
+  const requested = Math.max(1, Number(total || DEFAULT_TOTAL));
+  const baseTotal = Object.values(BASE_SELECT_COUNTS).reduce((sum, value) => sum + value, 0);
+  if (requested === baseTotal) return { ...BASE_SELECT_COUNTS };
+  const entries = Object.entries(BASE_SELECT_COUNTS).map(([database, baseCount]) => {
+    const raw = (baseCount / baseTotal) * requested;
+    const count = Math.max(1, Math.floor(raw));
+    return {
+      database,
+      baseCount,
+      raw,
+      count,
+      remainder: raw - count
+    };
+  });
+  let assigned = entries.reduce((sum, item) => sum + item.count, 0);
+  for (const item of entries.slice().sort((left, right) => right.remainder - left.remainder || right.baseCount - left.baseCount)) {
+    if (assigned >= requested) break;
+    item.count += 1;
+    assigned += 1;
+  }
+  for (const item of entries.slice().sort((left, right) => left.remainder - right.remainder || left.baseCount - right.baseCount)) {
+    if (assigned <= requested) break;
+    if (item.count <= 1) continue;
+    item.count -= 1;
+    assigned -= 1;
+  }
+  return Object.fromEntries(entries.map((item) => [item.database, item.count]));
 }
 
 function safeString(value, fallback = '') {
@@ -75,12 +121,13 @@ function stripSandboxPrefix(title = '') {
   return String(title).replace(/^DRY-RUN \/ SANDBOX(?: 100)?\s*·\s*/, '').trim();
 }
 
-function sandboxExternalId(row = {}, variant = '') {
-  return `${row.external_id}:${suffixForVariant(variant)}`;
+function sandboxExternalId(row = {}, variant = '', total = DEFAULT_TOTAL) {
+  return `${row.external_id}:${suffixForVariant(variant, total)}`;
 }
 
-function sandboxTitle(row = {}, variant = '') {
-  const label = variant ? `DRY-RUN / SANDBOX 100 ${variant.toUpperCase()}` : 'DRY-RUN / SANDBOX 100';
+function sandboxTitle(row = {}, variant = '', total = DEFAULT_TOTAL) {
+  const size = Number(total || DEFAULT_TOTAL);
+  const label = variant ? `DRY-RUN / SANDBOX ${size} ${variant.toUpperCase()}` : `DRY-RUN / SANDBOX ${size}`;
   return `${label} · ${stripSandboxPrefix(row.title || row.properties?.Name || 'Untitled')}`;
 }
 
@@ -135,8 +182,8 @@ function selectBalancedByMonth(rows = [], count = 0) {
 
 function convertRow(row = {}, targetDatabase = '', runtime = {}) {
   const props = row.properties || {};
-  const externalId = sandboxExternalId(row, runtime.variant);
-  const title = sandboxTitle(row, runtime.variant);
+  const externalId = sandboxExternalId(row, runtime.variant, runtime.total);
+  const title = sandboxTitle(row, runtime.variant, runtime.total);
   const nodePath = safeString(props.node_path, extractPreviewLine(row, '路径：'));
   const contextDomain = inferContextDomain(row, nodePath, targetDatabase);
   const recallGuard = safeString(props.recall_guard, targetDatabase === 'review_queue' ? 'audit_only' : 'n/a');
@@ -198,7 +245,7 @@ function convertRow(row = {}, targetDatabase = '', runtime = {}) {
     source_properties: props,
     source_content_preview: row.content_preview || [],
     content: [
-      '## Sandbox 100 Write Status',
+      `## Sandbox ${runtime.total} Write Status`,
       `- target_database: ${targetDatabase}`,
       `- source_month: ${sourceMonth}`,
       `- external_id: ${externalId}`,
@@ -219,7 +266,7 @@ function convertRow(row = {}, targetDatabase = '', runtime = {}) {
       `- source_span_count: ${sourceSpanCount}`,
       '',
       '## Recorder Contract',
-      '- This page belongs to the 100-page sandbox write plan.',
+      `- This page belongs to the ${runtime.total}-page sandbox write plan.`,
       '- rollback_status starts as sandbox_planned and should only become written after create-pages returns page_id/url.',
       '- Capture page_id/url from create-pages response immediately.',
       '- Fetch-back verifies representative pages and then marks fetch_back_status=verified.',
@@ -243,7 +290,7 @@ function rollbackEntry(row = {}, targetDatabase = '', runtime = {}) {
     notion_page_id: null,
     notion_page_url: null,
     status: 'not_written',
-    note: 'Sandbox 100-page plan seed. Capture notion_page_id/url from create-pages response immediately after write.'
+    note: `Sandbox ${runtime.total}-page plan seed. Capture notion_page_id/url from create-pages response immediately after write.`
   };
 }
 
@@ -256,6 +303,44 @@ function countBy(rows = [], keyFn) {
   return counts;
 }
 
+function fitSelectCountsToAvailable(selectCounts = {}, writePlan = []) {
+  const available = Object.fromEntries(Object.keys(selectCounts).map((database) => [
+    database,
+    writePlan.filter((row) => row.target_database === database).length
+  ]));
+  const fitted = {};
+  let deficit = 0;
+  for (const [database, requested] of Object.entries(selectCounts)) {
+    const count = Math.min(Number(requested || 0), Number(available[database] || 0));
+    fitted[database] = count;
+    deficit += Math.max(0, Number(requested || 0) - count);
+  }
+  if (deficit <= 0) return fitted;
+  const receivers = Object.keys(selectCounts)
+    .map((database) => ({
+      database,
+      spare: Math.max(0, Number(available[database] || 0) - Number(fitted[database] || 0))
+    }))
+    .filter((item) => item.spare > 0)
+    .sort((left, right) => right.spare - left.spare || left.database.localeCompare(right.database));
+  let cursor = 0;
+  while (deficit > 0 && receivers.length) {
+    const receiver = receivers[cursor % receivers.length];
+    if (receiver.spare > 0) {
+      fitted[receiver.database] += 1;
+      receiver.spare -= 1;
+      deficit -= 1;
+    }
+    if (receiver.spare <= 0) {
+      receivers.splice(cursor % receivers.length, 1);
+      cursor = 0;
+    } else {
+      cursor += 1;
+    }
+  }
+  return fitted;
+}
+
 function formatCounts(counts = {}) {
   return Object.entries(counts).map(([key, value]) => `${key}=${value}`).join(', ');
 }
@@ -263,7 +348,7 @@ function formatCounts(counts = {}) {
 function buildPlanMarkdown({ pagesByDatabase, rollbackEntries, runtime }) {
   const allRows = Object.values(pagesByDatabase).flat();
   const lines = [];
-  lines.push('# Driftstone Notion Sandbox 100-Page Write Plan');
+  lines.push(`# Driftstone Notion Sandbox ${runtime.total}-Page Write Plan`);
   lines.push('');
   lines.push('Milestone dependency: `notion_sandbox_v2_smoke_verified`.');
   lines.push(`Import batch: \`${runtime.importBatchId}\``);
@@ -280,7 +365,7 @@ function buildPlanMarkdown({ pagesByDatabase, rollbackEntries, runtime }) {
   lines.push('- Use fetch-back for verification; SQL batch query is optional audit only.');
   lines.push('');
   lines.push('## Planned Scope');
-  for (const [database, count] of Object.entries(SELECT_COUNTS)) {
+  for (const [database, count] of Object.entries(runtime.selectCounts)) {
     lines.push(`- ${database}: ${count}`);
   }
   lines.push(`- total: ${allRows.length}`);
@@ -327,14 +412,17 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const runtime = {
     variant: args.variant,
-    importBatchId: batchIdForVariant(args.variant),
-    outputFiles: outputFilesForVariant(args.variant)
+    total: args.total,
+    selectCounts: scaleSelectCounts(args.total),
+    importBatchId: batchIdForVariant(args.variant, args.total),
+    outputFiles: outputFilesForVariant(args.variant, args.total)
   };
   const writePlan = readJsonl(await readFile(SOURCE_WRITE_PLAN, 'utf8'));
+  runtime.selectCounts = fitSelectCountsToAvailable(runtime.selectCounts, writePlan);
   const pagesByDatabase = {};
   const rollbackEntries = [];
 
-  for (const [database, count] of Object.entries(SELECT_COUNTS)) {
+  for (const [database, count] of Object.entries(runtime.selectCounts)) {
     const rows = writePlan.filter((row) => row.target_database === database);
     if (rows.length < count) {
       throw new Error(`Not enough rows for ${database}: wanted ${count}, got ${rows.length}`);

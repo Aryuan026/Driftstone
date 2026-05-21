@@ -266,6 +266,7 @@ function renderIssueTable(issues = [], limit = 60) {
 
 function buildMarkdown({ payload, rows, issues }) {
   const lines = [];
+  const pageCount = rows.length;
   const byDb = countBy(rows, (row) => row.target_database);
   const byTier = countBy(rows, effectiveFrontendDeliveryTier);
   const byArchive = countBy(rows, (row) => row.properties?.archive_bucket || row.target_database);
@@ -278,7 +279,7 @@ function buildMarkdown({ payload, rows, issues }) {
         : issues.some((row) => row.status === 'audit_only')
           ? 'audit_only'
           : 'quality_pass';
-  lines.push('# Notion Sandbox 100 Quality Review');
+  lines.push(`# Notion Sandbox ${pageCount} Quality Review`);
   lines.push('');
   lines.push(`Scope: \`${payload.import_batch_id || payload.package_id || 'unknown'}\``);
   lines.push('');
@@ -330,11 +331,7 @@ function buildMarkdown({ payload, rows, issues }) {
   lines.push('');
   lines.push('## Final Judgment');
   lines.push('');
-  if (issues.length) {
-    lines.push('The 100-page sandbox remains valid as a write-chain artifact. Content projection is safer than the previous version because frontend delivery is now separated from archive membership, but the listed rows still need guard/text cleanup before any real frontend consumption.');
-  } else {
-    lines.push('The 100-page sandbox passes this content-quality gate for its current sample. It is still a sandbox, not a full production import.');
-  }
+  lines.push(`The ${pageCount}-page sandbox ${issues.length ? 'remains valid as a write-chain artifact, but the listed rows still need guard/text cleanup before any real frontend consumption' : 'passes this content-quality gate for its current sample'}. It is still a sandbox, not a full production import.`);
   lines.push('');
   return `${lines.join('\n')}\n`;
 }

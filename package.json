@@ -8,6 +8,7 @@
   "main": "main.mjs",
   "scripts": {
     "dev": "node ./node_modules/electron/cli.js .",
+    "test:reading-gate": "node scripts/debug/regression_frontend_delivery_tier_gate.mjs",
     "pack:dir": "node ./node_modules/electron-builder/cli.js --dir",
     "pack:win": "node ./node_modules/electron-builder/cli.js --win portable --x64",
     "pack:win:installer": "node ./node_modules/electron-builder/cli.js --win nsis --x64",

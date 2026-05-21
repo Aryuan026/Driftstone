@@ -3506,7 +3506,7 @@ function normalizeFrontendDeliveryTier(value = '') {
   return '';
 }
 
-function effectiveFrontendDeliveryTier(record = {}) {
+export function resolveFrontendDeliveryTier(record = {}) {
   const quality = record.quality || {};
   const props = record.properties || {};
   const explicitTier = normalizeFrontendDeliveryTier(
@@ -3527,6 +3527,10 @@ function effectiveFrontendDeliveryTier(record = {}) {
     recallGuard: safeText(quality.recall_guard || record.recall_guard || props.recall_guard),
     reviewStatus: safeText(quality.review_status || record.review_status || props.review_status)
   });
+}
+
+function effectiveFrontendDeliveryTier(record = {}) {
+  return resolveFrontendDeliveryTier(record);
 }
 
 function compactPathToken(value = '') {
