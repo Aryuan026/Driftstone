@@ -296,6 +296,94 @@ function sourceQuoteKind(trace = {}) {
   return 'missing';
 }
 
+function parseMsgRange(value = '') {
+  const text = safeText(value);
+  const match = text.match(/^(\d+)\s*-\s*(\d+)$/u);
+  if (!match) return { start: '', end: '', text };
+  return { start: match[1], end: match[2], text };
+}
+
+function explicitObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+function findActionReceiptClaim(...objects) {
+  const candidates = [];
+  for (const obj of objects) {
+    if (!obj || typeof obj !== 'object') continue;
+    for (const key of ['canonical_action_receipt', 'canonicalActionReceipt']) {
+      const receipt = explicitObject(obj[key]);
+      if (receipt) candidates.push(receipt);
+    }
+    const actionReceipt = explicitObject(obj.action_receipt);
+    if (actionReceipt && safeText(actionReceipt.canonical)) candidates.push(actionReceipt);
+    const receipt = explicitObject(obj.receipt);
+    if (receipt && safeText(receipt.receipt_kind) === 'canonical_action_receipt') candidates.push(receipt);
+  }
+  for (const receipt of candidates) {
+    const namespace = safeText(receipt.namespace || receipt.receipt_namespace || receipt.source_namespace, 'driftstone.upstream');
+    const rawReceiptId = safeText(receipt.receipt_id || receipt.id || receipt.action_id);
+    if (!rawReceiptId) continue;
+    const claimedSourceRefs = uniqueStrings([
+      receipt.source_trace_id,
+      receipt.source_span_id,
+      receipt.source_ref,
+      ...safeArray(receipt.source_refs, 8),
+      receipt.message_id,
+      receipt.source_window_id
+    ], 16);
+    return {
+      schema: 'driftstone_action_receipt_claim_v0',
+      namespace,
+      claim_id: rawReceiptId.includes(':') ? rawReceiptId : `${namespace}:${rawReceiptId}`,
+      claimed_receipt_id: rawReceiptId.includes(':') ? rawReceiptId : `${namespace}:${rawReceiptId}`,
+      action_id: safeText(receipt.action_id || rawReceiptId),
+      action_type: safeText(receipt.action_type || receipt.type),
+      actor: safeText(receipt.actor || receipt.speaker || receipt.entity),
+      source_trace_id: safeText(receipt.source_trace_id),
+      source_span_id: safeText(receipt.source_span_id),
+      source_ref: safeText(receipt.source_ref || safeArray(receipt.source_refs, 1)[0]),
+      claimed_source_refs: claimedSourceRefs,
+      message_id: safeText(receipt.message_id),
+      source_window_id: safeText(receipt.source_window_id),
+      source_time: safeText(receipt.source_time || receipt.created_at || receipt.time),
+      verification_state: 'unverified_action_outcome',
+      canonical_authority_granted: false,
+      has_source_reference: claimedSourceRefs.length > 0,
+      verification_required: 'external_canonical_receipt_ledger_with_namespace_owner_and_causal_identity'
+    };
+  }
+  return null;
+}
+
+function verifyCanonicalActionReceiptClaim(actionReceiptClaim = null, verifier = null) {
+  if (!actionReceiptClaim || !verifier || typeof verifier.verifyCanonicalActionReceipt !== 'function') return null;
+  const verified = verifier.verifyCanonicalActionReceipt(actionReceiptClaim);
+  if (!verified || verified.verified !== true) return null;
+  const receiptId = safeText(verified.receipt_id || verified.canonical_receipt_id);
+  const ownerId = safeText(verified.owner_id || verified.owner);
+  const causalIdentity = safeText(verified.causal_identity || verified.causal_identity_id);
+  const namespace = safeText(verified.namespace || actionReceiptClaim.namespace);
+  if (!receiptId || !ownerId || !causalIdentity || !namespace) return null;
+  return {
+    schema: 'driftstone_canonical_action_receipt_ref_v0',
+    namespace,
+    receipt_id: receiptId.includes(':') ? receiptId : `${namespace}:${receiptId}`,
+    action_id: safeText(verified.action_id || actionReceiptClaim.action_id),
+    action_type: safeText(verified.action_type || actionReceiptClaim.action_type),
+    actor: safeText(verified.actor || actionReceiptClaim.actor),
+    owner_id: ownerId,
+    causal_identity: causalIdentity,
+    source_trace_id: safeText(verified.source_trace_id || actionReceiptClaim.source_trace_id),
+    source_span_id: safeText(verified.source_span_id || actionReceiptClaim.source_span_id),
+    source_ref: safeText(verified.source_ref || actionReceiptClaim.source_ref),
+    message_id: safeText(verified.message_id || actionReceiptClaim.message_id),
+    source_time: safeText(verified.source_time || actionReceiptClaim.source_time),
+    verification_state: 'verified_external_canonical_receipt',
+    source_backed: true
+  };
+}
+
 function parseQuoteRefs(value) {
   const text = safeText(value);
   if (!text) return [];
@@ -470,6 +558,7 @@ function buildSourceDiagnosticFromTrace(trace = {}, span = {}, {
     source_file: firstText(sourceFileFromRefs(sourceRefs), workbenchRow.source_file),
     source_bundle_id: firstText(trace.source_bundle_id, span.source_bundle_id),
     turn_range: turnRange,
+    source_time: firstText(workbenchRow.time, trace.source_time, span.source_time),
     stable_source_id: firstText(recordId, messageId),
     record_id_equivalent: recordId,
     message_id_equivalent: messageId,
@@ -499,6 +588,451 @@ function buildSourceDiagnosticFromTrace(trace = {}, span = {}, {
       evidence_only: true,
       expose_to_front_model_by_default: false,
       emits_home_organ_packet: false
+    }
+  };
+}
+
+function stableIdPart(value, fallback = 'unknown') {
+  const text = safeText(value, fallback);
+  return encodeURIComponent(text).replace(/%/gu, '~');
+}
+
+function namespaceDriftstoneId({ month = '', provider = '', accountId = '', kind = '', rawId = '' } = {}) {
+  const raw = safeText(rawId);
+  if (!raw) return '';
+  return [
+    'driftstone',
+    stableIdPart(month, 'unknown-month'),
+    stableIdPart(provider, 'provider-unknown'),
+    stableIdPart(accountId, 'account-unknown'),
+    stableIdPart(kind, 'source-local'),
+    stableIdPart(raw)
+  ].join(':');
+}
+
+function providerConversationId(trace = {}, span = {}, candidate = {}, node = {}, canonicalActionReceipt = null) {
+  return firstText(
+    canonicalActionReceipt?.conversation_id,
+    trace.provider_conversation_id,
+    span.provider_conversation_id,
+    candidate.provider_conversation_id,
+    node.provider_conversation_id,
+    candidate.source_window?.provider_conversation_id
+  );
+}
+
+function sourceLocalConversationClaim(trace = {}, span = {}, candidate = {}, node = {}) {
+  return firstText(
+    trace.conversation_id,
+    span.conversation_id,
+    candidate.conversation_id,
+    node.conversation_id,
+    candidate.source_window?.conversation_id
+  );
+}
+
+function sourceWindowScopeId(sourceDiagnostic = {}, trace = {}, span = {}) {
+  return firstText(
+    sourceDiagnostic.source_window_id,
+    trace.source_window_id,
+    span.source_window_id,
+    sourceDiagnostic.source_window
+  );
+}
+
+function providerEpisodeId(trace = {}, span = {}, candidate = {}, node = {}, canonicalActionReceipt = null) {
+  return firstText(
+    canonicalActionReceipt?.episode_id,
+    trace.provider_episode_id,
+    span.provider_episode_id,
+    candidate.provider_episode_id,
+    node.provider_episode_id,
+    candidate.source_window?.provider_episode_id
+  );
+}
+
+function sourceLocalEpisodeClaim(trace = {}, span = {}, candidate = {}, node = {}) {
+  return firstText(
+    trace.episode_id,
+    span.episode_id,
+    candidate.episode_id,
+    node.episode_id,
+    candidate.source_window?.episode_id
+  );
+}
+
+function chooseScopeIdentity({
+  month = '',
+  node = {},
+  candidate = {},
+  providerConversation = '',
+  sourceWindowScope = ''
+} = {}) {
+  const nodeScope = safeText(node.scope_id);
+  if (nodeScope) {
+    return {
+      scope_id: nodeScope,
+      scope_identity_kind: 'source_local_node_scope_claim',
+      scope_source_field: 'node.scope_id'
+    };
+  }
+  const candidateScope = safeText(candidate.scope_id);
+  if (candidateScope) {
+    return {
+      scope_id: candidateScope,
+      scope_identity_kind: 'source_local_candidate_scope_claim',
+      scope_source_field: 'candidate.scope_id'
+    };
+  }
+  if (providerConversation) {
+    return {
+      scope_id: `${month}/${providerConversation}`,
+      scope_identity_kind: 'provider_conversation_scope',
+      scope_source_field: 'provider_conversation_id'
+    };
+  }
+  if (sourceWindowScope) {
+    return {
+      scope_id: `${month}/${sourceWindowScope}`,
+      scope_identity_kind: 'driftstone_source_scope',
+      scope_source_field: 'source_window_scope_id'
+    };
+  }
+  return {
+    scope_id: safeText(month),
+    scope_identity_kind: 'month_scope',
+    scope_source_field: 'month'
+  };
+}
+
+function speakerFromSource({ sourceDiagnostic = {}, trace = {}, span = {}, workbenchRow = {} } = {}) {
+  const quoteRoles = safeArray(sourceDiagnostic.quote_refs, 8).map((item) => safeText(item.role)).filter(Boolean);
+  const uniqueRoles = uniqueStrings(quoteRoles, 4);
+  return firstText(
+    trace.speaker,
+    trace.role,
+    span.speaker,
+    workbenchRow.speaker,
+    uniqueRoles.length === 1 ? uniqueRoles[0] : '',
+    uniqueRoles.length > 1 ? 'multi' : ''
+  );
+}
+
+function entityFromMaterial(node = {}, candidate = {}) {
+  return firstText(
+    node.structured_slots?.subject,
+    node.structured_slots?.object_anchor,
+    safeArray(candidate.entities, 1)[0],
+    safeArray(node.root_refs, 1)[0]?.root_name
+  );
+}
+
+function explicitHumanAttestation(node = {}, candidate = {}) {
+  const values = [
+    node.owner_attested,
+    node.human_attested,
+    candidate.owner_attested,
+    candidate.human_attested,
+    node.bridge_import_policy?.owner_attested,
+    candidate.bridge_import_policy?.owner_attested,
+    node.quality?.owner_reviewed,
+    candidate.quality?.owner_reviewed
+  ];
+  return values.some((value) => value === true || safeText(value).toLowerCase() === 'true');
+}
+
+function buildLineagePacket({
+  args,
+  node = {},
+  candidate = {},
+  trace = {},
+  span = {},
+  sourceDiagnostic = {},
+  workbenchRow = {},
+  sourceIndexAnchor = {},
+  actionReceiptClaim = null,
+  canonicalActionReceipt = null
+} = {}) {
+  const range = parseMsgRange(sourceDiagnostic.turn_range);
+  const conversationId = providerConversationId(trace, span, candidate, node, canonicalActionReceipt);
+  const conversationClaimId = sourceLocalConversationClaim(trace, span, candidate, node);
+  const sourceScopeId = sourceWindowScopeId(sourceDiagnostic, trace, span);
+  const month = firstText(node.month_key, candidate.month_key, args.month);
+  const provider = firstText(trace.provider, span.provider, candidate.provider, node.provider, args.sourceClient);
+  const accountId = firstText(trace.account_id, span.account_id, candidate.account_id, node.account_id);
+  const rawMessageId = firstText(
+    canonicalActionReceipt?.message_id,
+    sourceDiagnostic.message_id_equivalent,
+    sourceDiagnostic.source_trace_id ? `driftstone:${month}:trace:${sourceDiagnostic.source_trace_id}` : '',
+    node.source_entry_id ? `driftstone:${month}:source-entry:${node.source_entry_id}` : ''
+  );
+  const rawMessageIdKind = sourceDiagnostic.message_id_equivalent
+    ? 'source_ref_message_id'
+    : (sourceDiagnostic.source_trace_id ? 'driftstone_trace_surrogate' : (rawMessageId ? 'driftstone_source_entry_surrogate' : 'missing'));
+  const messageId = namespaceDriftstoneId({
+    month,
+    provider,
+    accountId,
+    kind: rawMessageIdKind,
+    rawId: rawMessageId
+  });
+  const messageIdKind = rawMessageId
+    ? `driftstone_namespaced_${rawMessageIdKind}`
+    : 'missing';
+  const episodeId = providerEpisodeId(trace, span, candidate, node, canonicalActionReceipt);
+  const episodeClaimId = sourceLocalEpisodeClaim(trace, span, candidate, node);
+  const providerExchangeRaw = conversationId && sourceDiagnostic.turn_range
+    ? `${provider || 'provider-unknown'}:${accountId || 'account-unknown'}:${conversationId}:${sourceDiagnostic.turn_range}`
+    : '';
+  const sourceExchangeRaw = sourceScopeId && sourceDiagnostic.turn_range
+    ? `${sourceScopeId}:${sourceDiagnostic.turn_range}`
+    : '';
+  const episodeExchangeRaw = firstText(node.episode_key, candidate.episode_key);
+  const exchangeId = firstText(
+    providerExchangeRaw ? namespaceDriftstoneId({ month, provider, accountId, kind: 'provider_conversation_turn_range', rawId: providerExchangeRaw }) : '',
+    sourceExchangeRaw ? namespaceDriftstoneId({ month, provider, accountId, kind: 'source_window_turn_range', rawId: sourceExchangeRaw }) : '',
+    episodeExchangeRaw ? namespaceDriftstoneId({ month, provider, accountId, kind: 'driftstone_episode_key', rawId: episodeExchangeRaw }) : '',
+    node.source_entry_id ? namespaceDriftstoneId({ month, provider, accountId, kind: 'source_entry', rawId: node.source_entry_id }) : ''
+  );
+  const driftstoneEpisodeKey = firstText(node.episode_key, candidate.episode_key);
+  const scopeIdentity = chooseScopeIdentity({
+    month,
+    node,
+    candidate,
+    providerConversation: conversationId,
+    sourceWindowScope: sourceScopeId
+  });
+  const replyToMessageId = firstText(
+    node.reply_to_message_id,
+    candidate.reply_to_message_id,
+    trace.reply_to_message_id,
+    span.reply_to_message_id
+  );
+  const replyToMaterialId = firstText(
+    node.reply_to_material_id,
+    candidate.reply_to_material_id,
+    node.tree_growth?.canonical_node_id && node.tree_growth?.canonical_node_id !== node.node_id ? node.tree_growth.canonical_node_id : ''
+  );
+  const speaker = speakerFromSource({ sourceDiagnostic, trace, span, workbenchRow });
+  const entity = entityFromMaterial(node, candidate);
+  const role = canonicalActionReceipt
+    ? 'canonical_action_receipt'
+    : (actionReceiptClaim
+      ? 'action_receipt_claim'
+      : (sourceDiagnostic.reliable_home_source_span ? 'narration' : 'unverified_claim'));
+  const roleSource = canonicalActionReceipt
+    ? 'external_canonical_receipt_verifier'
+    : (actionReceiptClaim
+      ? 'unverified_action_receipt_claim'
+      : (sourceDiagnostic.reliable_home_source_span ? 'bounded_source_quote' : 'no_source_quote'));
+  const topologyAuthority = canonicalActionReceipt
+    ? 'canonical_receipt'
+    : (sourceDiagnostic.reliable_home_source_span ? 'source_backed_narration_noncanonical' : 'none');
+  const strategy = canonicalActionReceipt
+    ? 'use_verified_canonical_receipt_authority'
+    : (actionReceiptClaim
+      ? 'keep_as_unverified_action_outcome'
+      : (sourceDiagnostic.reliable_home_source_span ? 'review_as_source_quote_available_candidate' : 'human_visible_review_only'));
+  return {
+    schema: 'driftstone_home_lineage_v0',
+    message_id: messageId,
+    message_id_kind: messageIdKind,
+    reply_to_material_id: replyToMaterialId,
+    reply_to_message_id: replyToMessageId,
+    source_time: firstText(sourceDiagnostic.source_time, node.time_anchor, candidate.source_window?.source_time),
+    exchange_id: exchangeId,
+    exchange_identity_kind: conversationId
+      ? 'provider_conversation_turn_range'
+      : (sourceScopeId ? 'driftstone_source_window_turn_range' : (driftstoneEpisodeKey ? 'driftstone_episode_key' : 'driftstone_source_entry_surrogate')),
+    raw_message_id: rawMessageId,
+    raw_message_id_kind: rawMessageIdKind,
+    provider,
+    account_id: accountId,
+    account_id_status: accountId ? 'source_field' : 'unknown',
+    conversation_id: conversationId,
+    conversation_identity_kind: conversationId ? 'provider_conversation_id' : 'unknown',
+    source_local_conversation_id_claim: conversationClaimId,
+    source_local_conversation_id_claim_kind: conversationClaimId ? 'source_local_unverified_claim' : 'missing',
+    source_window_scope_id: sourceScopeId,
+    source_window_identity_kind: sourceScopeId ? 'driftstone_source_window_or_title' : 'unknown',
+    episode_id: episodeId,
+    episode_identity_kind: episodeId ? 'provider_episode_id' : (driftstoneEpisodeKey ? 'driftstone_episode_key' : 'unknown'),
+    source_local_episode_id_claim: episodeClaimId,
+    source_local_episode_id_claim_kind: episodeClaimId ? 'source_local_unverified_claim' : 'missing',
+    episode_key: driftstoneEpisodeKey,
+    scope_id: scopeIdentity.scope_id,
+    scope_identity_kind: scopeIdentity.scope_identity_kind,
+    scope_source_field: scopeIdentity.scope_source_field,
+    source_window_id: firstText(sourceDiagnostic.source_window_id, trace.source_window_id, span.source_window_id),
+    source_window: safeText(sourceDiagnostic.source_window),
+    source_msg_range: sourceDiagnostic.turn_range,
+    source_msg_start: firstText(sourceDiagnostic.source_msg_start, range.start),
+    source_msg_end: firstText(sourceDiagnostic.source_msg_end, range.end),
+    source_bundle_id: firstText(sourceDiagnostic.source_bundle_id, trace.source_bundle_id, span.source_bundle_id),
+    source_file: safeText(sourceDiagnostic.source_file),
+    source_refs: uniqueStrings([
+      ...safeArray(node.source_refs, 128),
+      ...safeArray(candidate.source_refs, 128),
+      ...safeArray(trace.source_refs, 128),
+      ...safeArray(span.source_refs, 128),
+      sourceIndexAnchor.source_ref,
+      workbenchRow.source_ref
+    ], 256),
+    source_trace_ids: uniqueStrings([sourceDiagnostic.source_trace_id, ...safeArray(node.source_trace_ids, 128)], 256),
+    source_span_ids: uniqueStrings([sourceDiagnostic.source_span_id, ...safeArray(node.source_span_ids, 128)], 256),
+    source_entry_id: safeText(node.source_entry_id || candidate.source_entry_id),
+    speaker,
+    entity,
+    role,
+    role_source: roleSource,
+    topology_authority: topologyAuthority,
+    strategy,
+    action_receipt_claim: actionReceiptClaim,
+    canonical_action_receipt: canonicalActionReceipt
+  };
+}
+
+function buildSourceAuthorityPacket({
+  lineage,
+  sourceDiagnostic = {},
+  node = {},
+  candidate = {},
+  actionReceiptClaim = null,
+  canonicalActionReceipt = null
+} = {}) {
+  const humanAttested = explicitHumanAttestation(node, candidate);
+  const sourceQuoteAvailable = Boolean(sourceDiagnostic.reliable_home_source_span);
+  const exactBoundedClaimConservation = false;
+  const verifiedCanonicalReceipt = Boolean(canonicalActionReceipt?.source_backed);
+  const answerEvidenceCandidate = Boolean(sourceQuoteAvailable || actionReceiptClaim);
+  const canBeAnswerEvidence = Boolean(verifiedCanonicalReceipt || exactBoundedClaimConservation);
+  const authorityKind = canonicalActionReceipt
+    ? 'canonical_action_receipt'
+    : (actionReceiptClaim
+      ? 'action_receipt_claim'
+      : (sourceQuoteAvailable
+        ? 'source_quote_available'
+        : (humanAttested ? 'owner_attested_without_verbatim_source' : 'unverified_narration')));
+  const answerEvidenceReason = canBeAnswerEvidence
+    ? (verifiedCanonicalReceipt ? 'verified_external_canonical_receipt' : 'exact_bounded_claim_conservation_verified')
+    : (sourceQuoteAvailable
+      ? 'source_quote_available_but_claim_conservation_unverified'
+      : (actionReceiptClaim
+        ? 'action_receipt_claim_unverified_no_canonical_authority'
+        : (humanAttested ? 'owner_attested_but_no_verbatim_source_quote' : 'source_incomplete_or_legacy_unverified')));
+  return {
+    schema: 'driftstone_source_authority_packet_v0',
+    authority_kind: authorityKind,
+    answer_evidence_candidate: answerEvidenceCandidate,
+    source_quote_available: sourceQuoteAvailable,
+    exact_bounded_claim_conservation: exactBoundedClaimConservation,
+    can_be_answer_evidence: canBeAnswerEvidence,
+    can_be_answer_evidence_reason: answerEvidenceReason,
+    visible_candidate_allowed: true,
+    owner_approval_can_promote_visibility: true,
+    owner_approval_does_not_create_answer_evidence: true,
+    role: lineage.role,
+    role_source: lineage.role_source,
+    topology_authority: lineage.topology_authority,
+    strategy: lineage.strategy,
+    action_receipt_claim: actionReceiptClaim,
+    canonical_action_receipt: canonicalActionReceipt,
+    canonical_action_receipt_verified: verifiedCanonicalReceipt,
+    source_trace_id: sourceDiagnostic.source_trace_id,
+    source_span_id: sourceDiagnostic.source_span_id,
+    source_quote_kind: sourceDiagnostic.source_quote_kind,
+    quote_recovery_status: sourceDiagnostic.quote_recovery_status,
+    reliable_home_source_span: Boolean(sourceDiagnostic.reliable_home_source_span),
+    source_incomplete: Boolean(sourceDiagnostic.source_incomplete),
+    source_authority_note: sourceQuoteAvailable
+      ? 'Bounded quote is recoverable, but Driftstone has not proven the candidate claim is exactly conserved inside it.'
+      : (humanAttested ? 'owner_attested_without_verbatim_source' : 'unverified_narration')
+  };
+}
+
+function buildWarmRewriteCandidatePacket({
+  row = {},
+  node = {},
+  candidate = {},
+  lineage = {},
+  sourceAuthority = {}
+} = {}) {
+  return {
+    schema: 'driftstone_warm_rewrite_candidate_v0',
+    candidate_id: row.review_row_id.replace(/^home_review\./u, 'warm_rewrite_candidate.'),
+    review_row_id: row.review_row_id,
+    source_entry_id: row.source_entry_id,
+    assimilation_status: 'not_sent',
+    candidate_only: true,
+    writes_warm_memory: false,
+    final_body_markdown_generated: false,
+    persona_prompt_read_by_driftstone: false,
+    requires_home_runtime_persona: true,
+    source_material: {
+      source_quote: safeText(row.source_quote),
+      excerpt_text: safeText(row.excerpt_text),
+      excerpt_hint: safeText(row.excerpt_hint),
+      source_quote_available: Boolean(sourceAuthority.source_quote_available),
+      source_quote_kind: safeText(sourceAuthority.source_quote_kind),
+      source_quote_is_raw_or_bounded_source: Boolean(sourceAuthority.source_quote_available),
+      quote_recovery_status: safeText(row.quote_recovery_status),
+      quote_recovery_reason: safeText(row.quote_recovery_reason),
+      turn_range: safeText(row.turn_range),
+      source_window: safeText(row.source_window),
+      source_file: safeText(row.source_file),
+      source_trace_id: safeText(row.source_trace_id),
+      source_span_id: safeText(row.source_span_id)
+    },
+    candidate_material: {
+      candidate_claim: safeText(row.candidate_claim),
+      living_fragment: safeText(node.living_fragment),
+      project_fact: safeText(node.project_fact),
+      relationship_significance: safeText(node.relationship_significance),
+      feeling_as_fact: safeText(node.feeling_as_fact),
+      candidate_claim_is_source_quote: false,
+      living_fragment_is_source_quote: false
+    },
+    event_material: safeText(node.living_fragment || row.candidate_claim),
+    emotion_or_viewpoint: firstText(node.feeling_as_fact, node.relationship_significance, candidate.human_summary_cn, candidate.summary),
+    future_continuity_hint: firstText(node.front_context_hint, node.recall_payload, safeArray(node.activation_triggers, 4).join(' / ')),
+    owner_or_source_authority: {
+      authority_kind: sourceAuthority.authority_kind,
+      can_be_answer_evidence: sourceAuthority.can_be_answer_evidence,
+      reason: sourceAuthority.can_be_answer_evidence_reason,
+      answer_evidence_candidate: Boolean(sourceAuthority.answer_evidence_candidate),
+      source_quote_available: Boolean(sourceAuthority.source_quote_available),
+      exact_bounded_claim_conservation: Boolean(sourceAuthority.exact_bounded_claim_conservation),
+      action_receipt_claim_id: safeText(sourceAuthority.action_receipt_claim?.claim_id),
+      canonical_action_receipt_id: safeText(sourceAuthority.canonical_action_receipt?.receipt_id)
+    },
+    lineage: {
+      message_id: lineage.message_id,
+      message_id_kind: lineage.message_id_kind,
+      raw_message_id: lineage.raw_message_id,
+      raw_message_id_kind: lineage.raw_message_id_kind,
+      exchange_id: lineage.exchange_id,
+      exchange_identity_kind: lineage.exchange_identity_kind,
+      source_time: lineage.source_time,
+      conversation_id: lineage.conversation_id,
+      conversation_identity_kind: lineage.conversation_identity_kind,
+      source_local_conversation_id_claim: lineage.source_local_conversation_id_claim,
+      episode_id: lineage.episode_id,
+      episode_identity_kind: lineage.episode_identity_kind,
+      source_local_episode_id_claim: lineage.source_local_episode_id_claim,
+      scope_id: lineage.scope_id
+    },
+    quality_hints: {
+      review_status: row.review_status,
+      home_lane: row.home_lane,
+      promotion_status: row.promotion_status,
+      import_policy_state: row.import_policy_state,
+      write_risk: row.write_risk,
+      evidence_strength: row.evidence_strength,
+      source_incomplete: row.source_incomplete,
+      mixed_split_required: row.home_lane === 'mixed_split_required',
+      recommended_home_action: row.home_lane === 'mixed_split_required'
+        ? 'split_before_warm_rewrite'
+        : (sourceAuthority.can_be_answer_evidence ? 'home_runtime_persona_rewrite_after_review' : 'owner_visible_review_before_any_evidence_use')
     }
   };
 }
@@ -743,7 +1277,16 @@ function candidateClaimForNode(node = {}, candidate = {}) {
   );
 }
 
-function buildReviewRow({ node, candidate = {}, trace = {}, span = {}, sourceDiagnostic }) {
+function buildReviewRow({
+  args,
+  node,
+  candidate = {},
+  trace = {},
+  span = {},
+  sourceDiagnostic,
+  workbenchRow = {},
+  sourceIndexAnchor = {}
+}) {
   const homeLane = inferHomeLane(node, candidate);
   const mixedReasons = mixedLaneReasons(node, candidate);
   const fallbackSingleLane = inferSingleHomeLane(node, candidate);
@@ -751,7 +1294,29 @@ function buildReviewRow({ node, candidate = {}, trace = {}, span = {}, sourceDia
   const importPolicyState = inferImportPolicyState({ homeLane, node, sourceDiagnostic });
   const writeRisk = inferWriteRisk({ homeLane, node, sourceDiagnostic });
   const rowId = `home_review.${safeText(node.node_id || node.source_entry_id || candidate.candidate_id)}`;
-  return {
+  const actionReceiptClaim = findActionReceiptClaim(node, candidate, trace, span, sourceDiagnostic, workbenchRow, sourceIndexAnchor);
+  const canonicalActionReceipt = verifyCanonicalActionReceiptClaim(actionReceiptClaim);
+  const lineage = buildLineagePacket({
+    args,
+    node,
+    candidate,
+    trace,
+    span,
+    sourceDiagnostic,
+    workbenchRow,
+    sourceIndexAnchor,
+    actionReceiptClaim,
+    canonicalActionReceipt
+  });
+  const sourceAuthority = buildSourceAuthorityPacket({
+    lineage,
+    sourceDiagnostic,
+    node,
+    candidate,
+    actionReceiptClaim,
+    canonicalActionReceipt
+  });
+  const row = {
     schema: REVIEW_ROW_SCHEMA,
     review_row_id: rowId,
     source_entry_id: safeText(node.source_entry_id || candidate.source_entry_id),
@@ -773,8 +1338,44 @@ function buildReviewRow({ node, candidate = {}, trace = {}, span = {}, sourceDia
     import_reason: importReasonForRow({ homeLane, importPolicyState, sourceDiagnostic, node }),
     source_trace_id: safeText(trace.trace_id),
     source_span_id: firstText(trace.canonical_source_span_id, span.source_span_id),
+    message_id: lineage.message_id,
+    message_id_kind: lineage.message_id_kind,
+    raw_message_id: lineage.raw_message_id,
+    raw_message_id_kind: lineage.raw_message_id_kind,
+    reply_to_material_id: lineage.reply_to_material_id,
+    reply_to_message_id: lineage.reply_to_message_id,
+    source_time: lineage.source_time,
+    exchange_id: lineage.exchange_id,
+    exchange_identity_kind: lineage.exchange_identity_kind,
+    provider: lineage.provider,
+    account_id: lineage.account_id,
+    conversation_id: lineage.conversation_id,
+    conversation_identity_kind: lineage.conversation_identity_kind,
+    source_local_conversation_id_claim: lineage.source_local_conversation_id_claim,
+    source_local_conversation_id_claim_kind: lineage.source_local_conversation_id_claim_kind,
+    source_window_scope_id: lineage.source_window_scope_id,
+    source_window_identity_kind: lineage.source_window_identity_kind,
+    episode_id: lineage.episode_id,
+    episode_identity_kind: lineage.episode_identity_kind,
+    source_local_episode_id_claim: lineage.source_local_episode_id_claim,
+    source_local_episode_id_claim_kind: lineage.source_local_episode_id_claim_kind,
+    episode_key: lineage.episode_key,
+    scope_id: lineage.scope_id,
+    scope_identity_kind: lineage.scope_identity_kind,
+    scope_source_field: lineage.scope_source_field,
+    speaker: lineage.speaker,
+    entity: lineage.entity,
+    role: lineage.role,
+    role_source: lineage.role_source,
+    topology_authority: lineage.topology_authority,
+    strategy: lineage.strategy,
+    action_receipt_claim: actionReceiptClaim,
+    canonical_action_receipt: canonicalActionReceipt,
+    source_authority: sourceAuthority,
+    lineage,
     source_quote: safeText(sourceDiagnostic.source_quote),
     excerpt_text: safeText(sourceDiagnostic.excerpt_text),
+    excerpt_hint: safeText(sourceDiagnostic.excerpt_hint),
     quote_recovery_status: safeText(sourceDiagnostic.quote_recovery_status),
     quote_recovery_source: safeText(sourceDiagnostic.quote_recovery_source),
     quote_recovery_reason: safeText(sourceDiagnostic.quote_recovery_reason),
@@ -794,7 +1395,6 @@ function buildReviewRow({ node, candidate = {}, trace = {}, span = {}, sourceDia
     anchor_name: safeText(node.anchor_name),
     title: safeText(node.title || candidate.title || node.anchor_name),
     month_key: safeText(node.month_key || candidate.month_key),
-    episode_key: safeText(node.episode_key),
     living_fragment: safeText(node.living_fragment),
     project_fact: safeText(node.project_fact),
     relationship_significance: safeText(node.relationship_significance),
@@ -812,9 +1412,21 @@ function buildReviewRow({ node, candidate = {}, trace = {}, span = {}, sourceDia
       writes_warm_memory: false,
       writes_cold_tree: false,
       writes_notion: false,
+      reads_persona_prompt: false,
+      emits_final_warm_body_markdown: false,
       calls_home_api: false,
       direct_write_allowed: false
     }
+  };
+  return {
+    ...row,
+    warm_rewrite_candidate: buildWarmRewriteCandidatePacket({
+      row,
+      node,
+      candidate,
+      lineage,
+      sourceAuthority
+    })
   };
 }
 
@@ -835,6 +1447,42 @@ function buildCandidateRow(row = {}) {
     source_incomplete: row.source_incomplete,
     source_trace_id: row.source_trace_id,
     source_span_id: row.source_span_id,
+    message_id: row.message_id,
+    message_id_kind: row.message_id_kind,
+    raw_message_id: row.raw_message_id,
+    raw_message_id_kind: row.raw_message_id_kind,
+    reply_to_material_id: row.reply_to_material_id,
+    reply_to_message_id: row.reply_to_message_id,
+    source_time: row.source_time,
+    exchange_id: row.exchange_id,
+    exchange_identity_kind: row.exchange_identity_kind,
+    provider: row.provider,
+    account_id: row.account_id,
+    conversation_id: row.conversation_id,
+    conversation_identity_kind: row.conversation_identity_kind,
+    source_local_conversation_id_claim: row.source_local_conversation_id_claim,
+    source_local_conversation_id_claim_kind: row.source_local_conversation_id_claim_kind,
+    source_window_scope_id: row.source_window_scope_id,
+    source_window_identity_kind: row.source_window_identity_kind,
+    episode_id: row.episode_id,
+    episode_identity_kind: row.episode_identity_kind,
+    source_local_episode_id_claim: row.source_local_episode_id_claim,
+    source_local_episode_id_claim_kind: row.source_local_episode_id_claim_kind,
+    episode_key: row.episode_key,
+    scope_id: row.scope_id,
+    scope_identity_kind: row.scope_identity_kind,
+    scope_source_field: row.scope_source_field,
+    speaker: row.speaker,
+    entity: row.entity,
+    role: row.role,
+    role_source: row.role_source,
+    topology_authority: row.topology_authority,
+    strategy: row.strategy,
+    action_receipt_claim: row.action_receipt_claim,
+    canonical_action_receipt: row.canonical_action_receipt,
+    source_authority: row.source_authority,
+    lineage: row.lineage,
+    warm_rewrite_candidate: row.warm_rewrite_candidate,
     title: row.title,
     month_key: row.month_key,
     context_domain: row.context_domain,
@@ -1058,6 +1706,12 @@ function renderReport({ args, rows, sources, episodes, candidates, rejected, led
   const quoteRecoveryCounts = countBy(rows, 'quote_recovery_status');
   const mixedCount = homeLaneCounts.mixed_split_required || 0;
   const directWriteCount = rows.filter((row) => row.import_policy_state === 'direct_write_allowed').length;
+  const answerEvidenceCandidateCount = rows.filter((row) => row.source_authority?.answer_evidence_candidate).length;
+  const sourceQuoteAvailableCount = rows.filter((row) => row.source_authority?.source_quote_available).length;
+  const canBeAnswerEvidenceCount = rows.filter((row) => row.source_authority?.can_be_answer_evidence).length;
+  const actionReceiptClaimCount = rows.filter((row) => row.action_receipt_claim).length;
+  const canonicalReceiptCount = rows.filter((row) => row.canonical_action_receipt).length;
+  const warmBodyMarkdownCount = rows.filter((row) => Object.prototype.hasOwnProperty.call(row.warm_rewrite_candidate || {}, 'body_markdown')).length;
   return `# Driftstone -> Home Import Review Artifacts v0
 
 Generated at: ${new Date().toISOString()}
@@ -1077,6 +1731,8 @@ Output dir: \`${args.outDir}\`
 - Home organ packets emitted: none
 - All review rows assimilation_status: \`not_sent\`
 - Direct write rows: ${directWriteCount}
+- Persona prompt reads: 0
+- Final warm \`body_markdown\` emitted: ${warmBodyMarkdownCount}
 
 ## Output Files
 
@@ -1098,6 +1754,20 @@ Output dir: \`${args.outDir}\`
 - candidate review rows: ${candidates.length}
 - rejected/review-only rows: ${rejected.length}
 - mixed split required: ${mixedCount}
+- source quote available rows: ${sourceQuoteAvailableCount}
+- answer-evidence candidate rows: ${answerEvidenceCandidateCount}
+- can-be-answer-evidence rows: ${canBeAnswerEvidenceCount}
+- action receipt claims: ${actionReceiptClaimCount}
+- verified canonical action receipts: ${canonicalReceiptCount}
+
+## Lineage / Source Authority
+
+- Every review row carries \`lineage\`, \`source_authority\`, and \`warm_rewrite_candidate\`.
+- \`warm_rewrite_candidate\` is input material for Home runtime rewriting only; it does not include final \`body_markdown\`.
+- \`canonical_action_receipt\` is only populated after an external canonical receipt verifier confirms namespace, owner, and causal identity.
+- JSON-shaped receipt fields are preserved as \`action_receipt_claim\` / unverified outcomes, not canonical authority.
+- Bounded quotes set \`source_quote_available=true\` and may make a row an \`answer_evidence_candidate\`; they do not set \`can_be_answer_evidence=true\` until exact claim conservation or an external reviewed receipt is proven.
+- Human-visible legacy candidates may be reviewed by owner even when \`can_be_answer_evidence=false\`.
 
 ## Counts by Home Lane
 
@@ -1161,7 +1831,10 @@ function validateRows(rows = []) {
       'promotion_status',
       'target_hint',
       'import_policy_state',
-      'import_reason'
+      'import_reason',
+      'message_id',
+      'exchange_id',
+      'scope_id'
     ]) {
       if (!safeText(row[key]) && typeof row[key] !== 'boolean') missing.push(`${row.review_row_id}:${key}`);
     }
@@ -1173,6 +1846,64 @@ function validateRows(rows = []) {
     }
     if (row.home_lane === 'mixed_split_required' && row.promotion_status !== 'mixed_split_required') {
       throw new Error(`Mixed row not visibly marked: ${row.review_row_id}`);
+    }
+    if (!row.source_authority || typeof row.source_authority !== 'object') {
+      throw new Error(`Missing source_authority packet: ${row.review_row_id}`);
+    }
+    if (!row.lineage || typeof row.lineage !== 'object') {
+      throw new Error(`Missing lineage packet: ${row.review_row_id}`);
+    }
+    if (!row.warm_rewrite_candidate || typeof row.warm_rewrite_candidate !== 'object') {
+      throw new Error(`Missing warm_rewrite_candidate packet: ${row.review_row_id}`);
+    }
+    if ('body_markdown' in row.warm_rewrite_candidate) {
+      throw new Error(`Warm rewrite candidate must not emit body_markdown: ${row.review_row_id}`);
+    }
+    if (row.warm_rewrite_candidate.persona_prompt_read_by_driftstone !== false) {
+      throw new Error(`Driftstone must not read persona prompt: ${row.review_row_id}`);
+    }
+    if (row.source_authority.canonical_action_receipt && row.source_authority.canonical_action_receipt.verification_state !== 'verified_external_canonical_receipt') {
+      throw new Error(`Canonical receipt must be externally verified: ${row.review_row_id}`);
+    }
+    if (row.action_receipt_claim?.canonical_authority_granted) {
+      throw new Error(`Unverified action receipt claim must not grant canonical authority: ${row.review_row_id}`);
+    }
+    if (row.source_authority.can_be_answer_evidence && !row.source_authority.exact_bounded_claim_conservation && !row.source_authority.canonical_action_receipt_verified) {
+      throw new Error(`Answer evidence requires exact claim conservation or verified canonical receipt: ${row.review_row_id}`);
+    }
+    if (row.conversation_id && row.conversation_identity_kind !== 'provider_conversation_id') {
+      throw new Error(`conversation_id must be provider-owned or empty: ${row.review_row_id}`);
+    }
+    if (row.episode_id && row.episode_identity_kind !== 'provider_episode_id') {
+      throw new Error(`episode_id must be provider-owned or empty: ${row.review_row_id}`);
+    }
+    if (row.raw_message_id && row.message_id === row.raw_message_id) {
+      throw new Error(`message_id must be Driftstone-namespaced, not raw source id: ${row.review_row_id}`);
+    }
+    if (row.message_id && !row.message_id.startsWith('driftstone:')) {
+      throw new Error(`message_id must carry Driftstone namespace: ${row.review_row_id}`);
+    }
+    if (row.exchange_id && !row.exchange_id.startsWith('driftstone:')) {
+      throw new Error(`exchange_id must carry Driftstone namespace: ${row.review_row_id}`);
+    }
+    const scopeKindByField = {
+      'node.scope_id': 'source_local_node_scope_claim',
+      'candidate.scope_id': 'source_local_candidate_scope_claim',
+      provider_conversation_id: 'provider_conversation_scope',
+      source_window_scope_id: 'driftstone_source_scope',
+      month: 'month_scope'
+    };
+    if (row.scope_source_field && scopeKindByField[row.scope_source_field] !== row.scope_identity_kind) {
+      throw new Error(`scope_identity_kind does not match selected scope source: ${row.review_row_id}`);
+    }
+    if (row.conversation_identity_kind !== row.lineage.conversation_identity_kind) {
+      throw new Error(`conversation identity mismatch: ${row.review_row_id}`);
+    }
+    if (!row.warm_rewrite_candidate.source_material || !row.warm_rewrite_candidate.candidate_material) {
+      throw new Error(`Warm rewrite candidate must split source and candidate material: ${row.review_row_id}`);
+    }
+    if (row.warm_rewrite_candidate.candidate_material.living_fragment_is_source_quote !== false) {
+      throw new Error(`Warm candidate must not treat living_fragment as source quote: ${row.review_row_id}`);
     }
   }
   if (missing.length) {
@@ -1341,7 +2072,16 @@ async function buildArtifacts(args) {
     if (sourceDiagnostic.source_record_id && !sourcesById.has(sourceDiagnostic.source_record_id)) {
       sourcesById.set(sourceDiagnostic.source_record_id, sourceDiagnostic);
     }
-    rows.push(buildReviewRow({ node, candidate, trace, span, sourceDiagnostic }));
+    rows.push(buildReviewRow({
+      args,
+      node,
+      candidate,
+      trace,
+      span,
+      sourceDiagnostic,
+      workbenchRow,
+      sourceIndexAnchor
+    }));
   }
 
   for (const trace of sourceTraces) {
@@ -1396,7 +2136,13 @@ async function buildArtifacts(args) {
     source_diagnostics: sources.length,
     episode_groups: episodes.length,
     candidate_review_rows: candidates.length,
-    rejected_rows: rejected.length
+    rejected_rows: rejected.length,
+    source_quote_available_rows: rows.filter((row) => row.source_authority?.source_quote_available).length,
+    answer_evidence_candidate_rows: rows.filter((row) => row.source_authority?.answer_evidence_candidate).length,
+    can_be_answer_evidence_rows: rows.filter((row) => row.source_authority?.can_be_answer_evidence).length,
+    action_receipt_claims: rows.filter((row) => row.action_receipt_claim).length,
+    canonical_action_receipts_verified: rows.filter((row) => row.canonical_action_receipt).length,
+    warm_rewrite_candidates: rows.filter((row) => row.warm_rewrite_candidate).length
   };
   conservationLedger.source_lookup = {
     mode: 'month_scoped_composite_keys',
@@ -1481,6 +2227,12 @@ async function main() {
       by_source_reliability: countBy(rows, (row) => row.reliable_home_source_span ? 'reliable' : 'source_incomplete'),
       by_quote_recovery_status: countBy(rows, 'quote_recovery_status'),
       by_write_risk: countBy(rows, 'write_risk'),
+      source_quote_available_rows: rows.filter((row) => row.source_authority?.source_quote_available).length,
+      answer_evidence_candidate_rows: rows.filter((row) => row.source_authority?.answer_evidence_candidate).length,
+      can_be_answer_evidence_rows: rows.filter((row) => row.source_authority?.can_be_answer_evidence).length,
+      action_receipt_claims: rows.filter((row) => row.action_receipt_claim).length,
+      canonical_action_receipts_verified: rows.filter((row) => row.canonical_action_receipt).length,
+      warm_rewrite_candidates: rows.filter((row) => row.warm_rewrite_candidate).length,
       mixed_split_required: rows.filter((row) => row.home_lane === 'mixed_split_required').length,
       conservation: {
         reviewed_rows: ledger.reviewed_rows,
