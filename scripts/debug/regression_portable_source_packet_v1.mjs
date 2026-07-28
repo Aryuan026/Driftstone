@@ -400,6 +400,8 @@ const approved = buildPortableSourcePacket({
     month_key: '2025-03',
     decisions: [{
       record_id: 'record-incomplete',
+      candidate_id: incomplete.candidate_id,
+      canonical_payload_sha256: incomplete.integrity.canonical_payload_sha256,
       decision: 'approve',
       authority: 'human_attested',
       reviewer: 'owner',
@@ -656,11 +658,63 @@ assert.throws(() => buildPortableSourcePacket({
     month_key: '2025-03',
     decisions: [{
       record_id: 'record-incomplete',
+      candidate_id: incomplete.candidate_id,
+      canonical_payload_sha256: incomplete.integrity.canonical_payload_sha256,
       decision: 'approve',
       authority: 'source_bound'
     }]
   }
 }), (error) => error?.code === 'human_decision_authority_invalid');
+checks += 1;
+
+assert.throws(() => buildPortableSourcePacket({
+  monthKey: '2025-03',
+  fiveLayerManifest: fixture.fiveLayerManifest,
+  rawBundles: fixture.rawBundles,
+  preparedRows: fixture.preparedRows,
+  workbenchRows: fixture.workbenchRows,
+  sourceIndex: {
+    ...fixture.sourceIndex,
+    anchors: fixture.sourceIndex.anchors.map((row) => row.record_id === 'record-incomplete'
+      ? { ...row, source_msg_start: 11, source_msg_end: 11 }
+      : row)
+  },
+  reviewedRows: fixture.reviewedRows,
+  humanDecisions: {
+    schema: HUMAN_DECISIONS_SCHEMA,
+    month_key: '2025-03',
+    decisions: [{
+      record_id: 'record-incomplete',
+      candidate_id: incomplete.candidate_id,
+      canonical_payload_sha256: incomplete.integrity.canonical_payload_sha256,
+      decision: 'approve',
+      authority: 'human_attested'
+    }]
+  }
+}), (error) => error?.code === 'human_decision_candidate_binding_mismatch');
+checks += 1;
+
+assert.throws(() => buildPortableSourcePacket({
+  monthKey: '2025-03',
+  fiveLayerManifest: fixture.fiveLayerManifest,
+  rawBundles: fixture.rawBundles,
+  preparedRows: fixture.preparedRows,
+  workbenchRows: fixture.workbenchRows,
+  sourceIndex: fixture.sourceIndex,
+  reviewedRows: fixture.reviewedRows,
+  humanDecisions: {
+    schema: HUMAN_DECISIONS_SCHEMA,
+    month_key: '2025-03',
+    decisions: [{
+      record_id: 'record-persona',
+      candidate_id: personaCandidate.candidate_id,
+      canonical_payload_sha256:
+        personaCandidate.integrity.canonical_payload_sha256,
+      decision: 'approve',
+      authority: 'human_attested'
+    }]
+  }
+}), (error) => error?.code === 'human_decision_source_bound_approval_invalid');
 checks += 1;
 
 assert.throws(() => buildPortableSourcePacket({
@@ -727,34 +781,60 @@ const workbenchFile = join(temporaryRoot, 'memory-export-core_20250301_20250331-
 const sourceIndexFile = join(temporaryRoot, 'memory-export-core_20250301_20250331-source-index.json');
 const reviewedFile = join(temporaryRoot, '202503reviewed-memory-reviewed.csv');
 const decisionsFile = join(temporaryRoot, 'human-decisions.json');
+const baselineOutputDir = join(temporaryRoot, 'private-baseline-output');
 const outputDir = join(temporaryRoot, 'private-output');
 await writeFile(rawFile, JSON.stringify(fixture.rawBundles), 'utf8');
 await writeFile(preparedFile, JSON.stringify(fixture.preparedRows), 'utf8');
 await writeFile(workbenchFile, JSON.stringify(fixture.workbenchRows), 'utf8');
 await writeFile(sourceIndexFile, JSON.stringify(fixture.sourceIndex), 'utf8');
 await writeFile(reviewedFile, renderCsv(fixture.reviewedRows), 'utf8');
-await writeFile(decisionsFile, JSON.stringify({
-  schema: HUMAN_DECISIONS_SCHEMA,
-  month_key: '2025-03',
-  decisions: [{
-    record_id: 'record-incomplete',
-    decision: 'approve',
-    authority: 'legacy_import',
-    reviewer: 'owner'
-  }]
-}), 'utf8');
 
-const cliArguments = [
+const sourceArguments = [
   cli,
   '--raw-file', rawFile,
   '--prepared-file', preparedFile,
   '--workbench-file', workbenchFile,
   '--source-index-file', sourceIndexFile,
   '--reviewed-csv', reviewedFile,
-  '--human-decisions', decisionsFile,
   '--month', '2025-03',
-  '--out', outputDir,
   '--canary-limit', '2'
+];
+const baselineRun = spawnSync(process.execPath, [
+  ...sourceArguments,
+  '--out', baselineOutputDir
+], {
+  cwd: repoRoot,
+  encoding: 'utf8'
+});
+equal(baselineRun.status, 0, baselineRun.stderr || 'Baseline CLI should succeed.');
+const baselineCliCandidates = (await readFile(
+  join(baselineOutputDir, 'portable_source_candidates_v1.jsonl'),
+  'utf8'
+))
+  .trim()
+  .split('\n')
+  .map((line) => JSON.parse(line));
+const baselineCliIncomplete = baselineCliCandidates.find(
+  (candidate) => candidate.upstream.workbench_row.record_id === 'record-incomplete'
+);
+ok(baselineCliIncomplete, 'CLI baseline must expose the exact frozen decision target.');
+await writeFile(decisionsFile, JSON.stringify({
+  schema: HUMAN_DECISIONS_SCHEMA,
+  month_key: '2025-03',
+  decisions: [{
+    record_id: 'record-incomplete',
+    candidate_id: baselineCliIncomplete.candidate_id,
+    canonical_payload_sha256:
+      baselineCliIncomplete.integrity.canonical_payload_sha256,
+    decision: 'approve',
+    authority: 'legacy_import',
+    reviewer: 'owner'
+  }]
+}), 'utf8');
+const cliArguments = [
+  ...sourceArguments,
+  '--human-decisions', decisionsFile,
+  '--out', outputDir
 ];
 const run = spawnSync(process.execPath, cliArguments, {
   cwd: repoRoot,

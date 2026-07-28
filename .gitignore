@@ -38,6 +38,7 @@ docs/audits/checkpoints/**
 tmp/**
 !tmp/
 !tmp/README.md
+.playwright-cli/
 
 # desktop shell
 node_modules/

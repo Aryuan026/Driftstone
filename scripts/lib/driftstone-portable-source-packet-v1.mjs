@@ -355,6 +355,8 @@ function normalizeHumanDecisions(input = {}, monthKey = '') {
   const output = new Map();
   input.decisions.forEach((decision, index) => {
     const recordId = safeText(decision?.record_id);
+    const candidateId = safeText(decision?.candidate_id);
+    const canonicalPayloadSha256 = safeText(decision?.canonical_payload_sha256);
     const action = safeText(decision?.decision).toLowerCase();
     const authority = safeText(decision?.authority).toLowerCase();
     if (!recordId) {
@@ -368,6 +370,20 @@ function normalizeHumanDecisions(input = {}, monthKey = '') {
       throw new PortableSourcePacketError(
         'human_decision_duplicate',
         'A record_id may have only one human decision per packet.',
+        { record_id: recordId }
+      );
+    }
+    if (!/^dspc_[0-9a-f]{32}$/u.test(candidateId)) {
+      throw new PortableSourcePacketError(
+        'human_decision_candidate_id_invalid',
+        'Every human decision must bind the frozen dspc_ candidate_id.',
+        { record_id: recordId, candidate_id: candidateId }
+      );
+    }
+    if (!/^[0-9a-f]{64}$/u.test(canonicalPayloadSha256)) {
+      throw new PortableSourcePacketError(
+        'human_decision_candidate_digest_invalid',
+        'Every human decision must bind the frozen candidate canonical payload digest.',
         { record_id: recordId }
       );
     }
@@ -386,6 +402,8 @@ function normalizeHumanDecisions(input = {}, monthKey = '') {
       );
     }
     output.set(recordId, {
+      candidate_id: candidateId,
+      canonical_payload_sha256: canonicalPayloadSha256,
       decision: action,
       authority: action === 'approve' ? authority : '',
       reviewer: safeText(decision.reviewer, 'owner'),
@@ -1087,16 +1105,57 @@ export function buildPortableSourcePacket({
     const preparedMatches = chunkIds.flatMap((chunkId) => preparedByChunk.get(chunkId) || []);
     preparedMatches.forEach(({ index }) => matchedPreparedIndexes.add(index));
     const decision = decisionsByRecord.get(recordId);
-    const built = buildCandidate({
+    const candidateInput = {
       monthKey: month,
       workbench,
       workbenchIndex,
       reviewedMatches,
       anchorMatches,
       preparedMatches,
-      rawMessages: rawDisposition.rawMessages,
-      humanDecision: decision
-    });
+      rawMessages: rawDisposition.rawMessages
+    };
+    const baseline = buildCandidate(candidateInput);
+    if (decision && !baseline.candidate) {
+      throw new PortableSourcePacketError(
+        'human_decision_target_not_candidate',
+        'Human decision target does not produce a portable source candidate.',
+        { record_id: recordId }
+      );
+    }
+    if (
+      decision
+      && (
+        decision.candidate_id !== baseline.candidate.candidate_id
+        || decision.canonical_payload_sha256
+          !== baseline.candidate.integrity.canonical_payload_sha256
+      )
+    ) {
+      throw new PortableSourcePacketError(
+        'human_decision_candidate_binding_mismatch',
+        'Human decision does not match the current frozen candidate identity and payload.',
+        {
+          record_id: recordId,
+          expected_candidate_id: baseline.candidate.candidate_id,
+          observed_candidate_id: decision.candidate_id,
+          expected_canonical_payload_sha256:
+            baseline.candidate.integrity.canonical_payload_sha256,
+          observed_canonical_payload_sha256: decision.canonical_payload_sha256
+        }
+      );
+    }
+    if (
+      decision?.decision === 'approve'
+      && baseline.candidate.source_evidence.state === 'source_bound'
+    ) {
+      throw new PortableSourcePacketError(
+        'human_decision_source_bound_approval_invalid',
+        'Source-bound candidates already carry source evidence and cannot be downgraded to human-attested or legacy-import authority.',
+        { record_id: recordId, candidate_id: baseline.candidate.candidate_id }
+      );
+    }
+    const built = decision
+      ? buildCandidate({ ...candidateInput, humanDecision: decision })
+      : baseline;
     if (built.rejection) rejected.push(built.rejection);
     if (built.candidate) allCandidates.push(built.candidate);
     workbenchReviewLedger.push({

@@ -47,6 +47,8 @@ An optional decisions file uses:
   "decisions": [
     {
       "record_id": "exact-upstream-record-id",
+      "candidate_id": "dspc_0123456789abcdef0123456789abcdef",
+      "canonical_payload_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "decision": "approve",
       "authority": "human_attested",
       "reviewer": "owner",
@@ -59,7 +61,12 @@ An optional decisions file uses:
 
 Allowed decisions are `approve`, `hold`, and `reject`. Approved decisions
 require exactly `human_attested` or `legacy_import`. The decision file digest
-is bound into the packet generation identity.
+is bound into the packet generation identity. Every row must also bind the
+reviewed `candidate_id` and its `integrity.canonical_payload_sha256`; a decision
+from an older or altered candidate fails closed instead of being replayed by
+`record_id`. A `source_bound` candidate already has source authority and cannot
+be downgraded through either human approval authority; it may remain undecided,
+be held, or be rejected.
 
 ## Conservation model
 
