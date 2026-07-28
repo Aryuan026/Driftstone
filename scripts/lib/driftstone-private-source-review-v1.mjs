@@ -6,6 +6,11 @@ import {
   stableJson,
   verifyPortableSourceCandidate
 } from './driftstone-portable-source-packet-v1.mjs';
+import {
+  buildEventFamilies,
+  buildPortableWarmRewriteCandidate,
+  buildTitleCollisionWarnings
+} from './driftstone-home-warm-intake-v1.mjs';
 
 export const PRIVATE_SOURCE_REVIEW_SCHEMA = 'driftstone_private_source_review_bundle_v1';
 export const PRIVATE_SOURCE_REVIEW_MANIFEST_SCHEMA =
@@ -156,6 +161,40 @@ export function buildPrivateSourceReviewBundle({
     || left.candidate_lane.localeCompare(right.candidate_lane)
     || left.candidate_id.localeCompare(right.candidate_id)
   ));
+  const eventFamilies = buildEventFamilies(orderedCandidates);
+  const candidatesById = new Map(
+    orderedCandidates.map((candidate) => [candidate.candidate_id, candidate])
+  );
+  const candidateFamilyIndex = Object.fromEntries(
+    eventFamilies.flatMap((family) => family.member_refs.map((member) => [
+      member.candidate_id,
+      family.family_id
+    ]))
+  );
+  const titleCollisionWarnings = buildTitleCollisionWarnings(eventFamilies);
+  const homeWarmCandidateTemplates = eventFamilies.flatMap((family) => {
+    const familyCandidates = family.member_refs
+      .map((member) => candidatesById.get(member.candidate_id))
+      .filter(Boolean);
+    const factCandidates = familyCandidates.filter(
+      (candidate) => candidate.candidate_lane === 'fact'
+    );
+    return familyCandidates
+      .filter((candidate) => candidate.candidate_lane === 'persona')
+      .map((candidate) => ({
+        source_candidate_binding: {
+          record_id: safeText(candidate.upstream.workbench_row.record_id),
+          candidate_id: candidate.candidate_id,
+          canonical_payload_sha256: candidate.integrity.canonical_payload_sha256
+        },
+        family_id: family.family_id,
+        template: buildPortableWarmRewriteCandidate({
+          candidate,
+          eventFamily: family,
+          pairedFactCandidates: factCandidates
+        })
+      }));
+  });
   const packetDescriptors = packetSources
     .map((source) => ({
       month_key: safeText(source.month_key),
@@ -183,6 +222,17 @@ export function buildPrivateSourceReviewBundle({
     writes_hippocove: false,
     writes_notion: false,
     writes_cloud: false,
+    event_family_count: eventFamilies.length,
+    event_family_counts_by_pair_state: Object.fromEntries(
+      ['paired', 'persona_only', 'fact_only'].map((state) => [
+        state,
+        eventFamilies.filter((family) => family.pair_state === state).length
+      ])
+    ),
+    event_families: eventFamilies,
+    candidate_family_index: candidateFamilyIndex,
+    title_collision_warnings: titleCollisionWarnings,
+    home_warm_candidate_templates: homeWarmCandidateTemplates,
     candidates: orderedCandidates
   };
   return {
@@ -330,6 +380,11 @@ export function validateDecisionDocumentAgainstBundle(bundle = {}, document = {}
 function browserRuntime() {
 const bundle = REVIEW_BUNDLE;
 const candidateById = new Map(bundle.candidates.map((candidate) => [candidate.candidate_id, candidate]));
+const familyById = new Map(
+  (Array.isArray(bundle.event_families) ? bundle.event_families : [])
+    .map((family) => [family.family_id, family])
+);
+const familyIdByCandidate = new Map(Object.entries(bundle.candidate_family_index || {}));
 const recordByMonth = new Map(bundle.candidates.map((candidate) => [
   candidate.month_key + "\u0000" + candidate.upstream.workbench_row.record_id,
   candidate.candidate_id
@@ -427,10 +482,14 @@ function renderStats() {
   const incomplete = bundle.candidate_counts_by_source_state.source_incomplete || 0;
   $("#stats").innerHTML = [
     chip(bundle.candidate_count + " 条候选"),
+    chip(Number(bundle.event_family_count || 0) + " 个事件家族"),
+    chip(Number(bundle.event_family_counts_by_pair_state?.paired || 0) + " 个双投影", "ok"),
     chip(decided + " 条已决定", decided ? "ok" : ""),
     chip(incomplete + " 条缺源可人审", incomplete ? "warn" : ""),
+    chip(array(bundle.title_collision_warnings).length + " 组跨家族同名提醒",
+      array(bundle.title_collision_warnings).length ? "warn" : ""),
     chip("CASE 0"),
-    chip("只读预接纳 · 无写入")
+    chip("来源 / authority 海关 · 无写入")
   ].join("");
 }
 function renderFilters() {
@@ -447,15 +506,28 @@ function renderList() {
     state.selectedId = rows[0]?.candidate_id || "";
   }
   $("#visibleCount").textContent = "当前显示 " + rows.length + " / " + bundle.candidate_count;
-  $("#candidateList").innerHTML = rows.map((candidate) => {
-    const entry = state.decisions[candidate.candidate_id] || {};
-    const active = candidate.candidate_id === state.selectedId ? " active" : "";
-    const sourceTone = candidate.source_evidence.state === "source_bound" ? "ok" : "warn";
-    return '<button class="candidate-row' + active + '" data-candidate-id="' + esc(candidate.candidate_id) + '">'
-      + '<span class="candidate-kicker">' + esc(candidate.month_key) + " · " + esc(candidate.candidate_lane) + "</span>"
-      + '<strong>' + esc(displayTitle(candidate)) + "</strong>"
-      + '<span class="candidate-meta">' + chip(candidate.source_evidence.state, sourceTone)
-      + chip(decisionLabel(entry), entry.decision ? "decision" : "") + "</span></button>";
+  const visibleIds = new Set(rows.map((candidate) => candidate.candidate_id));
+  const familyIds = [...new Set(rows.map((candidate) => familyIdByCandidate.get(candidate.candidate_id)))]
+    .filter(Boolean);
+  $("#candidateList").innerHTML = familyIds.map((familyId) => {
+    const family = familyById.get(familyId);
+    const members = array(family?.member_refs)
+      .map((member) => candidateById.get(member.candidate_id))
+      .filter((candidate) => candidate && visibleIds.has(candidate.candidate_id));
+    return '<section class="family-row"><div class="candidate-kicker">'
+      + esc(family?.month_key || "") + " · " + esc(family?.pair_state || "")
+      + " · " + esc(family?.identity_basis || "") + "</div>"
+      + members.map((candidate) => {
+        const entry = state.decisions[candidate.candidate_id] || {};
+        const active = candidate.candidate_id === state.selectedId ? " active" : "";
+        const sourceTone = candidate.source_evidence.state === "source_bound" ? "ok" : "warn";
+        return '<button class="candidate-row' + active + '" data-candidate-id="'
+          + esc(candidate.candidate_id) + '">'
+          + '<span class="candidate-kicker">' + esc(candidate.candidate_lane) + "</span>"
+          + '<strong>' + esc(displayTitle(candidate)) + "</strong>"
+          + '<span class="candidate-meta">' + chip(candidate.source_evidence.state, sourceTone)
+          + chip(decisionLabel(entry), entry.decision ? "decision" : "") + "</span></button>";
+      }).join("") + "</section>";
   }).join("") || '<div class="empty">没有符合当前筛选的候选。</div>';
   document.querySelectorAll("[data-candidate-id]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -491,6 +563,13 @@ function renderDetail() {
   const entry = state.decisions[candidate.candidate_id] || {};
   const reviewed = array(candidate.upstream.reviewed_rows);
   const prepared = array(candidate.upstream.prepared_windows);
+  const family = familyById.get(familyIdByCandidate.get(candidate.candidate_id));
+  const siblingCandidates = array(family?.member_refs)
+    .map((member) => candidateById.get(member.candidate_id))
+    .filter((member) => member && member.candidate_id !== candidate.candidate_id);
+  const familyWarnings = array(bundle.title_collision_warnings).filter((warning) => (
+    array(warning.family_members).some((item) => item.family_id === family?.family_id)
+  ));
   const sourceTone = evidence.state === "source_bound" ? "ok" : "warn";
   $("#detail").innerHTML = `
     <header class="detail-head">
@@ -498,6 +577,23 @@ function renderDetail() {
       <h2>${esc(displayTitle(candidate))}</h2></div>
       <div>${chip(evidence.state, sourceTone)} ${chip(decisionLabel(entry), entry.decision ? "decision" : "")}</div>
     </header>
+    <section class="panel">
+      <h3>同一事件的平行投影</h3>
+      <div class="boundary">${chip(family?.pair_state || "unknown")}
+        ${chip(family?.identity_basis || "unknown")}
+        ${chip(family?.identity_confidence || "unknown")}</div>
+      <p class="explain">persona 与 SQL/fact 是同一事件的 sibling facets；这里并排查看，但不会把事实字段混进人格正文。</p>
+      ${siblingCandidates.map((sibling) => `<button class="candidate-row" data-candidate-id="${esc(sibling.candidate_id)}">
+        <span class="candidate-kicker">${esc(sibling.candidate_lane)}</span>
+        <strong>${esc(displayTitle(sibling))}</strong>
+        <span class="candidate-meta">${chip(sibling.source_evidence.state,
+          sibling.source_evidence.state === "source_bound" ? "ok" : "warn")}</span>
+      </button>`).join("") || '<div class="empty">这是 persona-only / fact-only 家族，没有 sibling facet。</div>'}
+      ${familyWarnings.length
+        ? '<div class="warning">同名内容也出现在其他 event family；仅提示碰撞，禁止自动合并。</div>'
+        : ""}
+      <details><summary>event family 结构</summary><pre>${esc(pretty(family || {}))}</pre></details>
+    </section>
     <section class="panel">
       <h3>候选正文</h3>
       ${bodySections(row) || '<div class="empty">工作台行没有可见正文；展开结构化原行复核。</div>'}
@@ -536,7 +632,7 @@ function renderDetail() {
       <h3>Source / evidence 可见范围</h3>
       ${array(evidence.incomplete_reasons).length
         ? '<div class="warning"><strong>缺源原因</strong><br>' + array(evidence.incomplete_reasons).map(esc).join("<br>") + "</div>"
-        : '<div class="success">各层显式范围当前相容；仍只是 pre-admission candidate。</div>'}
+        : '<div class="success">各层显式范围当前相容；可进入 Home intake，但仍不是 canonical memory。</div>'}
       ${rangeRows("anchor source-ref", span.anchor_source_ref_msg_ranges)}
       ${rangeRows("anchor chunk", span.anchor_window_local_chunk_ranges)}
       ${rangeRows("source bundles", span.source_bundle_ids)}
@@ -544,7 +640,7 @@ function renderDetail() {
       <details><summary>source index anchors</summary><pre>${esc(pretty(candidate.upstream.source_index_anchors || []))}</pre></details>
     </section>
     <section class="panel">
-      <h3>Graph hints · Hippocove 预接纳候选</h3>
+      <h3>Graph hints · 冷树 sibling 输入</h3>
       <div class="boundary">${chip("candidate_only")} ${chip("pre-admission")}
         ${chip("edges " + Number(graph.canonical_edges_created || 0))}
         ${chip("episodes " + Number(graph.canonical_episodes_created || 0))}
@@ -564,7 +660,7 @@ function renderDetail() {
         <button data-action="clear" class="quiet">清空</button>
       </div>
       <label>备注<textarea id="decisionNote" rows="5" placeholder="保留你判断时需要带到下一层的信息。">${esc(entry.note || "")}</textarea></label>
-      <p class="explain">认可只进入 Hippocove pre-admission；不会生成 canonical edge、receipt 或记忆写入。</p>
+      <p class="explain">source_incomplete 的认可只允许进入 sealed Home intake；不会生成 canonical authority、answer evidence、最终温卡正文或记忆写入。</p>
     </section>
     <details class="panel"><summary>完整候选 JSON</summary><pre>${esc(pretty(candidate))}</pre></details>
   `;
@@ -574,6 +670,13 @@ function renderDetail() {
       button.dataset.action,
       button.dataset.authority || ""
     ));
+  });
+  document.querySelectorAll("#detail [data-candidate-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedId = button.dataset.candidateId;
+      renderList();
+      renderDetail();
+    });
   });
   $("#decisionNote").addEventListener("input", (event) => {
     const current = state.decisions[candidate.candidate_id] || {
@@ -771,6 +874,8 @@ h1 { font-size: 24px; } h2 { font-size: 25px; line-height: 1.3; } h3 { font-size
 .layout { display: grid; grid-template-columns: minmax(250px, 340px) minmax(0, 1fr); min-height: calc(100vh - 185px); }
 .sidebar { border-right: 1px solid var(--line); padding: 16px; }
 #visibleCount { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+.family-row { border: 1px solid var(--line); border-radius: 14px; padding: 9px; margin-bottom: 10px; background: #faf7f0; }
+.family-row > .candidate-kicker { display: block; padding: 2px 4px 8px; }
 .candidate-row { display: flex; text-align: left; width: 100%; flex-direction: column; gap: 4px; padding: 13px; margin-bottom: 8px; box-shadow: none; }
 .candidate-row.active { border-color: #8b7758; box-shadow: inset 3px 0 #8b7758; }
 .candidate-row strong { line-height: 1.35; }
@@ -838,7 +943,7 @@ export function renderPrivateSourceReviewHtml(bundle = {}) {
 <body>
   <header class="topbar">
     <div class="titleline">
-      <div><h1>Driftstone 私密人审</h1><div class="subtitle">${bundle.candidate_count} 条历史候选 · 本地离线 · 只到 Hippocove pre-admission</div></div>
+      <div><h1>Driftstone 私密来源海关</h1><div class="subtitle">${bundle.candidate_count} 条历史候选 · persona / SQL 平行投影 · sealed 后才生成 Home intake</div></div>
       <div id="stats" class="stats"></div>
     </div>
     <div class="toolbar">

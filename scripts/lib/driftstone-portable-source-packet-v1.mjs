@@ -156,6 +156,98 @@ function normalizeLane(value) {
   return lane || 'unknown';
 }
 
+export function deriveEventFamilyIdentity(candidate = {}) {
+  const workbench = candidate?.upstream?.workbench_row || {};
+  const reviewedRows = Array.isArray(candidate?.upstream?.reviewed_rows)
+    ? candidate.upstream.reviewed_rows
+    : [];
+  const prepared = Array.isArray(candidate?.upstream?.prepared_windows)
+    ? candidate.upstream.prepared_windows
+    : [];
+  const monthKey = safeText(candidate.month_key);
+  const reviewedFamilyIds = uniqueStrings(reviewedRows.map((row) => row?.family_id));
+  const reviewedFamilyKinds = uniqueStrings(reviewedRows.map((row) => row?.family_kind));
+  if (reviewedFamilyIds.length > 1) {
+    throw new PortableSourcePacketError(
+      'event_family_id_conflict',
+      'A candidate with conflicting reviewed family_id values cannot be grouped silently.',
+      {
+        candidate_id: safeText(candidate.candidate_id),
+        month_key: monthKey,
+        family_ids: reviewedFamilyIds,
+        family_kinds: reviewedFamilyKinds
+      }
+    );
+  }
+  const sourceBundleId = safeText(
+    workbench.source_bundle_id
+    || candidate?.graph_hints?.span?.source_bundle_ids?.[0]
+  );
+  const chunkId = safeText(
+    workbench.chunk_id
+    || prepared[0]?.chunk_id
+  );
+  const sourceWindowId = safeText(
+    workbench.source_window_id
+    || candidate?.graph_hints?.span?.source_window_ids?.[0]
+    || prepared[0]?.source_window_id
+  );
+  const sourceStart = finiteInteger(
+    workbench.source_msg_start
+    ?? workbench.msg_start
+    ?? workbench.chunk_msg_start
+  );
+  const sourceEnd = finiteInteger(
+    workbench.source_msg_end
+    ?? workbench.msg_end
+    ?? workbench.chunk_msg_end
+  );
+  let basis = 'candidate_fallback';
+  let confidence = 'identity_only';
+  let keyMaterial = {
+    month_key: monthKey,
+    candidate_id: safeText(candidate.candidate_id)
+  };
+  if (reviewedFamilyIds.length === 1) {
+    basis = 'reviewed_family_id';
+    confidence = 'upstream_reviewed_family';
+    keyMaterial = {
+      month_key: monthKey,
+      reviewed_family_id: reviewedFamilyIds[0]
+    };
+  } else if (sourceBundleId && chunkId) {
+    basis = 'source_bundle_chunk';
+    confidence = 'deterministic_source_group';
+    keyMaterial = {
+      month_key: monthKey,
+      source_bundle_id: sourceBundleId,
+      chunk_id: chunkId
+    };
+  } else if (
+    sourceBundleId
+    && sourceWindowId
+    && sourceStart !== null
+    && sourceEnd !== null
+  ) {
+    basis = 'source_window_range';
+    confidence = 'bounded_source_fallback';
+    keyMaterial = {
+      month_key: monthKey,
+      source_bundle_id: sourceBundleId,
+      source_window_id: sourceWindowId,
+      source_msg_start: sourceStart,
+      source_msg_end: sourceEnd
+    };
+  }
+  return {
+    basis,
+    confidence,
+    reviewed_family_kind: reviewedFamilyKinds.length === 1 ? reviewedFamilyKinds[0] : '',
+    key_material: keyMaterial,
+    family_key: `dsevent_${sha256({ basis, ...keyMaterial }).slice(0, 32)}`
+  };
+}
+
 function multiMap(rows, keyFn) {
   const map = new Map();
   rows.forEach((row, index) => {
@@ -764,58 +856,109 @@ export function buildBoundedProjection(candidate, {
 
 function deterministicSample(candidates, monthKey, limit) {
   if (!Number.isInteger(limit) || limit <= 0 || candidates.length <= limit) return [...candidates];
-  const byLane = new Map();
+  const byFamily = new Map();
   for (const candidate of candidates) {
-    const lane = candidate.candidate_lane;
-    if (!byLane.has(lane)) byLane.set(lane, []);
-    byLane.get(lane).push(candidate);
+    const identity = deriveEventFamilyIdentity(candidate);
+    if (!byFamily.has(identity.family_key)) {
+      byFamily.set(identity.family_key, {
+        identity,
+        candidates: []
+      });
+    }
+    byFamily.get(identity.family_key).candidates.push(candidate);
   }
-  for (const rows of byLane.values()) {
-    rows.sort((left, right) => (
-      sha256(`${monthKey}:${left.candidate_id}`).localeCompare(
-        sha256(`${monthKey}:${right.candidate_id}`)
+  const families = [...byFamily.values()].map((family) => {
+    const byLane = new Map();
+    for (const candidate of family.candidates) {
+      if (!byLane.has(candidate.candidate_lane)) {
+        byLane.set(candidate.candidate_lane, []);
+      }
+      byLane.get(candidate.candidate_lane).push(candidate);
+    }
+    const representatives = [...byLane.keys()]
+      .sort()
+      .map((lane) => byLane.get(lane).sort((left, right) => (
+        sha256(`${monthKey}:${left.candidate_id}`).localeCompare(
+          sha256(`${monthKey}:${right.candidate_id}`)
+        )
+      ))[0]);
+    return {
+      ...family,
+      representatives,
+      source_incomplete: representatives.some(
+        (candidate) => candidate.source_evidence.state === 'source_incomplete'
+      ),
+      max_tags: Math.max(
+        0,
+        ...representatives.map((candidate) => candidate.canonical_labels.tags.length)
+      ),
+      max_fact_keys: Math.max(
+        0,
+        ...representatives.map((candidate) => candidate.canonical_labels.fact_keys.length)
       )
-    ));
-  }
+    };
+  });
+  families.sort((left, right) => (
+    Number(right.source_incomplete) - Number(left.source_incomplete)
+    || right.max_tags - left.max_tags
+    || right.max_fact_keys - left.max_fact_keys
+    || sha256(`${monthKey}:${left.identity.family_key}`).localeCompare(
+      sha256(`${monthKey}:${right.identity.family_key}`)
+    )
+  ));
   const selected = [];
   const selectedIds = new Set();
-  const laneNames = [...byLane.keys()].sort();
-  function add(candidate) {
-    if (!candidate || selected.length >= limit || selectedIds.has(candidate.candidate_id)) return;
-    selected.push(candidate);
-    selectedIds.add(candidate.candidate_id);
-  }
-  function highest(rows, selector) {
-    return [...rows].sort((left, right) => (
-      selector(right) - selector(left)
-      || left.candidate_id.localeCompare(right.candidate_id)
-    ))[0];
-  }
-  // A canary must exercise the known migration boundaries rather than becoming
-  // a random-looking sample of only easy rows.
-  for (const lane of laneNames) {
-    const rows = byLane.get(lane);
-    add(rows.find((candidate) => candidate.source_evidence.state === 'source_incomplete'));
-    add(highest(rows, (candidate) => candidate.canonical_labels.tags.length));
-    add(highest(rows, (candidate) => candidate.canonical_labels.fact_keys.length));
-    add(rows[0]);
-  }
-  const remainingByLane = new Map(
-    [...byLane.entries()].map(([lane, rows]) => [
-      lane,
-      rows.filter((candidate) => !selectedIds.has(candidate.candidate_id))
-    ])
+  const selectedFamilies = new Set();
+  const familyByKey = new Map(
+    families.map((family) => [family.identity.family_key, family])
   );
-  while (selected.length < limit) {
-    let changed = false;
-    for (const lane of laneNames) {
-      const row = remainingByLane.get(lane).shift();
-      if (!row) continue;
-      add(row);
-      changed = true;
-      if (selected.length >= limit) break;
+  function addFamily(family) {
+    if (!family || selectedFamilies.has(family.identity.family_key)) return false;
+    const available = family.representatives.filter(
+      (candidate) => !selectedIds.has(candidate.candidate_id)
+    );
+    if (!available.length || selected.length + available.length > limit) return false;
+    for (const candidate of available) {
+      selected.push(candidate);
+      selectedIds.add(candidate.candidate_id);
     }
-    if (!changed) break;
+    selectedFamilies.add(family.identity.family_key);
+    return true;
+  }
+  const originalByLane = new Map();
+  for (const candidate of candidates) {
+    if (!originalByLane.has(candidate.candidate_lane)) {
+      originalByLane.set(candidate.candidate_lane, []);
+    }
+    originalByLane.get(candidate.candidate_lane).push(candidate);
+  }
+  for (const lane of [...originalByLane.keys()].sort()) {
+    const boundaryCandidate = originalByLane.get(lane).find(
+      (candidate) => candidate.source_evidence.state === 'source_incomplete'
+    );
+    if (boundaryCandidate) {
+      addFamily(
+        familyByKey.get(deriveEventFamilyIdentity(boundaryCandidate).family_key)
+      );
+    }
+  }
+  for (const family of families) {
+    if (selected.length >= limit) break;
+    addFamily(family);
+  }
+  if (selected.length < limit) {
+    const remaining = candidates
+      .filter((candidate) => !selectedIds.has(candidate.candidate_id))
+      .sort((left, right) => (
+        sha256(`${monthKey}:${left.candidate_id}`).localeCompare(
+          sha256(`${monthKey}:${right.candidate_id}`)
+        )
+      ));
+    for (const candidate of remaining) {
+      if (selected.length >= limit) break;
+      selected.push(candidate);
+      selectedIds.add(candidate.candidate_id);
+    }
   }
   return selected;
 }

@@ -19,6 +19,7 @@ import {
   PORTABLE_SOURCE_PACKET_SCHEMA,
   buildBoundedProjection,
   buildPortableSourcePacket,
+  deriveEventFamilyIdentity,
   parseFactKeysFull,
   parseTagsFull,
   sha256,
@@ -773,6 +774,41 @@ equal(
   'Canary sampling must be deterministic.'
 );
 equal(canaryOne.packet.candidate_counts.full_candidates_before_sampling, 3);
+
+const pairedFamilyCanary = buildPortableSourcePacket({
+  monthKey: '2025-03',
+  fiveLayerManifest: fixture.fiveLayerManifest,
+  rawBundles: fixture.rawBundles,
+  preparedRows: fixture.preparedRows,
+  workbenchRows: fixture.workbenchRows,
+  sourceIndex: fixture.sourceIndex,
+  reviewedRows: fixture.reviewedRows.map((row) => (
+    ['record-persona', 'record-incomplete'].includes(row.record_id)
+      ? {
+        ...row,
+        family_id: 'synthetic-paired-family',
+        family_kind: 'persona_sql_family'
+      }
+      : row
+  )),
+  sampleLimit: 2
+});
+equal(
+  pairedFamilyCanary.candidates.map(
+    (candidate) => candidate.upstream.workbench_row.record_id
+  ).sort(),
+  ['record-incomplete', 'record-persona'],
+  'A paired family must be sampled as sibling persona and fact facets.'
+);
+equal(
+  new Set(
+    pairedFamilyCanary.candidates.map(
+      (candidate) => deriveEventFamilyIdentity(candidate).family_key
+    )
+  ).size,
+  1,
+  'Paired sample members must retain one reviewed event-family identity.'
+);
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'driftstone-source-packet-regression-'));
 const rawFile = join(temporaryRoot, 'memsrc_2025-03_bundle.json');

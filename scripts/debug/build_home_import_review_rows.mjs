@@ -4,6 +4,9 @@
 import { existsSync } from 'fs';
 import { mkdir, mkdtemp, readFile, rm, rename, writeFile } from 'fs/promises';
 import { basename, dirname, join, resolve } from 'path';
+import {
+  buildWarmRewriteCandidatePacket
+} from '../lib/driftstone-home-warm-intake-v1.mjs';
 
 const EXPECTED_REVIEWED_TOTAL = 16274;
 const DEFAULT_OUT_DIR = 'output/home_import_review/driftstone_home_import_review_v0';
@@ -947,93 +950,6 @@ function buildSourceAuthorityPacket({
     source_authority_note: sourceQuoteAvailable
       ? 'Bounded quote is recoverable, but Driftstone has not proven the candidate claim is exactly conserved inside it.'
       : (humanAttested ? 'owner_attested_without_verbatim_source' : 'unverified_narration')
-  };
-}
-
-function buildWarmRewriteCandidatePacket({
-  row = {},
-  node = {},
-  candidate = {},
-  lineage = {},
-  sourceAuthority = {}
-} = {}) {
-  return {
-    schema: 'driftstone_warm_rewrite_candidate_v0',
-    candidate_id: row.review_row_id.replace(/^home_review\./u, 'warm_rewrite_candidate.'),
-    review_row_id: row.review_row_id,
-    source_entry_id: row.source_entry_id,
-    assimilation_status: 'not_sent',
-    candidate_only: true,
-    writes_warm_memory: false,
-    final_body_markdown_generated: false,
-    persona_prompt_read_by_driftstone: false,
-    requires_home_runtime_persona: true,
-    source_material: {
-      source_quote: safeText(row.source_quote),
-      excerpt_text: safeText(row.excerpt_text),
-      excerpt_hint: safeText(row.excerpt_hint),
-      source_quote_available: Boolean(sourceAuthority.source_quote_available),
-      source_quote_kind: safeText(sourceAuthority.source_quote_kind),
-      source_quote_is_raw_or_bounded_source: Boolean(sourceAuthority.source_quote_available),
-      quote_recovery_status: safeText(row.quote_recovery_status),
-      quote_recovery_reason: safeText(row.quote_recovery_reason),
-      turn_range: safeText(row.turn_range),
-      source_window: safeText(row.source_window),
-      source_file: safeText(row.source_file),
-      source_trace_id: safeText(row.source_trace_id),
-      source_span_id: safeText(row.source_span_id)
-    },
-    candidate_material: {
-      candidate_claim: safeText(row.candidate_claim),
-      living_fragment: safeText(node.living_fragment),
-      project_fact: safeText(node.project_fact),
-      relationship_significance: safeText(node.relationship_significance),
-      feeling_as_fact: safeText(node.feeling_as_fact),
-      candidate_claim_is_source_quote: false,
-      living_fragment_is_source_quote: false
-    },
-    event_material: safeText(node.living_fragment || row.candidate_claim),
-    emotion_or_viewpoint: firstText(node.feeling_as_fact, node.relationship_significance, candidate.human_summary_cn, candidate.summary),
-    future_continuity_hint: firstText(node.front_context_hint, node.recall_payload, safeArray(node.activation_triggers, 4).join(' / ')),
-    owner_or_source_authority: {
-      authority_kind: sourceAuthority.authority_kind,
-      can_be_answer_evidence: sourceAuthority.can_be_answer_evidence,
-      reason: sourceAuthority.can_be_answer_evidence_reason,
-      answer_evidence_candidate: Boolean(sourceAuthority.answer_evidence_candidate),
-      source_quote_available: Boolean(sourceAuthority.source_quote_available),
-      exact_bounded_claim_conservation: Boolean(sourceAuthority.exact_bounded_claim_conservation),
-      action_receipt_claim_id: safeText(sourceAuthority.action_receipt_claim?.claim_id),
-      canonical_action_receipt_id: safeText(sourceAuthority.canonical_action_receipt?.receipt_id)
-    },
-    lineage: {
-      message_id: lineage.message_id,
-      message_id_kind: lineage.message_id_kind,
-      raw_message_id: lineage.raw_message_id,
-      raw_message_id_kind: lineage.raw_message_id_kind,
-      exchange_id: lineage.exchange_id,
-      exchange_identity_kind: lineage.exchange_identity_kind,
-      source_time: lineage.source_time,
-      conversation_id: lineage.conversation_id,
-      conversation_identity_kind: lineage.conversation_identity_kind,
-      source_local_conversation_id_claim: lineage.source_local_conversation_id_claim,
-      episode_id: lineage.episode_id,
-      episode_identity_kind: lineage.episode_identity_kind,
-      source_local_episode_id_claim: lineage.source_local_episode_id_claim,
-      scope_id: lineage.scope_id
-    },
-    quality_hints: {
-      review_status: row.review_status,
-      home_lane: row.home_lane,
-      promotion_status: row.promotion_status,
-      import_policy_state: row.import_policy_state,
-      write_risk: row.write_risk,
-      evidence_strength: row.evidence_strength,
-      source_incomplete: row.source_incomplete,
-      mixed_split_required: row.home_lane === 'mixed_split_required',
-      recommended_home_action: row.home_lane === 'mixed_split_required'
-        ? 'split_before_warm_rewrite'
-        : (sourceAuthority.can_be_answer_evidence ? 'home_runtime_persona_rewrite_after_review' : 'owner_visible_review_before_any_evidence_use')
-    }
   };
 }
 

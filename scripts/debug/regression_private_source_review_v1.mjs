@@ -27,6 +27,10 @@ import {
   sha256,
   stableJson
 } from '../lib/driftstone-portable-source-packet-v1.mjs';
+import {
+  DRIFTSTONE_HOME_WARM_INTAKE_SCHEMA,
+  buildHomeWarmIntake
+} from '../lib/driftstone-home-warm-intake-v1.mjs';
 
 const repoRoot = resolve(new URL('../..', import.meta.url).pathname);
 const cli = join(repoRoot, 'scripts/debug/build_private_source_review_v1.mjs');
@@ -70,6 +74,8 @@ function candidate(month, index, sourceState) {
         record_id: recordId,
         title: `Reviewed ${index}`,
         text: `Reviewed body ${index}`,
+        family_id: `family-${month}-${Math.floor(index / 2)}`,
+        family_kind: 'persona_sql_family',
         source_msg_start: index,
         source_msg_end: index
       }],
@@ -181,8 +187,8 @@ function candidate(month, index, sourceState) {
 
 const months = ['2025-03', '2025-08', '2025-11'];
 const candidates = months.flatMap((month) => [
-  candidate(month, 0, 'source_bound'),
-  candidate(month, 1, 'source_incomplete')
+  candidate(month, 0, 'source_incomplete'),
+  candidate(month, 1, 'source_bound')
 ]);
 const packetSources = months.map((month) => ({
   month_key: month,
@@ -212,6 +218,22 @@ equal(bundle.writes_home, false);
 equal(bundle.writes_hippocove, false);
 equal(bundle.writes_notion, false);
 equal(bundle.writes_cloud, false);
+equal(bundle.event_family_count, 3);
+equal(bundle.event_family_counts_by_pair_state, {
+  paired: 3,
+  persona_only: 0,
+  fact_only: 0
+});
+equal(bundle.home_warm_candidate_templates.length, 3);
+equal(
+  bundle.home_warm_candidate_templates[0].template.event_family.schema,
+  'driftstone_event_family.v0'
+);
+equal(
+  bundle.home_warm_candidate_templates[0].template.event_family.sql_member_refs[0]
+    .payload_digest.length,
+  64
+);
 
 const html = renderPrivateSourceReviewHtml(bundle);
 const bundleJson = `${JSON.stringify(bundle, null, 2)}\n`;
@@ -239,10 +261,6 @@ const decisionDoc = buildDecisionDocument({
     authority: 'human_attested',
     decided_at: '2026-07-28T00:00:00Z',
     note: 'synthetic note'
-  }, {
-    candidate_id: sourceBoundCandidate.candidate_id,
-    decision: 'hold',
-    note: ''
   }]
 });
 equal(decisionDoc.schema, HUMAN_DECISIONS_SCHEMA);
@@ -252,7 +270,6 @@ equal(
   decisionDoc.decisions[0].canonical_payload_sha256,
   incompleteCandidate.integrity.canonical_payload_sha256
 );
-equal(decisionDoc.decisions[1].authority, '');
 assert.throws(() => buildDecisionDocument({
   monthKey: '2025-03',
   candidates,
@@ -262,6 +279,206 @@ assert.throws(() => buildDecisionDocument({
     authority: 'legacy_import'
   }]
 }), (error) => error?.code === 'source_bound_approval_invalid');
+checks += 1;
+const holdFactDecisionDoc = buildDecisionDocument({
+  monthKey: '2025-03',
+  candidates,
+  decisions: [{
+    candidate_id: sourceBoundCandidate.candidate_id,
+    decision: 'hold',
+    note: ''
+  }]
+});
+const intakeWithFactHold = buildHomeWarmIntake({
+  bundle,
+  decisionDocuments: [holdFactDecisionDoc],
+  generatedAt: '2026-07-28T00:00:00.000Z'
+});
+equal(intakeWithFactHold.included_fact_candidate_count, 2);
+equal(intakeWithFactHold.excluded_fact_candidate_count, 1);
+
+const intakeWithoutApproval = buildHomeWarmIntake({
+  bundle,
+  decisionDocuments: [],
+  generatedAt: '2026-07-28T00:00:00.000Z'
+});
+equal(intakeWithoutApproval.schema, DRIFTSTONE_HOME_WARM_INTAKE_SCHEMA);
+equal(intakeWithoutApproval.included_persona_candidate_count, 0);
+equal(intakeWithoutApproval.excluded_persona_candidate_count, 3);
+equal(intakeWithoutApproval.source_fact_candidate_count, 3);
+equal(intakeWithoutApproval.conservation.persona_equation_passed, true);
+equal(intakeWithoutApproval.conservation.fact_equation_passed, true);
+equal(intakeWithoutApproval.included_fact_candidate_count, 3);
+equal(intakeWithoutApproval.excluded_fact_candidate_count, 0);
+
+const intakeWithApproval = buildHomeWarmIntake({
+  bundle,
+  decisionDocuments: [decisionDoc],
+  generatedAt: '2026-07-28T00:00:00.000Z'
+});
+equal(intakeWithApproval.included_persona_candidate_count, 1);
+equal(intakeWithApproval.excluded_persona_candidate_count, 2);
+equal(intakeWithApproval.event_family_intakes.length, 1);
+equal(
+  intakeWithApproval.event_family_intakes[0].persona_candidates[0]
+    .authority_decision.canonical_authority_granted,
+  false
+);
+equal(
+  intakeWithApproval.event_family_intakes[0].persona_candidates[0]
+    .warm_rewrite_candidate.event_family.sql_member_refs[0].payload_digest,
+  sourceBoundCandidate.integrity.canonical_payload_sha256
+);
+equal(
+  intakeWithApproval.event_family_intakes[0].persona_candidates[0]
+    .warm_rewrite_candidate.event_family.event_family_digest,
+  undefined
+);
+const fixtureOptionIndex = process.argv.indexOf('--emit-home-event-family-fixture');
+let emittedHomeFixture = null;
+if (fixtureOptionIndex >= 0) {
+  const fixturePath = resolve(process.argv[fixtureOptionIndex + 1] || '');
+  if (
+    !fixturePath.startsWith(`${resolve(tmpdir())}/`)
+    && !fixturePath.startsWith('/private/tmp/')
+  ) {
+    throw new Error('home_event_family_fixture_must_be_private_tmp');
+  }
+  const fixturePacket = intakeWithApproval.event_family_intakes[0]
+    .persona_candidates[0].warm_rewrite_candidate;
+  const fixtureBytes = `${JSON.stringify(fixturePacket, null, 2)}\n`;
+  await writeFile(fixturePath, fixtureBytes, { mode: 0o600 });
+  await chmod(fixturePath, 0o600);
+  emittedHomeFixture = {
+    path: fixturePath,
+    byte_count: Buffer.byteLength(fixtureBytes, 'utf8'),
+    sha256: sha256(Buffer.from(fixtureBytes, 'utf8')),
+    mode: '0600',
+    producer: 'buildHomeWarmIntake -> buildPortableWarmRewriteCandidate'
+  };
+}
+
+function resealCandidate(base, mutate) {
+  const { integrity: _ignored, ...payload } = JSON.parse(JSON.stringify(base));
+  mutate(payload);
+  return {
+    ...payload,
+    integrity: {
+      canonical_payload_sha256: sha256(payload)
+    }
+  };
+}
+
+const titleCollisionCandidates = [
+  resealCandidate(candidate('2025-12', 2, 'source_bound'), (payload) => {
+    payload.upstream.workbench_row.title = 'Same title';
+    payload.upstream.reviewed_rows[0].title = 'Same title';
+    payload.upstream.reviewed_rows[0].family_id = 'family-2025-12-a';
+  }),
+  resealCandidate(candidate('2025-12', 4, 'source_bound'), (payload) => {
+    payload.upstream.workbench_row.title = 'Same title';
+    payload.upstream.reviewed_rows[0].title = 'Same title';
+    payload.upstream.reviewed_rows[0].family_id = 'family-2025-12-b';
+  })
+];
+const titleCollisionBundle = buildPrivateSourceReviewBundle({
+  packetSources: [{
+    month_key: '2025-12',
+    generation_id: `driftstone-source-v1:${sha256('2025-12')}`,
+    packet_sha256: sha256('packet:2025-12'),
+    candidates_sha256: sha256(titleCollisionCandidates),
+    candidate_count: 2
+  }],
+  candidates: titleCollisionCandidates,
+  generatedAt: '2026-07-28T00:00:00.000Z'
+});
+equal(titleCollisionBundle.event_family_count, 2);
+equal(titleCollisionBundle.title_collision_warnings.length, 1);
+equal(
+  titleCollisionBundle.title_collision_warnings[0].automatic_merge_allowed,
+  false
+);
+const sourceBoundAutoIntake = buildHomeWarmIntake({
+  bundle: titleCollisionBundle,
+  decisionDocuments: [],
+  generatedAt: '2026-07-28T00:00:00.000Z'
+});
+equal(sourceBoundAutoIntake.included_persona_candidate_count, 2);
+equal(sourceBoundAutoIntake.excluded_persona_candidate_count, 0);
+equal(
+  sourceBoundAutoIntake.event_family_intakes.every(
+    (family) => family.pair_state === 'persona_only'
+  ),
+  true
+);
+
+const factApprovalCandidates = [
+  candidate('2025-10', 0, 'source_bound'),
+  candidate('2025-10', 1, 'source_incomplete')
+];
+const factApprovalBundle = buildPrivateSourceReviewBundle({
+  packetSources: [{
+    month_key: '2025-10',
+    generation_id: `driftstone-source-v1:${sha256('2025-10')}`,
+    packet_sha256: sha256('packet:2025-10'),
+    candidates_sha256: sha256(factApprovalCandidates),
+    candidate_count: 2
+  }],
+  candidates: factApprovalCandidates,
+  generatedAt: '2026-07-28T00:00:00.000Z'
+});
+const factBlockedIntake = buildHomeWarmIntake({
+  bundle: factApprovalBundle,
+  decisionDocuments: [],
+  generatedAt: '2026-07-28T00:00:00.000Z'
+});
+equal(factBlockedIntake.included_persona_candidate_count, 1);
+equal(factBlockedIntake.included_fact_candidate_count, 0);
+equal(factBlockedIntake.excluded_fact_candidate_count, 1);
+equal(factBlockedIntake.event_family_intakes[0].pair_state, 'persona_only');
+const factApprovalDecision = buildDecisionDocument({
+  monthKey: '2025-10',
+  candidates: factApprovalCandidates,
+  decisions: [{
+    candidate_id: factApprovalCandidates[1].candidate_id,
+    decision: 'approve',
+    authority: 'legacy_import',
+    reviewer: 'owner'
+  }]
+});
+const factApprovedIntake = buildHomeWarmIntake({
+  bundle: factApprovalBundle,
+  decisionDocuments: [factApprovalDecision],
+  generatedAt: '2026-07-28T00:00:00.000Z'
+});
+equal(factApprovedIntake.included_fact_candidate_count, 1);
+equal(factApprovedIntake.excluded_fact_candidate_count, 0);
+equal(factApprovedIntake.event_family_intakes[0].pair_state, 'paired');
+equal(
+  factApprovedIntake.eligible_fact_facets[0]
+    .authority_decision.canonical_authority_granted,
+  false
+);
+
+const conflictingFamilyCandidate = resealCandidate(
+  candidate('2025-12', 6, 'source_bound'),
+  (payload) => {
+    payload.upstream.reviewed_rows.push({
+      ...payload.upstream.reviewed_rows[0],
+      family_id: 'conflicting-family'
+    });
+  }
+);
+assert.throws(() => buildPrivateSourceReviewBundle({
+  packetSources: [{
+    month_key: '2025-12',
+    generation_id: 'conflict',
+    packet_sha256: sha256('conflict'),
+    candidates_sha256: sha256([conflictingFamilyCandidate]),
+    candidate_count: 1
+  }],
+  candidates: [conflictingFamilyCandidate]
+}), (error) => error?.code === 'event_family_id_conflict');
 checks += 1;
 
 const manifest = buildPrivateReviewManifest({
@@ -393,6 +610,12 @@ equal(
   decisionDoc,
   'Sealed decision content must preserve the canonical monthly decision document.'
 );
+const sealedIntakeFile = join(sealedOutput, 'driftstone_home_warm_intake_v1.json');
+equal((await stat(sealedIntakeFile)).mode & 0o777, 0o600);
+const sealedIntake = JSON.parse(await readFile(sealedIntakeFile, 'utf8'));
+equal(sealedIntake.schema, DRIFTSTONE_HOME_WARM_INTAKE_SCHEMA);
+equal(sealedIntake.included_persona_candidate_count, 1);
+equal(sealedIntake.conservation.persona_equation_passed, true);
 
 const alteredDecisionFile = join(temporaryRoot, 'altered-browser-download.json');
 const alteredDecision = JSON.parse(JSON.stringify(decisionDoc));
@@ -501,6 +724,7 @@ console.log(JSON.stringify({
   checks,
   schema: PRIVATE_SOURCE_REVIEW_SCHEMA,
   decision_schema: HUMAN_DECISIONS_SCHEMA,
+  emitted_home_event_family_fixture: emittedHomeFixture,
   private_output_only: true,
   model_called: false,
   writes_any_destination: false

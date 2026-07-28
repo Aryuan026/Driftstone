@@ -13,11 +13,16 @@ import {
   publishPrivateDirectory
 } from '../lib/driftstone-private-output-v1.mjs';
 import { sha256 } from '../lib/driftstone-portable-source-packet-v1.mjs';
+import {
+  DRIFTSTONE_HOME_WARM_INTAKE_SCHEMA,
+  buildHomeWarmIntake
+} from '../lib/driftstone-home-warm-intake-v1.mjs';
 
 const REPO_ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const REVIEW_MANIFEST_FILE = 'private_source_review_manifest_v1.json';
 const REVIEW_BUNDLE_FILE = 'private_source_review_bundle_v1.json';
 const SEAL_MANIFEST_SCHEMA = 'driftstone_private_source_decision_seal_v1';
+const HOME_INTAKE_FILE = 'driftstone_home_warm_intake_v1.json';
 
 class DecisionSealError extends Error {
   constructor(code, message, details = {}) {
@@ -55,7 +60,7 @@ function parseArgs(argv = []) {
         'Usage:',
         '  node scripts/debug/seal_private_source_decisions_v1.mjs \\',
         '    --review-dir PRIVATE_REVIEW_DIR \\',
-        '    --decision-file BROWSER_DOWNLOAD.json [--decision-file ...] \\',
+        '    [--decision-file BROWSER_DOWNLOAD.json ...] \\',
         '    --out PRIVATE_SEALED_DIR',
         '',
         'The output is atomically published outside Git as 0700/0600.'
@@ -65,10 +70,10 @@ function parseArgs(argv = []) {
       throw new DecisionSealError('argument_unknown', `Unknown argument: ${argument}`);
     }
   }
-  if (!args.reviewDir || !args.decisionFiles.length || !args.outDir) {
+  if (!args.reviewDir || !args.outDir) {
     throw new DecisionSealError(
       'argument_missing',
-      '--review-dir, at least one --decision-file, and --out are required.'
+      '--review-dir and --out are required; decision files are optional for source-bound intake.'
     );
   }
   if (new Set(args.decisionFiles).size !== args.decisionFiles.length) {
@@ -210,6 +215,22 @@ async function main() {
       month_key: item.month_key
     };
   }
+  const intake = buildHomeWarmIntake({
+    bundle: loadedReview.bundle,
+    decisionDocuments: decisions.map((item) => item.canonical)
+  });
+  const intakeContent = `${JSON.stringify(intake, null, 2)}\n`;
+  files[HOME_INTAKE_FILE] = intakeContent;
+  outputDescriptors[HOME_INTAKE_FILE] = {
+    byte_count: Buffer.byteLength(intakeContent, 'utf8'),
+    sha256: sha256(Buffer.from(intakeContent, 'utf8')),
+    mode: '0600',
+    schema: DRIFTSTONE_HOME_WARM_INTAKE_SCHEMA,
+    included_persona_candidate_count: intake.included_persona_candidate_count,
+    excluded_persona_candidate_count: intake.excluded_persona_candidate_count,
+    included_fact_candidate_count: intake.included_fact_candidate_count,
+    excluded_fact_candidate_count: intake.excluded_fact_candidate_count
+  };
   const sealPayload = {
     schema: SEAL_MANIFEST_SCHEMA,
     review_bundle_id: loadedReview.bundle.bundle_id,
@@ -247,6 +268,13 @@ async function main() {
       (sum, item) => sum + item.canonical.decisions.length,
       0
     ),
+    home_warm_intake_schema: intake.schema,
+    home_warm_intake_persona_candidates: intake.included_persona_candidate_count,
+    home_warm_intake_excluded_persona_candidates:
+      intake.excluded_persona_candidate_count,
+    home_warm_intake_fact_candidates: intake.included_fact_candidate_count,
+    home_warm_intake_excluded_fact_candidates:
+      intake.excluded_fact_candidate_count,
     output_directory_mode: '0700',
     output_file_mode: '0600',
     writes_any_destination: false,
