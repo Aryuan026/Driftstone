@@ -140,14 +140,23 @@ Still pending:
 
 ## License
 
-Driftstone is licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
+The code and documentation distributed in this repository are licensed under the
+Apache License, Version 2.0. Apache-2.0 was chosen to provide clear reuse,
+contribution, copyright, and patent terms for this public implementation. The
+[LICENSE](./LICENSE) file controls.
 
 ## Provenance
 
-Driftstone was shaped through human/AI pair development.
+Driftstone is an independent public product for extracting and organizing
+materials from personal history. Its information-organization approach is
+informed in part by concepts developed by A-Yuan through long-term-memory
+research.
+
+Separate private datasets, systems, implementations, Hippocove/Cold work, and
+unpublished research artifacts are not included in this Work.
+
+Secondary implementation provenance:
 
 - Product direction, review, tuning, and owner decisions: Aryuan026
 - Implementation collaboration: Codex in the OpenAI desktop agent environment
 - Earlier Obsidian memory-card, Persona memo, and language-fingerprint design work: Claude Code / Anthropic-assisted collaboration
-
-Please preserve this provenance if you study or adapt the project.
