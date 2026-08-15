@@ -1,16 +1,89 @@
 # Driftstone
 
-Driftstone is a local-first memory extraction workbench: it turns a user's own conversation history into portable Warm cards with source occurrence, bounded source spans, digests, manifests, and rejected/HOLD ledgers.
+**Your AI can change. Your history shouldn't have to start over.**
 
-It is not a Home/Hippocove writer, not a Cold tree, and not a second truth layer. JSON/JSONL, Markdown/Obsidian, and Notion-ready exports are projections of the portable Warm bundle.
+Driftstone turns your own conversation history into **portable, reviewable Warm memory** — while keeping the source evidence attached.
+
+Bring in exported conversations. Let a configured API or an MCP-capable agent help organize them. Review the uncertain pieces instead of silently losing them, then carry the result forward as a portable Warm bundle or a human-readable projection.
+
+**Change the AI. Change the system. Keep the past.**
+
+<!-- UI preview: replace this comment with the live Memory Star Map screenshot/GIF after the final UI lands. -->
+
+```text
+Conversation history
+        ↓
+  read · trace · review
+        ↓
+ Portable Warm memory
+        ↓
+Markdown / Obsidian · Notion-ready · JSON/JSONL
+```
+
+## Why Driftstone?
+
+Most history tools can summarize a conversation. Driftstone is interested in what happens **after** the summary.
+
+### It keeps the evidence
+
+A memory should not become true merely because a model wrote it down. Driftstone keeps bounded source spans, occurrences, digests, and provenance so accepted memory can still point back to where it came from.
+
+### It keeps uncertainty visible
+
+Incomplete, rejected, conflicting, or source-weak material does not need to masquerade as finished memory. Rejected/HOLD ledgers keep those decisions inspectable.
+
+### It treats memory as something you can carry
+
+The public truth is a portable Warm bundle, not a database owned by one chat product, one note app, or one private memory system. Markdown/Obsidian and Notion-ready files are projections of the same underlying artifact.
+
+### It works with humans and agents
+
+You can use the local UI and a configured OpenAI-compatible API, or run the same public workflow headlessly through MCP with an agent such as Codex.
+
+## What is a Warm card?
+
+A Warm card is more than a bag of user facts.
+
+It is a portable memory unit shaped to preserve what may matter later: lived context, a bounded source trail, review state, and a readable memory fragment that can travel without pretending to be a complete private memory system.
+
+Driftstone currently stops at **portable Warm cards + source evidence + review/provenance data**. It does not emit Hippocove-compatible memory state, write a Cold tree, or act as a hidden second truth layer.
+
+## What do you actually get?
+
+The canonical public artifact is a portable Warm bundle:
+
+```text
+portable_warm_bundle/
+  portable_warm_bundle.json
+  source occurrences
+  source spans
+  manifest digests
+  conservation counts
+  rejected/HOLD ledger
+```
+
+From that same truth, Driftstone can produce local human-readable projections such as:
+
+- Markdown / Obsidian staging files
+- Notion-ready CSV / Markdown / JSON files
+- portable JSON / JSONL for downstream tools and agents
+
+<!-- Showcase outputs: after the synthetic demo lands, add links/screenshots for Notion-ready, Obsidian/Markdown, spreadsheet, and canonical portable-Warm examples here. -->
+
+The bundle is designed to stay inspectable:
+
+- source paths are sanitized before entering the portable bundle
+- source occurrence/span ids and digests remain checkable
+- candidate identity follows stable source lineage rather than per-run task ids or local file locations
+- source-incomplete material remains visible instead of pretending to be accepted
 
 ## Five-Minute Start
 
 Requirements:
 
 - Node.js 20+
-- A local OpenAI-compatible API endpoint if you want AI generation
-- Your own exported chat/history files
+- an OpenAI-compatible API endpoint if you want model-backed generation
+- your own exported chat/history files
 
 From the repository root:
 
@@ -31,17 +104,19 @@ Desktop helper scripts are also included:
 - macOS: `00_双击启动_Driftstone.command`
 - Windows: `00_双击启动_Driftstone.cmd`
 
-The old `Hippocove`-named launch scripts remain compatibility aliases; Driftstone is the public product name.
+The old `Hippocove`-named launch scripts remain compatibility aliases; **Driftstone** is the public product name.
 
 ## Human Path
 
-1. Import or prepare your source history.
-2. Build Persona/Soul and language fingerprint first. They are quality inputs, not decorative settings.
-3. Run extraction/growth review.
-4. Inspect source traces, rejected/HOLD rows, and generated Warm cards.
-5. Export a portable Warm bundle and optional Markdown/Obsidian/Notion-ready projection.
+The current human workflow is:
 
-If your input is a large ChatGPT `conversations.json`, use the legacy lab's conversation exporter first. The newer front UI is better for already prepared text, markdown, or Driftstone source packages.
+1. Import or prepare your source history.
+2. Build Persona/Soul and language fingerprint inputs when you want them to guide extraction quality.
+3. Run extraction and growth review.
+4. Inspect source traces, rejected/HOLD rows, and generated Warm cards.
+5. Export the portable Warm bundle and any local projections you want.
+
+If your input is a large ChatGPT `conversations.json`, the current build still uses the legacy lab's conversation exporter for preprocessing. The newer front UI is better suited to already prepared text, Markdown, or Driftstone source packages until the final UI cleanup lands.
 
 ## Agent Path
 
@@ -62,30 +137,7 @@ Read the agent guide:
 
 - [docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md](./docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)
 
-Public headless export should end at portable Warm bundles and local projections. Legacy root/vine/finalize tools are hidden from the default catalog and are only diagnostic compatibility surfaces.
-
-## Canonical Output
-
-The canonical public artifact is:
-
-```text
-portable_warm_bundle/
-  portable_warm_bundle.json
-  source occurrences
-  source spans
-  manifest digests
-  conservation counts
-  rejected/HOLD ledger
-```
-
-The bundle is built to be portable:
-
-- source paths are sanitized before entering the bundle
-- source occurrence/span ids and digests remain checkable
-- candidate identity is based on stable source lineage, not per-run task ids or local file locations
-- source-incomplete rows stay visible instead of pretending to be accepted
-
-Markdown, Obsidian, and Notion-ready exports are local projections. They are useful for reading and review, but they are not canonical truth.
+Public headless export ends at portable Warm bundles and local projections. Legacy root/vine/finalize tools are hidden from the default catalog and remain diagnostic compatibility surfaces only.
 
 ## Inputs And Projections
 
@@ -96,7 +148,7 @@ Typical inputs:
 - reviewed CSV/JSON/JSONL artifacts from an existing Driftstone run
 - optional Persona/Soul and language fingerprint workspace state
 
-Typical outputs:
+Current output/projection surfaces include:
 
 - portable Warm bundle JSON
 - source occurrence/span JSON or JSONL
@@ -106,7 +158,7 @@ Typical outputs:
 
 Notion support is intentionally projection-only today. Provider writes, Notion patch apply, and Notion-to-bundle roundtrip are not enabled in the public product path yet.
 
-## Privacy And Boundaries
+## Privacy And Product Boundaries
 
 Driftstone is local-first. It should not commit source history, API keys, private runtime state, generated private memory, or provider responses to Git.
 
@@ -114,9 +166,10 @@ Public Driftstone does not:
 
 - write Home memory
 - write Hippocove Cold tree / roots / relations / vines / cases
+- claim Hippocove-compatible memory output without an explicit tested adapter
 - include private AsherieSystem schemas, credentials, paths, or corpora
-- treat Notion as canonical truth
-- turn historical bulk material into direct warm memory writes
+- treat Notion, Obsidian, or any other projection as canonical truth
+- turn historical bulk material into unreviewed direct memory writes
 
 Private downstream systems may consume reviewed Driftstone artifacts, but that is outside this public repository.
 
@@ -134,7 +187,8 @@ Usable now:
 
 Still pending:
 
-- final human UI polish
+- final human UI / live Memory Star Map polish
+- synthetic showcase data and human-facing output examples
 - provider-backed Notion write and patch-apply loop
 - production release decision
 
