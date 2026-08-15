@@ -32,7 +32,7 @@ export async function runNextProgrammaticTranslationTask(body = {}) {
   if (!workerPacket?.task_file) {
     return {
       ok: true,
-      schema: 'hippocove_programmatic_translation_task_run_v0.1',
+      schema: 'driftstone_programmatic_translation_task_run_v0.1',
       scope,
       status: 'idle',
       task_file: '',
@@ -68,7 +68,7 @@ export async function runNextProgrammaticTranslationTask(body = {}) {
 
     return {
       ok: Boolean(failed?.ok),
-      schema: 'hippocove_programmatic_translation_task_run_v0.1',
+      schema: 'driftstone_programmatic_translation_task_run_v0.1',
       scope: failed?.scope || scope,
       status: 'failed_empty',
       task_file: workerPacket.task_file,
@@ -99,7 +99,7 @@ export async function runNextProgrammaticTranslationTask(body = {}) {
 
   return {
     ok: Boolean(submitted?.ok),
-    schema: 'hippocove_programmatic_translation_task_run_v0.1',
+    schema: 'driftstone_programmatic_translation_task_run_v0.1',
     scope: submitted?.scope || scope,
     status: submitted?.ok ? 'submitted' : 'failed',
     task_file: workerPacket.task_file,
@@ -161,7 +161,7 @@ export async function drainProgrammaticTranslationTasks(body = {}) {
 
   return {
     ok: true,
-    schema: 'hippocove_programmatic_translation_task_drain_v0.1',
+    schema: 'driftstone_programmatic_translation_task_drain_v0.1',
     scope,
     max_tasks: maxTasks,
     run_count: runs.length,

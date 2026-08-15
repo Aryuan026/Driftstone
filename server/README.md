@@ -189,9 +189,9 @@ node scripts/debug/regression_reviewed_csv_conservation.mjs --dropbox /path/to/s
 
 最常用的是：
 
-- `HIPPOCOVE_STAGE_DROPBOX`
+- `DRIFTSTONE_STAGE_DROPBOX`
   - 你的输入材料 / stage dropbox 根目录
-- `HIPPOCOVE_OBSIDIAN_ROOT`
+- `DRIFTSTONE_OBSIDIAN_ROOT`
   - 你的 Obsidian staging 根目录
 
 新的 portable bundle / Notion-ready projection 不应依赖作者机器上的私有 Home、Hippocove 或 raw corpus 路径。
@@ -213,4 +213,4 @@ node scripts/debug/regression_reviewed_csv_conservation.mjs --dropbox /path/to/s
 
 - [../README.md](../README.md)
 - [../PROJECT_STATUS.md](../PROJECT_STATUS.md)
-- [../docs/HIPPOCOVE_TECH_HANDOFF.md](../docs/HIPPOCOVE_TECH_HANDOFF.md)
+- [../docs/DRIFTSTONE_TECH_HANDOFF.md](../docs/DRIFTSTONE_TECH_HANDOFF.md)

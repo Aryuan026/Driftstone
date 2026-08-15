@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 const dataRoot = await mkdtemp(join(tmpdir(), 'driftstone-memory-read-empty-'));
-process.env.HIPPOCOVE_DATA_ROOT = dataRoot;
+process.env.DRIFTSTONE_DATA_ROOT = dataRoot;
 
 const { handleMemoryReadRoute } = await import('../routes/product/memory-read.js');
 

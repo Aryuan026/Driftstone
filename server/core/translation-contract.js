@@ -44,7 +44,7 @@ function normalizeRecentUpdates(rawUpdates, fallbackBatch, fallbackFirstSeen, fa
 
 export function buildTranslatorContract() {
   return {
-    schema: 'hippocove_translation_entries_v0.1',
+    schema: 'driftstone_translation_entries_v0.1',
     apply_route: '/api/memory/translate/apply',
     note: '翻译层把 slices 译成 entries；后端再统一写进 /api/memory/write。',
     required_top_level: ['entries'],

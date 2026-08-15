@@ -4,16 +4,16 @@ import { renderMemoryRunDock, renderMemoryStarMap } from './memory-star-map.js';
 import { buildPersonaOnboardingState, renderPersonaOnboarding } from './persona-onboarding.js';
 import { buildSyntheticDemoSnapshot } from './synthetic-demo.js';
 
-const STORAGE_KEY = 'hippocove-runtime-flow-v7';
+const STORAGE_KEY = 'driftstone-runtime-flow-v1';
 const RUNTIME_BUILD_LABEL = 'build 20260508b';
 const DIRECT_SOURCE_FILE_LIMIT_BYTES = 20 * 1024 * 1024;
 const START_PARSE_PAYLOAD_LIMIT_BYTES = 28 * 1024 * 1024;
-const SHARED_API_STORAGE_KEY = 'hippocove_api_config';
-const API_PROFILES_STORAGE_KEY = 'hippocove_api_profiles';
-const LEGACY_PERSONA_CARD_STORAGE_KEY = 'hippocove_main_persona_card';
-const LEGACY_LANGUAGE_FINGERPRINT_STORAGE_KEY = 'hippocove_main_language_fingerprint';
-const LEGACY_BOT_NAME_STORAGE_KEY = 'hippocove_main_bot_name';
-const LEGACY_USER_NAME_STORAGE_KEY = 'hippocove_main_user_name';
+const SHARED_API_STORAGE_KEY = 'driftstone_api_config';
+const API_PROFILES_STORAGE_KEY = 'driftstone_api_profiles';
+const PERSONA_CARD_STORAGE_KEY = 'driftstone_main_persona_card';
+const LANGUAGE_FINGERPRINT_STORAGE_KEY = 'driftstone_main_language_fingerprint';
+const BOT_NAME_STORAGE_KEY = 'driftstone_main_bot_name';
+const USER_NAME_STORAGE_KEY = 'driftstone_main_user_name';
 const LOCAL_BACKEND = window.location.origin;
 const RUNTIME_API_PROFILE_PATH = '/api/runtime/api-profiles';
 const RUNTIME_PERSONA_WORKSPACE_PATH = '/api/runtime/persona-workspace';
@@ -278,10 +278,10 @@ function clearLocalApiProfilesMirror() {
 function clearLocalWorkspaceMirror() {
   try {
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(LEGACY_PERSONA_CARD_STORAGE_KEY);
-    localStorage.removeItem(LEGACY_LANGUAGE_FINGERPRINT_STORAGE_KEY);
-    localStorage.removeItem(LEGACY_BOT_NAME_STORAGE_KEY);
-    localStorage.removeItem(LEGACY_USER_NAME_STORAGE_KEY);
+    localStorage.removeItem(PERSONA_CARD_STORAGE_KEY);
+    localStorage.removeItem(LANGUAGE_FINGERPRINT_STORAGE_KEY);
+    localStorage.removeItem(BOT_NAME_STORAGE_KEY);
+    localStorage.removeItem(USER_NAME_STORAGE_KEY);
   } catch {}
 }
 
@@ -566,10 +566,10 @@ function getPrefsSnapshot() {
 
 function readLegacyPersonaContext() {
   return {
-    charName: safeText(localStorage.getItem(LEGACY_BOT_NAME_STORAGE_KEY), ''),
-    userName: safeText(localStorage.getItem(LEGACY_USER_NAME_STORAGE_KEY), ''),
-    personaCard: safeText(localStorage.getItem(LEGACY_PERSONA_CARD_STORAGE_KEY), ''),
-    languageFingerprint: safeText(localStorage.getItem(LEGACY_LANGUAGE_FINGERPRINT_STORAGE_KEY), '')
+    charName: safeText(localStorage.getItem(BOT_NAME_STORAGE_KEY), ''),
+    userName: safeText(localStorage.getItem(USER_NAME_STORAGE_KEY), ''),
+    personaCard: safeText(localStorage.getItem(PERSONA_CARD_STORAGE_KEY), ''),
+    languageFingerprint: safeText(localStorage.getItem(LANGUAGE_FINGERPRINT_STORAGE_KEY), '')
   };
 }
 

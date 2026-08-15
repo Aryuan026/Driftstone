@@ -46,8 +46,8 @@ not yet apply projection edits back to the bundle.
 - `server/core/reviewed-store.js`
 - `server/core/path-config.js`
 - `legacy/index.html` targeted Notion split/placeholder ranges
-- `docs/HIPPOCOVE_MCP_AGENT_HANDOFF.md`
-- `docs/HIPPOCOVE_TECH_HANDOFF.md`
+- `docs/DRIFTSTONE_MCP_AGENT_HANDOFF.md`
+- `docs/DRIFTSTONE_TECH_HANDOFF.md`
 - `data/README.md`
 
 No license file was found under the public worktree root at max depth 3.
@@ -74,7 +74,7 @@ No license file was found under the public worktree root at max depth 3.
 
 | Need | Current code-grounded state | Gap |
 | --- | --- | --- |
-| Human can start local app | Present via README scripts and desktop shell docs | Product name/docs still say Hippocove and mix workbench/cold-tree language. |
+| Human can start local app | Present via README scripts and desktop shell docs | Public-facing Hippocove launch/doc names have been cleaned; legacy/cold-tree language remains only as bounded compatibility context. |
 | Human can inspect card/source projections | Present for Obsidian; partial for legacy reviewed split | No public portable Warm bundle index; Notion only placeholder/split profile. |
 | Agent can prepare/pull/submit tasks | Present in MCP | Finalize still points to roots/vines; no portable Warm bundle export caller yet. |
 | Agent can inspect product contract | Added in this block via `get_portable_warm_bundle_contract` | Export/review/run/resume tool names still need public Driftstone naming pass. |
@@ -203,7 +203,7 @@ P0:
 
 P1:
 
-- Public docs/package naming still says Hippocove in many places.
+- Public docs/package naming has been cleaned for launch/docs surfaces; remaining Hippocove mentions should stay limited to explicit boundary or compatibility notes.
 - `path-config` creates runtime/staging directories on import, which is too eager
   for pure inspect/export tools.
 - There is no root `LICENSE`/`NOTICE` file in the inspected public worktree.

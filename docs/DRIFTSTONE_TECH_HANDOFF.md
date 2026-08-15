@@ -1,7 +1,5 @@
 # Driftstone 技术交底
 
-> 文件名还保留旧 `HIPPOCOVE_*` 命名，方便旧链接不失效；本说明的公开产品边界以 Driftstone 为准。
-
 这份不是产品介绍，也不是功能清单。
 
 它是留给后面接手的人，尤其是别人的 Codex / Claude Code / 本地 agent，用来快速理解：
@@ -16,7 +14,7 @@
 1. `README.md`
 2. `PROJECT_STATUS.md`
 3. 这份技术交底
-4. `HIPPOCOVE_HAND_TEST_MAP.md`
+4. `DRIFTSTONE_HAND_TEST_MAP.md`
 
 这样比较不容易把“工程细节”误当成“项目意图本身”。
 
@@ -309,9 +307,9 @@ MCP 现在已经能直接调用这些：
 1. `README`
    - `README.md`
 2. MCP handoff
-   - `docs/HIPPOCOVE_MCP_AGENT_HANDOFF.md`
+   - `docs/DRIFTSTONE_MCP_AGENT_HANDOFF.md`
 3. 这份技术交底
-   - `docs/HIPPOCOVE_TECH_HANDOFF.md`
+   - `docs/DRIFTSTONE_TECH_HANDOFF.md`
 4. 后端主链
    - `persona-workspace-service`
    - `growth-task-service`

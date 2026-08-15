@@ -16,13 +16,13 @@ let mainWindow = null;
 let backendProcess = null;
 let quitting = false;
 
-function makeLoadingHtml(message = '正在点亮 Hippocove…') {
+function makeLoadingHtml(message = '正在点亮 Driftstone…') {
   return `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
   <html lang="zh-CN">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width,initial-scale=1" />
-      <title>Hippocove</title>
+      <title>Driftstone</title>
       <style>
         body {
           margin: 0;
@@ -56,7 +56,7 @@ function makeLoadingHtml(message = '正在点亮 Hippocove…') {
     </head>
     <body>
       <div class="card">
-        <h1>Hippocove</h1>
+        <h1>Driftstone</h1>
         <p>${message}</p>
       </div>
     </body>
@@ -104,7 +104,7 @@ function stopBackend() {
 
 function startBackend() {
   if (backendProcess) return;
-  const dataRoot = join(app.getPath('userData'), 'hippocove-data');
+  const dataRoot = join(app.getPath('userData'), 'driftstone-data');
   const obsidianRoot = join(app.getPath('userData'), 'obsidian-staging');
   backendProcess = spawn(process.execPath, [SERVER_ENTRY], {
     env: {
@@ -112,8 +112,8 @@ function startBackend() {
       ELECTRON_RUN_AS_NODE: '1',
       HOST,
       PORT: String(PORT),
-      HIPPOCOVE_DATA_ROOT: dataRoot,
-      HIPPOCOVE_OBSIDIAN_ROOT: obsidianRoot
+      DRIFTSTONE_DATA_ROOT: dataRoot,
+      DRIFTSTONE_OBSIDIAN_ROOT: obsidianRoot
     },
     stdio: 'ignore',
     windowsHide: true
@@ -121,7 +121,7 @@ function startBackend() {
   backendProcess.on('exit', () => {
     backendProcess = null;
     if (!quitting && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.loadURL(makeLoadingHtml('Hippocove 的本地后端已经停下来了。你可以关闭窗口后重新打开应用。')).catch(() => {});
+      mainWindow.loadURL(makeLoadingHtml('Driftstone 的本地后端已经停下来了。你可以关闭窗口后重新打开应用。')).catch(() => {});
     }
   });
 }
@@ -134,7 +134,7 @@ async function createMainWindow() {
     minHeight: 760,
     backgroundColor: '#f7f7f8',
     autoHideMenuBar: true,
-    title: 'Hippocove',
+    title: 'Driftstone',
     webPreferences: {
       contextIsolation: true,
       sandbox: false,
@@ -153,8 +153,8 @@ async function createMainWindow() {
     await waitForServer();
     await mainWindow.loadURL(APP_URL);
   } catch (error) {
-    await mainWindow.loadURL(makeLoadingHtml(`Hippocove 没能顺利点亮：${String(error?.message || error)}`));
-    dialog.showErrorBox('Hippocove 启动失败', `本地后端没能顺利点亮。\n\n${String(error?.message || error)}`);
+    await mainWindow.loadURL(makeLoadingHtml(`Driftstone 没能顺利点亮：${String(error?.message || error)}`));
+    dialog.showErrorBox('Driftstone 启动失败', `本地后端没能顺利点亮。\n\n${String(error?.message || error)}`);
   }
 }
 
@@ -170,7 +170,7 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(async () => {
-  app.setName('Hippocove');
+  app.setName('Driftstone');
   await createMainWindow();
 });
 

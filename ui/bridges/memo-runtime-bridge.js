@@ -358,7 +358,7 @@ export function buildRuntimeMaterialsExport({
   parseRun
 }) {
   return {
-    schema: 'hippocove_runtime_material_export_v0.3',
+    schema: 'driftstone_runtime_material_export_v0.1',
     exported_at: new Date().toISOString(),
     session_id: sessionId,
     source_label: sourceLabel,

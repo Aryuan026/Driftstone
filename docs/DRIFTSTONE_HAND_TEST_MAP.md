@@ -1,4 +1,4 @@
-# Hippocove 手测地图
+# Driftstone 手测地图
 
 这份不是技术设计稿。
 
@@ -10,7 +10,7 @@
 
 ## 1. 先确认你在看什么
 
-Hippocove 现在是三层工位：
+Driftstone 现在是三层工位：
 
 - `docs/index.html`
   GitHub Pages 首页。先看它讲得清不清楚。
@@ -164,8 +164,8 @@ npm run start
 
 1. 先看 [README](../README.md)
 2. 再看 [PROJECT_STATUS](../PROJECT_STATUS.md)
-3. 再看 [技术交底](./HIPPOCOVE_TECH_HANDOFF.md)
-4. 再看 [MCP handoff](./HIPPOCOVE_MCP_AGENT_HANDOFF.md)
+3. 再看 [技术交底](./DRIFTSTONE_TECH_HANDOFF.md)
+4. 再看 [MCP handoff](./DRIFTSTONE_MCP_AGENT_HANDOFF.md)
 5. 最后才去碰 `server/core`
 
 别一上来就掉进代码里。

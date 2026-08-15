@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 const dataRoot = await mkdtemp(join(tmpdir(), 'driftstone-growth-draft-store-'));
-process.env.HIPPOCOVE_DATA_ROOT = dataRoot;
+process.env.DRIFTSTONE_DATA_ROOT = dataRoot;
 
 const {
   getGrowthDraftArtifact,

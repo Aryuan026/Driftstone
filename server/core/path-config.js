@@ -8,16 +8,16 @@ const __dirname = dirname(__filename);
 
 export const SERVER_DIR = join(__dirname, '..');
 export const PROJECT_ROOT = join(__dirname, '..', '..');
-const ENV_DATA_ROOT = process.env.HIPPOCOVE_DATA_ROOT || '';
-const ENV_OUTPUT_ROOT = process.env.HIPPOCOVE_OUTPUT_ROOT || '';
+const ENV_DATA_ROOT = process.env.DRIFTSTONE_DATA_ROOT || '';
+const ENV_OUTPUT_ROOT = process.env.DRIFTSTONE_OUTPUT_ROOT || '';
 export const DATA_DIR = ENV_DATA_ROOT || join(PROJECT_ROOT, 'data');
 export const LOCAL_FIXTURES_DIR = join(DATA_DIR, 'local_fixtures');
 export const RUNTIME_SAVE_DIR = join(DATA_DIR, 'runtime_save');
 export const DEFAULT_STAGE_DROPBOX_DIR = join(LOCAL_FIXTURES_DIR, 'stage_dropbox');
 const OUTPUT_DIR = ENV_OUTPUT_ROOT || join(PROJECT_ROOT, 'output');
 export const DEFAULT_OBSIDIAN_ROOT = join(OUTPUT_DIR, 'obsidian_staging');
-const ENV_STAGE_DROPBOX = process.env.HIPPOCOVE_STAGE_DROPBOX || '';
-const ENV_OBSIDIAN_ROOT = process.env.HIPPOCOVE_OBSIDIAN_ROOT || '';
+const ENV_STAGE_DROPBOX = process.env.DRIFTSTONE_STAGE_DROPBOX || '';
+const ENV_OBSIDIAN_ROOT = process.env.DRIFTSTONE_OBSIDIAN_ROOT || '';
 const STAGE_ROOT_CANDIDATES = [
   ENV_STAGE_DROPBOX,
   DEFAULT_STAGE_DROPBOX_DIR

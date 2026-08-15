@@ -1,10 +1,8 @@
 # Driftstone MCP Agent Handoff
 
-> 文件名还保留旧 `HIPPOCOVE_*` 命名，方便旧链接不失效；本说明的公开产品边界以 Driftstone 为准。
-
 > 新 agent 建议优先阅读 Driftstone 命名的正门：
 > [`DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md`](./DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)。
-> 本文件保留为旧链接兼容与更长解释。
+> 本文件保留为更长的 MCP/agent 解释。
 
 这份说明不是写给网页用户的。
 
@@ -59,7 +57,7 @@ node server/mcp-server.js
 
 ## 3. 给 agent 的 MCP 配置
 
-通用思路是把这只本地进程注册成一个 `driftstone` 工具源。旧客户端如果已经配置成 `hippocove`，可以暂时保留别名；公开文档新写法统一用 `driftstone`。
+通用思路是把这只本地进程注册成一个 `driftstone` 工具源。公开 Driftstone 文档和示例不再引入旧产品别名。
 
 示例：
 

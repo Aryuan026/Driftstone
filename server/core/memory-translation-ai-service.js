@@ -243,7 +243,7 @@ export async function parseAiTranslationTaskSubmission(body = {}, options = {}) 
 
     return {
       ok: false,
-      schema: 'hippocove_translation_ai_parse_v0.1',
+      schema: 'driftstone_translation_ai_parse_v0.1',
       error: reason,
       scope: {
         ...scope,
@@ -282,7 +282,7 @@ export async function parseAiTranslationTaskSubmission(body = {}, options = {}) 
 
     return {
       ok: false,
-      schema: 'hippocove_translation_ai_parse_v0.1',
+      schema: 'driftstone_translation_ai_parse_v0.1',
       error: reason,
       scope: {
         ...scope,
@@ -301,7 +301,7 @@ export async function parseAiTranslationTaskSubmission(body = {}, options = {}) 
   }
   return {
     ok: true,
-    schema: 'hippocove_translation_ai_parse_v0.1',
+    schema: 'driftstone_translation_ai_parse_v0.1',
     scope: {
       ...scope,
       isolation_stage: 'translation_packet'
@@ -352,7 +352,7 @@ export async function prepareAiTranslationTasks(body = {}) {
 
   const payload = {
     ok: true,
-    schema: 'hippocove_translation_ai_prepare_v0.1',
+    schema: 'driftstone_translation_ai_prepare_v0.1',
     scope: {
       ...scope,
       isolation_stage: 'translation_packet'
@@ -411,7 +411,7 @@ export async function submitAiTranslationTask(body = {}) {
   if (!parsedPayload?.ok) {
     return {
       ...parsedPayload,
-      schema: 'hippocove_translation_ai_submit_v0.1',
+      schema: 'driftstone_translation_ai_submit_v0.1',
       writeback: {
         ok: false,
         summary: {
@@ -463,7 +463,7 @@ export async function submitAiTranslationTask(body = {}) {
 
   return {
     ok: true,
-    schema: 'hippocove_translation_ai_submit_v0.1',
+    schema: 'driftstone_translation_ai_submit_v0.1',
     scope: payload.scope,
     packet_file: parsedPayload.packet_file,
     task_file: parsedPayload.task_file,
@@ -483,7 +483,7 @@ export async function failAiTranslationTask(body = {}) {
     return {
       ok: false,
       error: 'task_file is required',
-      schema: 'hippocove_translation_ai_fail_v0.1'
+      schema: 'driftstone_translation_ai_fail_v0.1'
     };
   }
 
@@ -523,7 +523,7 @@ export async function failAiTranslationTask(body = {}) {
 
   return {
     ok: true,
-    schema: 'hippocove_translation_ai_fail_v0.1',
+    schema: 'driftstone_translation_ai_fail_v0.1',
     scope: {
       ...scope,
       isolation_stage: 'translation_packet'

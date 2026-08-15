@@ -197,7 +197,7 @@ export async function buildTranslationPacket(body = {}) {
 
   return {
     ok: true,
-    schema: 'hippocove_translation_result_v0.1',
+    schema: 'driftstone_translation_result_v0.1',
     packet_id: translationPacket.packet_id,
     ingest_packet_id: translationPacket.ingest_packet_id,
     scope: {
@@ -265,7 +265,7 @@ export async function applyTranslationEntries(body = {}) {
 
   return {
     ok: true,
-    schema: 'hippocove_translation_apply_result_v0.1',
+    schema: 'driftstone_translation_apply_result_v0.1',
     scope: {
       ...scope,
       isolation_stage: 'scoped_truth'

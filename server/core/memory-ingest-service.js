@@ -223,7 +223,7 @@ export async function ingestMemoryEnvelope(body = {}, options = {}) {
 
   return {
     ok: true,
-    schema: 'hippocove_ingest_result_v0.1',
+    schema: 'driftstone_ingest_result_v0.1',
     packet_id: packet.packet_id,
     scope: {
       ...scope,

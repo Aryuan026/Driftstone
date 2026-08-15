@@ -31,7 +31,7 @@ export async function materializeTranslationTasks(payload = {}, options = {}) {
   for (const [index, task] of (Array.isArray(payload?.tasks) ? payload.tasks : []).entries()) {
     const taskFile = join(taskFilesDir, `${taskOrdinalName(index)}.json`);
     const taskDoc = {
-      schema: 'hippocove_translation_task_v0.1',
+      schema: 'driftstone_translation_task_v0.1',
       generated_at: generatedAt,
       packet_id: payload.packet_id || '',
       packet_file: payload.packet_file || '',
@@ -81,7 +81,7 @@ export async function materializeTranslationTasks(payload = {}, options = {}) {
   }
 
   const packetDoc = {
-    schema: 'hippocove_translation_task_packet_v0.1',
+    schema: 'driftstone_translation_task_packet_v0.1',
     generated_at: generatedAt,
     packet_id: payload.packet_id || '',
     packet_file: payload.packet_file || '',
@@ -114,7 +114,7 @@ export async function materializeTranslationTasks(payload = {}, options = {}) {
   }
   await writeFile(packetFile, `${JSON.stringify(packetDoc, null, 2)}\n`, 'utf-8');
   await writeFile(join(tasksDir, 'latest.json'), `${JSON.stringify({
-    schema: 'hippocove_translation_task_latest_pointer_v0.1',
+    schema: 'driftstone_translation_task_latest_pointer_v0.1',
     generated_at: generatedAt,
     latest_packet: packetDir,
     scope: {

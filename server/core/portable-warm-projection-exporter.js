@@ -445,7 +445,7 @@ function buildProjection({ bundle = {}, outputDir = '' } = {}) {
       local_files_only: true,
       notion_written: false,
       home_written: false,
-      hippocove_written: false
+      cold_tree_written: false
     }
   };
 

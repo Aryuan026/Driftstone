@@ -186,7 +186,7 @@ function buildCompletionBundle(scope = {}, result = {}) {
   if (!result || typeof result !== 'object' || result.ok === false) return null;
   const draft = result.draft && typeof result.draft === 'object' ? result.draft : {};
   return {
-    schema: 'hippocove_growth_runtime_bundle_v0.1',
+    schema: 'driftstone_growth_runtime_bundle_v0.1',
     generated_at: safeText(draft.generated_at || new Date().toISOString()),
     source_label: 'growth-runtime',
     session_id: safeText(scope.realm_id),

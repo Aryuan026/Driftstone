@@ -44,7 +44,7 @@ export async function advanceMemoryBay(body = {}) {
   if (!before?.ok) {
     return {
       ok: false,
-      schema: 'hippocove_memory_advance_v0.1',
+      schema: 'driftstone_memory_advance_v0.1',
       scope,
       error: safeText(before?.error || 'Bay not found'),
       before
@@ -69,7 +69,7 @@ export async function advanceMemoryBay(body = {}) {
     });
     return {
       ok: Boolean(translated?.ok),
-      schema: 'hippocove_memory_advance_v0.1',
+      schema: 'driftstone_memory_advance_v0.1',
       scope,
       action: 'build_translation_packet',
       before,
@@ -92,7 +92,7 @@ export async function advanceMemoryBay(body = {}) {
     });
     return {
       ok: Boolean(prepared?.ok),
-      schema: 'hippocove_memory_advance_v0.1',
+      schema: 'driftstone_memory_advance_v0.1',
       scope,
       action: 'prepare_translation_tasks',
       before,
@@ -115,7 +115,7 @@ export async function advanceMemoryBay(body = {}) {
     });
     return {
       ok: Boolean(worked?.ok),
-      schema: 'hippocove_memory_advance_v0.1',
+      schema: 'driftstone_memory_advance_v0.1',
       scope,
       action: 'run_programmatic_translation_task',
       before,
@@ -127,7 +127,7 @@ export async function advanceMemoryBay(body = {}) {
 
   return {
     ok: true,
-    schema: 'hippocove_memory_advance_v0.1',
+    schema: 'driftstone_memory_advance_v0.1',
     scope,
     action: 'noop',
     before,
@@ -166,7 +166,7 @@ export async function drainMemoryBay(body = {}) {
   if (before?.ok && beforeState === stopAt) {
     return {
       ok: true,
-      schema: 'hippocove_memory_advance_drain_v0.1',
+      schema: 'driftstone_memory_advance_drain_v0.1',
       scope,
       max_steps: maxSteps,
       stop_at: stopAt,
@@ -223,7 +223,7 @@ export async function drainMemoryBay(body = {}) {
 
   return {
     ok: true,
-    schema: 'hippocove_memory_advance_drain_v0.1',
+    schema: 'driftstone_memory_advance_drain_v0.1',
     scope,
     max_steps: maxSteps,
     stop_at: stopAt,

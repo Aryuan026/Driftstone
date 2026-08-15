@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 const dataRoot = await mkdtemp(join(tmpdir(), 'driftstone-mcp-translation-'));
-process.env.HIPPOCOVE_DATA_ROOT = dataRoot;
+process.env.DRIFTSTONE_DATA_ROOT = dataRoot;
 
 const {
   failTranslationTaskForTool,
@@ -239,7 +239,7 @@ test('headless task_file authority, replay, conflict, and resume stay exact', as
 test('public task_file rejects non-canonical task paths without reading private body', async () => {
   const forgedTaskFile = join(dataRoot, 'untrusted.json');
   await writeFile(forgedTaskFile, JSON.stringify({
-    schema: 'hippocove_translation_task_v0.1',
+    schema: 'driftstone_translation_task_v0.1',
     scope: {
       owner_id: 'owner-forged',
       realm_id: 'realm-forged',
@@ -305,7 +305,7 @@ test('public task_file rejects unregistered and symlinked canonical-looking file
   const taskFile = prepared.next_task.task_file;
   const unregisteredFile = join(dirname(taskFile), 'unregistered.json');
   await writeFile(unregisteredFile, JSON.stringify({
-    schema: 'hippocove_translation_task_v0.1',
+    schema: 'driftstone_translation_task_v0.1',
     scope: prepared.next_task.scope,
     task_packet_file: prepared.next_task.task_packet_file,
     translator_contract: {

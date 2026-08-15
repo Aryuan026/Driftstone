@@ -3,7 +3,7 @@ import { loadCanonicalTranslationTaskByFile, loadLatestTranslationTaskPacket } f
 function buildEmptyTranslationTaskStatus(options = {}) {
   return {
     ok: true,
-    schema: 'hippocove_translation_task_packet_status_v0.1',
+    schema: 'driftstone_translation_task_packet_status_v0.1',
     scope: {
       owner_id: String(options.ownerId || options.owner_id || ''),
       realm_id: String(options.realmId || options.realm_id || ''),
@@ -58,7 +58,7 @@ function summarizeTaskRow(row = {}) {
 
 function summarizeTaskDoc(task = {}) {
   return {
-    schema: 'hippocove_translation_task_read_v0.1',
+    schema: 'driftstone_translation_task_read_v0.1',
     task_file: String(task?.task_packet_file ? task?.task?.task_file || '' : task?.file || ''),
     status: String(task?.status || 'pending'),
     scope: task?.scope || {},
@@ -124,7 +124,7 @@ export async function getLatestTranslationTaskPacketStatus(options = {}) {
 
   return {
     ok: true,
-    schema: 'hippocove_translation_task_packet_status_v0.1',
+    schema: 'driftstone_translation_task_packet_status_v0.1',
     scope: packet?.scope || pointer?.scope || {},
     latest: {
       generated_at: String(packet?.generated_at || pointer?.generated_at || ''),
@@ -170,7 +170,7 @@ export async function getTranslationTaskWorkerPacket(taskFile) {
   const task = await loadCanonicalTranslationTaskByFile(taskFile);
   return {
     ok: true,
-    schema: 'hippocove_translation_worker_packet_v0.1',
+    schema: 'driftstone_translation_worker_packet_v0.1',
     task_file: taskFile,
     status: String(task?.status || 'pending'),
     scope: task?.scope || {},
@@ -199,7 +199,7 @@ export async function getNextPendingTranslationTask(options = {}) {
   if (!nextTask?.task_file) {
     return {
       ok: true,
-      schema: 'hippocove_translation_task_next_v0.1',
+      schema: 'driftstone_translation_task_next_v0.1',
       scope: latest.scope || {},
       latest: latest.latest || {},
       status_summary: latest.status_summary || {},
@@ -210,7 +210,7 @@ export async function getNextPendingTranslationTask(options = {}) {
   const detail = await getTranslationTaskStatus(nextTask.task_file);
   return {
     ok: true,
-    schema: 'hippocove_translation_task_next_v0.1',
+    schema: 'driftstone_translation_task_next_v0.1',
     scope: latest.scope || {},
     latest: latest.latest || {},
     status_summary: latest.status_summary || {},
@@ -224,7 +224,7 @@ export async function getNextPendingTranslationWorkerPacket(options = {}) {
   if (!nextTask?.task_file) {
     return {
       ok: true,
-      schema: 'hippocove_translation_worker_packet_next_v0.1',
+      schema: 'driftstone_translation_worker_packet_next_v0.1',
       scope: latest.scope || {},
       latest: latest.latest || {},
       status_summary: latest.status_summary || {},
@@ -235,7 +235,7 @@ export async function getNextPendingTranslationWorkerPacket(options = {}) {
   const workerPacket = await getTranslationTaskWorkerPacket(nextTask.task_file);
   return {
     ok: true,
-    schema: 'hippocove_translation_worker_packet_next_v0.1',
+    schema: 'driftstone_translation_worker_packet_next_v0.1',
     scope: latest.scope || {},
     latest: latest.latest || {},
     status_summary: latest.status_summary || {},

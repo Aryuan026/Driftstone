@@ -75,7 +75,7 @@ export async function ensureRuntimeReviewedPacket({
 
   const generatedAt = new Date().toISOString();
   const packet = {
-    schema: 'hippocove_runtime_reviewed_packet_v0.1',
+    schema: 'driftstone_runtime_reviewed_packet_v0.1',
     generated_at: generatedAt,
     updated_at: generatedAt,
     finalized_at: '',
@@ -102,7 +102,7 @@ export async function ensureRuntimeReviewedPacket({
   const packetFile = join(packetDir, 'packet.json');
   await writeFile(packetFile, `${JSON.stringify(packet, null, 2)}\n`, 'utf-8');
   await writeFile(join(dir, 'latest.json'), `${JSON.stringify({
-    schema: 'hippocove_runtime_reviewed_latest_pointer_v0.1',
+    schema: 'driftstone_runtime_reviewed_latest_pointer_v0.1',
     generated_at: generatedAt,
     latest_packet: packetDir,
     scope: packet.scope

@@ -115,8 +115,6 @@ Desktop helper scripts are also included:
 - macOS: `00_双击启动_Driftstone.command`
 - Windows: `00_双击启动_Driftstone.cmd`
 
-The old `Hippocove`-named launch scripts remain compatibility aliases; **Driftstone** is the public product name.
-
 ## Human Path
 
 The current human workflow is:

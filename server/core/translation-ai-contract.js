@@ -10,7 +10,7 @@ function previewText(text, limit = 220) {
 
 export function buildTranslationAiSystemPrompt() {
   return [
-    '你是 Hippocove 的标准语言翻译层。',
+    '你是 Driftstone 的标准语言翻译层。',
     '你的任务不是聊天，也不是解释，而是把原文切片翻成可写入记忆树的 entries。',
     '四个主干只有：person / thing / event / rule。',
     'time 不是第五主干；如果某个日期/纪念日其实更像事件锚，请直接写成 event。',
@@ -27,7 +27,7 @@ export function buildTranslationAiSystemPrompt() {
 
 export function buildTranslationAiFallbackPrompt() {
   return [
-    '你是 Hippocove 的标准语言翻译层。',
+    '你是 Driftstone 的标准语言翻译层。',
     '这次不要输出 JSON，也不要写解释散文。',
     '请严格按“翻译便签”格式输出。',
     '每个 entry 都以 ### ENTRY 开头，不要编号，不要前言，不要总结。',
@@ -55,7 +55,7 @@ export function buildTranslationAiResponseFormat() {
   return {
     type: 'json_schema',
     json_schema: {
-      name: 'hippocove_translation_entries',
+      name: 'driftstone_translation_entries',
       strict: true,
       schema: {
         type: 'object',

@@ -182,8 +182,8 @@ Targets:
 ```text
 server/routes/registry.js
 server/routes/product/README.md
-docs/HIPPOCOVE_MCP_AGENT_HANDOFF.md
-docs/HIPPOCOVE_TECH_HANDOFF.md
+docs/DRIFTSTONE_MCP_AGENT_HANDOFF.md
+docs/DRIFTSTONE_TECH_HANDOFF.md
 README.md
 server/README.md
 ```
@@ -462,9 +462,9 @@ P1:
 - The CSV/conservation Green patch from `codex/driftstone-csv-ledger@042764d`
   still needs a public-product port before Driftstone can claim hardened
   all-month CSV import quality.
-- Product naming still has legacy `HIPPOCOVE_*` filenames and double-click
-  scripts for compatibility; current entry docs now route agents through
-  Driftstone-named workflow docs.
+- Public-facing legacy product filenames and double-click script aliases were
+  removed after this roadmap item; remaining Hippocove mentions should be
+  boundary/compatibility notes only.
 - `path-config` creates runtime directories on import, which is awkward for pure
   inspect/validate tools.
 - No root `LICENSE` or `NOTICE` file is present in the inspected public worktree.

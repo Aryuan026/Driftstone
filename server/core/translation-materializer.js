@@ -37,7 +37,7 @@ export async function materializeTranslationPacket(packet, options = {}) {
     const sliceId = safeSegment(slice.slice_id || `slice_${sliceRows.length + 1}`);
     const filePath = join(slicesDir, `${sliceId}.json`);
     const sliceDoc = {
-      schema: 'hippocove_translation_slice_v0.1',
+      schema: 'driftstone_translation_slice_v0.1',
       generated_at: generatedAt,
       packet_id: packet.packet_id,
       slice_id: slice.slice_id,
@@ -69,7 +69,7 @@ export async function materializeTranslationPacket(packet, options = {}) {
   }
 
   const packetDoc = {
-    schema: 'hippocove_translation_packet_v0.1',
+    schema: 'driftstone_translation_packet_v0.1',
     generated_at: generatedAt,
     packet_id: packet.packet_id,
     ingest_packet_id: packet.ingest_packet_id,
@@ -83,7 +83,7 @@ export async function materializeTranslationPacket(packet, options = {}) {
   const packetFile = join(packetDir, 'packet.json');
   await writeFile(packetFile, `${JSON.stringify(packetDoc, null, 2)}\n`, 'utf-8');
   await writeFile(join(translationDir, 'latest.json'), `${JSON.stringify({
-    schema: 'hippocove_translation_latest_pointer_v0.1',
+    schema: 'driftstone_translation_latest_pointer_v0.1',
     generated_at: generatedAt,
     latest_packet: packetDir,
     scope: {

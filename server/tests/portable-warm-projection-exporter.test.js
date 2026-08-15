@@ -69,6 +69,7 @@ test('projection exporter writes local markdown, obsidian, and notion-ready file
     assert.equal(result.projection_status, 'projection_written');
     assert.equal(result.manifest.canonical_truth, false);
     assert.equal(result.manifest.write_boundary.notion_written, false);
+    assert.equal(result.manifest.write_boundary.cold_tree_written, false);
     assert.equal(result.counts.warm_cards, 1);
     assert.equal(result.counts.source_spans, 1);
 

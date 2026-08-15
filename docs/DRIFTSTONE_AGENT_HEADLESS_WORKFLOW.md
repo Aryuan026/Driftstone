@@ -3,10 +3,8 @@
 This is the canonical public guide for agents that run Driftstone without
 opening the human UI.
 
-Older docs may still use `HIPPOCOVE_*` filenames for compatibility. Public
-product language should say Driftstone. The public endpoint is a portable Warm
-bundle and local projections with review-backflow anchors, not a Cold tree
-writer.
+The public endpoint is a portable Warm bundle and local projections with
+review-backflow anchors, not a Cold tree writer.
 
 ## Boundary
 
@@ -47,9 +45,8 @@ cd server
 npm run mcp
 ```
 
-MCP clients should register this process as `driftstone`. Existing clients that
-still call it `hippocove` can keep that alias, but new instructions should use
-`driftstone`.
+MCP clients should register this process as `driftstone`. Public Driftstone
+docs and examples should not introduce legacy product aliases.
 
 ```json
 {

@@ -79,8 +79,7 @@ const KEYSETS = {
     'source_refs',
     'privacy',
     'quality',
-    'home_import_policy',
-    'hippocove_import_policy'
+    'home_import_policy'
   ]),
   portable_warm_card: new Set([
     'body_markdown',
@@ -427,10 +426,6 @@ function validateWarmCard(card, index, errors, warnings) {
   validateAllowedKeys(card?.home_import_policy, KEYSETS.import_policy, `${basePath}.home_import_policy`, errors);
   validateRequiredObject(card?.home_import_policy, `${basePath}.home_import_policy`, errors);
   validateRequiredKeys(card?.home_import_policy, REQUIRED_KEYS.import_policy, `${basePath}.home_import_policy`, errors);
-  validateAllowedKeys(card?.hippocove_import_policy, KEYSETS.import_policy, `${basePath}.hippocove_import_policy`, errors);
-  if (isPlainObject(card?.hippocove_import_policy)) {
-    validateRequiredKeys(card.hippocove_import_policy, REQUIRED_KEYS.import_policy, `${basePath}.hippocove_import_policy`, errors);
-  }
   ['candidate_id', 'title', 'archive_bucket', 'frontend_delivery_tier'].forEach((key) => {
     validateStringField(card, key, basePath, errors);
   });
@@ -453,11 +448,6 @@ function validateWarmCard(card, index, errors, warnings) {
   validateBooleanField(card?.home_import_policy, 'direct_write_allowed', `${basePath}.home_import_policy`, errors, false);
   validateStringField(card?.home_import_policy, 'state', `${basePath}.home_import_policy`, errors);
   validateStringField(card?.home_import_policy, 'reason', `${basePath}.home_import_policy`, errors);
-  if (isPlainObject(card?.hippocove_import_policy)) {
-    validateBooleanField(card.hippocove_import_policy, 'direct_write_allowed', `${basePath}.hippocove_import_policy`, errors, false);
-    validateStringField(card.hippocove_import_policy, 'state', `${basePath}.hippocove_import_policy`, errors);
-    validateStringField(card.hippocove_import_policy, 'reason', `${basePath}.hippocove_import_policy`, errors);
-  }
   if (!safeText(card?.candidate_id)) {
     pushError(errors, `${basePath}.candidate_id`, 'candidate_id is required for projection identity and future review patching.');
   }
@@ -473,9 +463,6 @@ function validateWarmCard(card, index, errors, warnings) {
   }
   if (card?.home_import_policy?.direct_write_allowed === true) {
     pushError(errors, `${basePath}.home_import_policy.direct_write_allowed`, 'Public bundle must not grant Home direct-write authority.');
-  }
-  if (card?.hippocove_import_policy?.direct_write_allowed === true) {
-    pushError(errors, `${basePath}.hippocove_import_policy.direct_write_allowed`, 'Public bundle must not grant Hippocove direct-write authority.');
   }
   if (card?.quality?.source_bound !== true) {
     pushError(errors, `${basePath}.quality.source_bound`, 'accepted portable Warm cards must be source_bound=true.');

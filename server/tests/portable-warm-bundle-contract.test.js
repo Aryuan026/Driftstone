@@ -521,6 +521,20 @@ test('public bundle rejects nested unknown/private fields after reseal', () => {
   assert.ok(result.errors.some((item) => item.path === 'warm_cards[0].portable_warm_card.private_payload'));
 });
 
+test('public bundle rejects private cold-tree import policy fields after reseal', () => {
+  const bundle = buildValidBundle();
+  bundle.warm_cards[0].hippocove_import_policy = {
+    direct_write_allowed: false,
+    state: 'review_only',
+    reason: 'private downstream policy must not be part of the public portable contract'
+  };
+
+  const result = validatePortableWarmBundle(resealBundlePreservingShape(bundle));
+
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((item) => item.path === 'warm_cards[0].hippocove_import_policy'));
+});
+
 test('public bundle requires canonical conservation counts after reseal', () => {
   const bundle = buildValidBundle();
   delete bundle.conservation.accepted_rows;

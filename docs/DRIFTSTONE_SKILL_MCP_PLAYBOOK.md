@@ -1,7 +1,7 @@
 # Driftstone Legacy Skill / MCP Playbook
 
 > Legacy note: this file keeps older workbench observations and compatibility
-> notes under the old `HIPPOCOVE_*` filename. New agents should start from
+> notes. New agents should start from
 > [`DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md`](./DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md).
 > Public Driftstone's endpoint is `portable_warm_bundle` plus local projections
 > with review-backflow anchors, not roots/vines, Home, Hippocove, Notion, or
@@ -52,8 +52,6 @@ Driftstone 现在不是一张纯网页。
 
 - macOS：`00_双击启动_Driftstone.command`
 - Windows：`00_双击启动_Driftstone.cmd`
-
-旧的 `00_双击启动_Hippocove.*` 仍是兼容别名；新说明优先使用 Driftstone 命名。
 
 这把钥匙会自动：
 

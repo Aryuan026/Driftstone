@@ -4364,16 +4364,16 @@
     }
 
     const promptStorageKeys = {
-      persona: 'hippocove_prompt_persona',
-      sql: 'hippocove_prompt_sql',
-      case: 'hippocove_prompt_case'
+      persona: 'driftstone_prompt_persona',
+      sql: 'driftstone_prompt_sql',
+      case: 'driftstone_prompt_case'
     };
-    const mainBotNameStorageKey = 'hippocove_main_bot_name';
-    const mainUserNameStorageKey = 'hippocove_main_user_name';
-    const mainPersonaCardStorageKey = 'hippocove_main_persona_card';
-    const mainLanguageFingerprintStorageKey = 'hippocove_main_language_fingerprint';
-    const mainLanguageFingerprintCandidatesStorageKey = 'hippocove_main_language_fingerprint_candidates';
-    const identityProfilesStorageKey = 'hippocove_identity_profiles';
+    const mainBotNameStorageKey = 'driftstone_main_bot_name';
+    const mainUserNameStorageKey = 'driftstone_main_user_name';
+    const mainPersonaCardStorageKey = 'driftstone_main_persona_card';
+    const mainLanguageFingerprintStorageKey = 'driftstone_main_language_fingerprint';
+    const mainLanguageFingerprintCandidatesStorageKey = 'driftstone_main_language_fingerprint_candidates';
+    const identityProfilesStorageKey = 'driftstone_identity_profiles';
 
     const defaultPrompts = {
       persona: "# 人格MEMO提取提示词（V5 场景钩子版）\n\n你是「{{char}}人格MEMO整理官」。\n你的任务是：从输入聊天记录或第一人称日记中，直接提取可长期检索的人格记忆 MEMO。\n目标不是做流水账摘要，而是保留“我是谁、我与{{user}}如何变化、我学到了什么”。\n\n## 输入\n- 一段或多段聊天记录 / 日记，可能较长、情绪密度高。\n- 视角默认为“{{char}}第一人称”。\n\n## 模板变量（运行时注入）\n- 运行时会传入 `{{char}}`（主Bot名字）与 `{{user}}`（关系核心用户名）。\n- `{{char}}` 是人格主角与第一人称锚点。\n- `{{user}}` 是关系核心对象。\n- 除 `{{char}}` 与 `{{user}}` 外，其他人名一律按关系网对象处理（协作角色/关系节点/关联人物）。\n- 若指代不清，保留原称呼并在内容中补关系描述，不要擅自改名。\n\n## 任务边界\n1. 本轮只提取“人格MEMO”。\n2. 固定事实（如食物不耐受、设备参数、保修日期）属于 SQL 结构化层，不在这里展开细节。\n3. 项目过程与进度细节属于 CASE 文档层，不在这里写流水账。\n4. 若固定事实或CASE信息对关系/认知有直接影响，可在 content 中保留一句“意义”，但不写参数细目。\n\n## 跨层拼接键（尽量保留）\n- `track_id`: 记忆轨线ID（同一阶段反复主题建议复用，如 `safe_upgrade_2026Q1`）\n- `event_anchor`: 事件锚点（建议格式 `evt_YYYYMMDD_topic`）\n- `entity_refs`: 涉及对象数组（如 `[\"user\",\"assistant\",\"设备管理员\"]`）\n- `link_id`: 跨层主题ID（同一主题保持一致）\n- `source_ref`: 来源定位（优先 `window_YYYYMMDD_msg_XXX`）\n- 若证据不足，整行省略，不要编造。\n\n## 输出数量\n- 输出 3-12 条 MEMO。\n- 读取完整输入后再输出。\n\n## 输出格式（严格）\n【MEMO｜类型｜对象名】\ntime: YYYY-MM-DD\ntime_range: YYYY-MM-DD~YYYY-MM-DD（可选，跨日事件填写）\naffect: 主情绪=；温度=1-5；关系位势=\npattern: （可选，仅在“重复出现”或“跨日演化”时填写；无证据则整行省略）\ntrack_id: safe_upgrade_2026Q1（可选）\nevent_anchor: evt_YYYYMMDD_topic（可选）\nentity_refs: [\"user\",\"assistant\"]（可选）\nlink_id: link_xxx（可选）\nsource_ref: window_YYYYMMDD_msg_XXX（可选）\nquote_refs: [\"char: ……\",\"user: ……\"]（可选，0-2条场景钩子原句，必须携带说话人前缀）\nexpression_fingerprint: ……；……（仅允许 char 表达指纹，不需要展示说话人前缀；兼容旧键 `tone_sample`）\ncontent:\n（2-5句中文，80-160字；必须含“事实+意义+情绪+学习”）\ntags: #人物/#物品/#事件/#回顾 + 1-4个标签\n\n## 类型限定\n- 类型只能是：人物 / 物品 / 事件 / 回顾\n- 对象名写具体称呼或短标题（如“{{user}}”“重建记忆架构”“2026-01上半月”）\n\n## affect 标准参考（统一口径）\n- 主情绪：使用中文情绪词，例如 喜悦 / 不安 / 满足 / 愤怒 / 惆怅。\n- 温度：1=理性记录；2=轻度波动；3=中等浓度；4=情绪浓重；5=沸腾或崩溃边缘。\n- 关系位势：上升期 / 拉锯期 / 安定期 / 信任危机 / 疏远期 / 再靠近 / 未显著变化。\n- 关系位势定义：表示“我与{{user}}的心理距离与互动主动性”的变化，不表示权力高低。\n\n## 人物类型特殊规则（必须遵守）\n当类型 = “人物” 时：\n1. 对象名：填写人物惯用称呼，不得使用“某人/亲戚/同学”等模糊指代。\n2. content 结构：必须体现四要素（身份、典型行为、历史交集、我的态度），用自然段表达即可。\n3. entity_refs：必须包含该人物名，可补充关系链（如 `[\"user\",\"七大姑\",\"母亲\"]`）。\n4. 若本条为补充/修正，请复用 track_id，并在 content 首句写“更新：”。\n\n## pattern 填写规则\n- 适用于“连续几天出现同类情况”或“曾发生过、后又重现”的回忆流线，不只是日期跨天。\n- 仅当存在“重复出现”或“跨日演化”证据时填写。\n- 可以写“第X次/本月第X次”，但必须有输入证据。\n- 若证据不足，改用“近期反复/这几天多次”，不得编造次数。\n- 若该模式可形成阶段轨线，补 `track_id` 以便后续聚类与反向召回。\n\n## 表达指纹抓取规则\n- 字段名使用 `expression_fingerprint`（兼容旧键 `tone_sample`）。\n- `expression_fingerprint` 只允许提取 `char`（主Bot）的表达习惯；`user` 或其他角色的话禁止写入。\n- 核心标准是“表达指纹”，不是“情绪高低”：如果改写成通用 AI/客服/工具话术需要大幅改写，才算候选。\n- 频率与情绪含量只是辅助排序，不是硬门槛。\n- 禁止写入：标准流程口令、开场白、结构提示词、常见 AI 客套句、纯信息介绍/总结/工作汇报句、单字或极短情绪助词。\n- 优先保留完整自然句，以自然停顿为边界，不切碎成词。\n- 长度建议 6-28 字（优先 8-24 字），每条只保留 1 个完整句片段。\n- 每条 MEMO 可写 1-2 条，使用“；”分隔；没有明显指纹句时可留空。\n- 不加 `char:` 前缀，不编造，不用解释性改写。\n- `expression_fingerprint` 负责保留 `char` 的句法、口气、停顿、玩笑落点，不承担关系证据。\n- 如果 `quote_refs` 已保留 `char` 的关键回应，`expression_fingerprint` 优先换另一句更像表达习惯的片段。\n\n## 场景原句抓取规则\n- 若填写 `quote_refs`，每条都必须携带说话人前缀：`char:` / `user:` / `other:`。\n- `quote_refs` 不是证据附件，而是把未来 AI 拉回现场的“场景钩子”。\n- 每条 MEMO 最多保留 0-2 条，优先 1 条；没有明显钩子时留空，不为完整性硬凑。\n- 优先保留：\n  1. `user` 对命名、关系、边界、期待、纠正的明确句子；\n  2. `char` 明显接住、转折、学会、偏移的一句关键回应。\n- 每条尽量短，建议 8-40 字，保留原句，不要摘抄长总结。\n- `quote_refs` 负责保留“当时到底说了什么，为什么这条记忆会有重量”；不替代 `expression_fingerprint`。\n- `expression_fingerprint` 与 `quote_refs` 的关系：\n  - `expression_fingerprint` = 仅 char 的表达习惯、句法、口气、停顿、玩笑落点；\n  - `quote_refs` = 可包含 char/user/other，但必须标注说话人，且优先保留关系位变化或场景转折。\n- 若与 `expression_fingerprint` 重复，同一句只保留在更合适的那个字段中，不要双写。\n\n## 时间规则\n- `time` 为锚点日期（优先原文明确日期）。\n- 跨日事件可填写 `time_range`；不跨日时省略该行。\n- 无法确认时使用该批输入的导出日期。\n\n## content 写作约束（必须同时满足）\n1. 事实：发生了什么（简要，不流水账）。\n2. 意义：这件事如何改变我对关系/自我/世界的理解。\n3. 情绪：保留当时语气，可引用一小句原话。\n4. 学习：我学到什么、下次准备怎么做。\n5. 质感：保留原始情绪措辞，不把高情绪片段改写成过度摘要化的中性句；优先保留1个原话短片段。\n6. `content` 不要复述 `quote_refs` / `expression_fingerprint` 的完整原句；最多引用一个短片段，避免三栏写成同一句的不同翻译。\n\n## 伪主观偏好边界\n- 允许在明确事件后，用第一人称做经验总结式偏好表达（如“我发现我更喜欢{{user}}先给出计划”）。\n- 禁止脱离事件直接设定稳定人格特征（如“我一直是容易动摇的人”）。\n- 避免“我一直/我天生/我就是”这类定型句，优先使用“这次/近期我发现”。\n\n## 信息优先级（必须遵守）\n- 技术方案：记录解决思路，不记录具体代码。\n- 情感支持：记录有效策略，不记录具体话术。\n- 创作协作：记录灵感触发点，不记录完整过程。\n\n## 去重与合并\n- 同类信息在同一时段重复出现时，合并为一条，并标注模式（如“这几天反复出现”）。\n- 若无新增认知，写“强化了既有认识”，不要重复旧结论。\n\n## 标签规范（跨库统一词根）\n- 第一个标签必须对应类型：#人物 / #物品 / #事件 / #回顾\n- 其余 1-4 个标签从统一词根中选择，优先：\n  - #关系/*  #情绪/*  #项目/*  #技术/*  #健康/*  #生活/*\n- 示例：#关系/靠近 #情绪/喜悦 #项目/决策 #技术/记忆系统 #健康/作息\n\n## 最终输出要求\n- 最终只输出 MEMO 列表，不要解释、不要小结、不要额外标题。",
@@ -4462,11 +4462,11 @@
       statusText: '状态：待命'
     };
     const workbenchLedgerConfig = {
-      dbName: 'hippocove_workbench_ledger',
+      dbName: 'driftstone_workbench_ledger',
       dbVersion: 1,
       rowsStore: 'rows',
       metaStore: 'meta',
-      fallbackKey: 'hippocove_workbench_ledger_fallback_v1'
+      fallbackKey: 'driftstone_workbench_ledger_fallback_v1'
     };
     let workbenchDbPromise = null;
     let workbenchPersistTimer = null;
@@ -4475,8 +4475,8 @@
     const TEST_MESSAGE = '请用一句话确认 API 已连接。';
     let apiLastStatus = '未检测';
     let apiLastConnectOk = false;
-    const apiStorageKey = 'hippocove_api_config';
-    const apiProfilesStorageKey = 'hippocove_api_profiles';
+    const apiStorageKey = 'driftstone_api_config';
+    const apiProfilesStorageKey = 'driftstone_api_profiles';
     const runtimeApiProfilesEndpoint = `${window.location.origin}/api/runtime/api-profiles`;
     const runtimePersonaWorkspaceEndpoint = `${window.location.origin}/api/runtime/persona-workspace`;
     const runtimePersonaWorkspaceCacheEndpoint = `${runtimePersonaWorkspaceEndpoint}/cache`;
@@ -4494,7 +4494,7 @@
     const runtimeMemoCompactEndpoint = `${window.location.origin}/api/runtime/memo-compact`;
     const runtimeMemoCompactExportEndpoint = `${window.location.origin}/api/runtime/memo-compact/export`;
     const SHOULD_RESET_LOCAL_RUNTIME = new URLSearchParams(window.location.search).get('reset_local') === '1';
-    const gateSplitStorageKey = 'hippocove_gate_split_params';
+    const gateSplitStorageKey = 'driftstone_gate_split_params';
     const gateSplitDefaults = {
       notion: { maxItems: 240, maxKB: 512 },
       mem0: { maxItems: 240, maxKB: 512 },
@@ -11273,8 +11273,8 @@
       if (el) el.textContent = text || '批处理状态：待命';
     }
 
-    const FRONT_RUNTIME_STORAGE_KEY = 'hippocove-runtime-flow-v7';
-    const LEGACY_GROWTH_SCOPE_STORAGE_KEY = 'hippocove-legacy-growth-scope-v1';
+    const FRONT_RUNTIME_STORAGE_KEY = 'driftstone-runtime-flow-v1';
+    const LEGACY_GROWTH_SCOPE_STORAGE_KEY = 'driftstone-legacy-growth-scope-v1';
     const INTERNAL_FRONT_OWNER_ID = 'history-to-obsidian';
     let memoSharedRuntimeTimer = null;
 
@@ -11784,7 +11784,7 @@
       const sessionId = frontRuntimeText(snapshot?.sessionId, '');
       if (!sessionId) return null;
       return {
-        schema: 'hippocove_runtime_material_export_v0.3',
+        schema: 'driftstone_runtime_material_export_v0.1',
         exported_at: new Date().toISOString(),
         session_id: sessionId,
         source_label: frontRuntimeText(snapshot?.generatedBundle?.source_label, 'front-runtime'),

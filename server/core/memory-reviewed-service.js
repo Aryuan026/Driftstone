@@ -291,7 +291,7 @@ export async function appendRuntimeReviewedEntries(body = {}) {
     if (!historicalItems.length) {
       return {
         ok: false,
-        schema: 'hippocove_runtime_reviewed_append_v0.1',
+        schema: 'driftstone_runtime_reviewed_append_v0.1',
         scope,
         error: 'task_file replay cannot be verified against its reviewed packet.',
         task_file: taskFile,
@@ -320,7 +320,7 @@ export async function appendRuntimeReviewedEntries(body = {}) {
       });
       return {
         ok: true,
-        schema: 'hippocove_runtime_reviewed_append_v0.1',
+        schema: 'driftstone_runtime_reviewed_append_v0.1',
         scope,
         reviewed: {
           packet_file: historicalReviewedPacketFile,
@@ -338,7 +338,7 @@ export async function appendRuntimeReviewedEntries(body = {}) {
     }
     return {
       ok: false,
-      schema: 'hippocove_runtime_reviewed_append_v0.1',
+      schema: 'driftstone_runtime_reviewed_append_v0.1',
       scope,
       error: 'task_file submission conflict: existing reviewed entries differ from this submission.',
       task_file: taskFile,
@@ -415,7 +415,7 @@ export async function appendRuntimeReviewedEntries(body = {}) {
       });
       return {
         ok: true,
-        schema: 'hippocove_runtime_reviewed_append_v0.1',
+        schema: 'driftstone_runtime_reviewed_append_v0.1',
         scope,
         reviewed: {
           packet_file: packetState.packetFile,
@@ -433,7 +433,7 @@ export async function appendRuntimeReviewedEntries(body = {}) {
     }
     return {
       ok: false,
-      schema: 'hippocove_runtime_reviewed_append_v0.1',
+      schema: 'driftstone_runtime_reviewed_append_v0.1',
       scope,
       error: 'task_file submission conflict: existing reviewed entries differ from this submission.',
       task_file: taskFile,
@@ -507,7 +507,7 @@ export async function appendRuntimeReviewedEntries(body = {}) {
 
   return {
     ok: true,
-    schema: 'hippocove_runtime_reviewed_append_v0.1',
+    schema: 'driftstone_runtime_reviewed_append_v0.1',
     scope,
     reviewed: {
       packet_file: packetState.packetFile,
@@ -539,7 +539,7 @@ export async function getRuntimeReviewedClusters(body = {}) {
   if (!loaded?.packet) {
     return {
       ok: true,
-      schema: 'hippocove_runtime_reviewed_clusters_v0.1',
+      schema: 'driftstone_runtime_reviewed_clusters_v0.1',
       scope,
       packet_file: '',
       summary: {
@@ -555,7 +555,7 @@ export async function getRuntimeReviewedClusters(body = {}) {
   const clusters = buildReviewedClusters(loaded.packet);
   return {
     ok: true,
-    schema: 'hippocove_runtime_reviewed_clusters_v0.1',
+    schema: 'driftstone_runtime_reviewed_clusters_v0.1',
     scope,
     packet_file: loaded.packetFile,
     summary: loaded.packet?.summary || summarizeReviewedPacket(loaded.packet),
@@ -582,7 +582,7 @@ export async function finalizeRuntimeReviewedEntries(body = {}) {
   if (!loaded?.packet) {
     return {
       ok: true,
-      schema: 'hippocove_runtime_reviewed_finalize_v0.1',
+      schema: 'driftstone_runtime_reviewed_finalize_v0.1',
       scope,
       packet_file: '',
       summary: {
@@ -656,7 +656,7 @@ export async function finalizeRuntimeReviewedEntries(body = {}) {
 
   return {
     ok: true,
-    schema: 'hippocove_runtime_reviewed_finalize_v0.1',
+    schema: 'driftstone_runtime_reviewed_finalize_v0.1',
     scope,
     packet_file: loaded.packetFile,
     summary: packet.summary,

@@ -195,7 +195,7 @@ export async function runRuntimeAiTranslationTask(body = {}) {
   if (!workerPacket?.task_file) {
     return {
       ok: true,
-      schema: 'hippocove_runtime_ai_task_run_v0.1',
+      schema: 'driftstone_runtime_ai_task_run_v0.1',
       scope,
       status: 'idle',
       task_file: '',
@@ -228,7 +228,7 @@ export async function runRuntimeAiTranslationTask(body = {}) {
 
       return {
         ok: Boolean(appended?.ok),
-        schema: 'hippocove_runtime_ai_task_run_v0.1',
+        schema: 'driftstone_runtime_ai_task_run_v0.1',
         scope: appended?.scope || scope,
         status: appended?.ok ? 'submitted' : 'failed',
         task_file: workerPacket.task_file,
@@ -272,7 +272,7 @@ export async function runRuntimeAiTranslationTask(body = {}) {
 
     return {
       ok: Boolean(appended?.ok),
-      schema: 'hippocove_runtime_ai_task_run_v0.1',
+      schema: 'driftstone_runtime_ai_task_run_v0.1',
       scope: appended?.scope || scope,
       status: appended?.ok ? 'submitted' : 'failed',
       task_file: workerPacket.task_file,
@@ -298,7 +298,7 @@ export async function runRuntimeAiTranslationTask(body = {}) {
 
     return {
       ok: false,
-      schema: 'hippocove_runtime_ai_task_run_v0.1',
+      schema: 'driftstone_runtime_ai_task_run_v0.1',
       scope: failed?.scope || scope,
       status: 'failed',
       task_file: workerPacket.task_file,
@@ -329,7 +329,7 @@ export async function runRuntimeReviewedMerge(body = {}) {
   if (!clusterId || !cluster) {
     return {
       ok: false,
-      schema: 'hippocove_runtime_reviewed_merge_v0.1',
+      schema: 'driftstone_runtime_reviewed_merge_v0.1',
       scope,
       error: 'cluster_id not found'
     };
@@ -338,7 +338,7 @@ export async function runRuntimeReviewedMerge(body = {}) {
   if (isProgrammaticApi(body?.api)) {
     return {
       ok: true,
-      schema: 'hippocove_runtime_reviewed_merge_v0.1',
+      schema: 'driftstone_runtime_reviewed_merge_v0.1',
       scope,
       cluster_id: clusterId,
       used_ai: false,
@@ -350,7 +350,7 @@ export async function runRuntimeReviewedMerge(body = {}) {
   if (!cluster.ambiguous || Number(cluster.entry_count || 0) <= 1) {
     return {
       ok: true,
-      schema: 'hippocove_runtime_reviewed_merge_v0.1',
+      schema: 'driftstone_runtime_reviewed_merge_v0.1',
       scope,
       cluster_id: clusterId,
       used_ai: false,
@@ -363,7 +363,7 @@ export async function runRuntimeReviewedMerge(body = {}) {
     const entry = await requestReviewedMerge(cluster, body?.api);
     return {
       ok: true,
-      schema: 'hippocove_runtime_reviewed_merge_v0.1',
+      schema: 'driftstone_runtime_reviewed_merge_v0.1',
       scope,
       cluster_id: clusterId,
       used_ai: true,
@@ -373,7 +373,7 @@ export async function runRuntimeReviewedMerge(body = {}) {
   } catch {
     return {
       ok: true,
-      schema: 'hippocove_runtime_reviewed_merge_v0.1',
+      schema: 'driftstone_runtime_reviewed_merge_v0.1',
       scope,
       cluster_id: clusterId,
       used_ai: false,

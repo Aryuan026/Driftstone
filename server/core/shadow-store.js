@@ -41,7 +41,7 @@ async function readJson(filePath) {
 
 function normalizeScopedSlice(doc, file) {
   const schema = safeText(doc?.schema);
-  if (schema === 'hippocove_translation_slice_v0.1') {
+  if (schema === 'driftstone_translation_slice_v0.1') {
     return {
       source_mode: 'scoped_truth',
       source_kind: 'translation_slice',
@@ -60,7 +60,7 @@ function normalizeScopedSlice(doc, file) {
     };
   }
 
-  if (schema === 'hippocove_ingest_document_v0.1') {
+  if (schema === 'driftstone_ingest_document_v0.1') {
     return {
       source_mode: 'scoped_truth',
       source_kind: 'ingest_document',

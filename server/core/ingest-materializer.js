@@ -25,7 +25,7 @@ function documentPreview(text, limit = 180) {
 
 function buildPacketDoc(packet, meta = {}) {
   return {
-    schema: 'hippocove_ingest_packet_v0.1',
+    schema: 'driftstone_ingest_packet_v0.1',
     generated_at: meta.generated_at,
     packet_id: packet.packet_id,
     scope: packet.scope,
@@ -56,7 +56,7 @@ export async function materializeIngressPacket(packet, options = {}) {
     const docId = safeSegment(doc.doc_id || doc.title || `doc_${docRows.length + 1}`);
     const filePath = join(docsDir, `${docId}.json`);
     const docRecord = {
-      schema: 'hippocove_ingest_document_v0.1',
+      schema: 'driftstone_ingest_document_v0.1',
       generated_at: generatedAt,
       packet_id: packet.packet_id,
       doc_id: doc.doc_id,
@@ -91,7 +91,7 @@ export async function materializeIngressPacket(packet, options = {}) {
   const packetFile = join(packetDir, 'packet.json');
   await writeFile(packetFile, `${JSON.stringify(indexDoc, null, 2)}\n`, 'utf-8');
   await writeFile(join(ingressDir, 'latest.json'), `${JSON.stringify({
-    schema: 'hippocove_ingest_latest_pointer_v0.1',
+    schema: 'driftstone_ingest_latest_pointer_v0.1',
     generated_at: generatedAt,
     latest_packet: packetDir,
     scope: {

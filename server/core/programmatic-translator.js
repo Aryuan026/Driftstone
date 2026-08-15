@@ -311,7 +311,7 @@ export async function runProgrammaticTranslation(body = {}) {
   const entries = await buildEntriesFromSlices(packet);
   const response = {
     ok: true,
-    schema: 'hippocove_programmatic_translation_v0.1',
+    schema: 'driftstone_programmatic_translation_v0.1',
     scope: {
       ...scope,
       isolation_stage: 'translation_packet'
