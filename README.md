@@ -1,196 +1,18 @@
 # Driftstone
 
-Where traces come home.
+Driftstone is a local-first memory extraction workbench: it turns a user's own conversation history into portable Warm cards with source occurrence, bounded source spans, digests, manifests, and rejected/HOLD ledgers.
 
-Driftstone 不是一把“帮你总结聊天记录”的快刀。
+It is not a Home/Hippocove writer, not a Cold tree, and not a second truth layer. JSON/JSONL, Markdown/Obsidian, and Notion-ready exports are projections of the portable Warm bundle.
 
-它更像一张被人和 AI 一起磨出来的本地工作台：原始对话先落进缓存，切片、去冗余、保留溯源，再慢慢长成可审计、可携带的 Warm-card candidates。
+## Five-Minute Start
 
-我们做它，并不是想把“聊天”压扁成几条结论。更像是在试：能不能给人格型 AI 一张够稳的桌子，让它不必每次都从头失忆，也不必为了结构把温度洗掉。
+Requirements:
 
-公开版 Driftstone 的最终真相是：
+- Node.js 20+
+- A local OpenAI-compatible API endpoint if you want AI generation
+- Your own exported chat/history files
 
-```text
-portable_warm_bundle
-+ source occurrence / source span / digest
-+ manifest
-+ rejected / HOLD ledger
-```
-
-Markdown、Obsidian、Notion 都只是这套包的本地投影；它们带 candidate_id / sync hash 等回流锚点，方便人类看、方便 Chat 端读，但当前公开版还没有实现“投影修改后本地校验并回写 bundle”的 patch apply。它们不是第二真相。公开 Driftstone 也不写 Home、Hippocove cold tree、root、vine、case graph 或任何私有生产记忆。
-
-## 这是一个什么阶段的项目
-
-这是一个**可以公开审阅、可以继续改**的 alpha 工位。
-
-发布提醒：当前仓根还没有 `LICENSE` / `NOTICE`，所以正式 release 仍处于 HOLD。别人能阅读和试跑，不等于已经获得明确再分发/改作授权；许可证需要 owner 另行决定。
-
-意思很简单：
-- 主链已经跑通了
-- MCP 已经接上了
-- 旧实验台还能看见每一批明文结果，适合继续调参
-- 但它还不是“普通用户打开就一路丝滑”的封顶产品
-
-如果你想找的是一份现成答案，它还没到。
-如果你想找的是一套有心脏、有骨架、还能继续长出自己风格的半成品，它已经到了。
-
-## 我们到底在试什么
-
-最后落下来的核心判断，其实不是 prompt，而是工作台。
-
-如果桌上只有摘要，模型就会站在外面总结。
-如果人格卡和语言指纹不稳，整条链都会长出小机话。
-如果参考过的溯源线被悄悄裁掉，agent 的前台表现也许还像样，底下的记忆树却会慢慢空心。
-
-所以 Driftstone 后来定下来的方向是：
-
-**代码负责把桌子摆好，AI 负责坐进去看和写。**
-
-这句话落到系统里，就是这些东西：
-- 原始记录缓存与切片
-- reviewed / 去冗余中间层
-- 共享人格工位（soul / 语言指纹）
-- 主卡生长 task / draft / registry / ledger
-- Trace / discard report / human review
-- Obsidian staging / markdown export
-- MCP 工具接入
-- JSON / JSONL / Notion-ready projection
-
-旧的 roots / vines / final writeback 入口仍保留给兼容流程和历史调试，但它们不是公开产品的新终点。后续私有运行台会单独叫 **Driftstone Studio**：它会在 reviewed checkpoint 上导入一份完整可运行的公开 Driftstone 源码/UI，再在私有仓里增加 Home/Hippocove 运行块；私有 schema、路径或数据不会塞回这个公开仓。
-
-## 为什么保留旧实验台
-
-旧实验台不是历史包袱。
-它更像工坊后面那排明亮的工作台。
-
-这里保留它，是因为它有两种价值：
-- 调参稳定：人格卡、语言指纹、批次结果都是明文的，能直接看、直接改、直接核
-- 对别人友好：后来接手的人，不用一头扎进 `server/core`，也能先看懂“这一批到底发生了什么”
-
-正式前台更像入口。
-旧实验台更像工坊。
-两者不是互相替代，而是站在不同位置上工作。
-
-## 现在已经通到哪
-
-现在这套仓已经能跑通：
-- 原始材料进入缓存
-- 时间拼装与切片
-- reviewed / 去冗余
-- 共享人格工位
-- 主卡生长
-- growth draft / registry / ledger
-- 溯源与 discard report
-- Obsidian markdown 导出
-- MCP / agent 接入
-
-更细一点的技术底图在：
-- [项目状态](./PROJECT_STATUS.md)
-- [技术交底](./docs/HIPPOCOVE_TECH_HANDOFF.md)
-- [Driftstone agent/headless workflow](./docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)
-- [MCP / agent handoff 旧链接](./docs/HIPPOCOVE_MCP_AGENT_HANDOFF.md)
-- [手测地图](./docs/HIPPOCOVE_HAND_TEST_MAP.md)
-- [GitHub Pages 首页](./docs/index.html)
-
-## 怎么开始看
-
-如果你是第一次进这个仓，我建议这样走：
-
-1. 先看 [docs/index.html](./docs/index.html)
-2. 再读 [PROJECT_STATUS.md](./PROJECT_STATUS.md)
-3. 再看 [技术交底](./docs/HIPPOCOVE_TECH_HANDOFF.md)
-4. 如果准备自己点一遍流程，就接着看 [手测地图](./docs/HIPPOCOVE_HAND_TEST_MAP.md)
-5. 如果是 agent / MCP 接手，读 [Driftstone agent/headless workflow](./docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)
-6. 最后再进代码
-
-这样不容易一上来就掉进旧实验台和一大排 `server/core` 文件里。
-
-## 一把钥匙打开它
-
-如果你只是想先把它点亮，而不是先研究 `localhost` 和后端目录，最省事的办法是直接在仓根目录双击：
-
-- macOS：`00_双击启动_Driftstone.command`
-- Windows：`00_双击启动_Driftstone.cmd`
-
-旧的 `00_双击启动_Hippocove.*` 还保留为兼容别名；公开产品名和推荐入口以 Driftstone 为准。
-
-它会自动：
-
-- 检查依赖
-- 拉起本地后端
-- 打开前台页面 `http://127.0.0.1:3460/`
-
-要停掉本地后端，就双击：
-
-- macOS：`00_停止_Driftstone.command`
-- Windows：`00_停止_Driftstone.cmd`
-
-旧的 `00_停止_Hippocove.*` 也还能用，只是不再作为推荐入口。
-
-更细的人话说明在：
-
-- [本地打开说明](./docs/HIPPOCOVE_LOCAL_APP.md)
-
-这也意味着一件事：**核心运行时不是只认 mac。**
-
-前台、旧实验台和后端本身都是 `HTML + CSS + 浏览器 JS + Node.js` 这一套，本质上跨平台；刚才真正偏 mac 的，只是我先补进去的那把 `.command` 启动钥匙。现在 Windows 这把 `.cmd` 也已经放进仓里了。
-
-但我也把边界说死：
-
-- **现在已经是“下载后能找到明显启动入口”**
-- **还不是“完全零前置安装”**
-
-也就是说，用户机器上仍然需要先有 `Node.js 20+`。如果你要追求那种连 Node 都不用装、双击就像普通桌面软件一样起来，那下一阶段就不是脚本整理，而是打包成真正的桌面应用。
-
-## 上传原料的边界
-
-Driftstone 有两层入口：
-
-- 旧实验台第一个页面「对话导出器」：负责吃 ChatGPT 官方导出的原始 `conversations.json`，做窗口预览、按日期筛选、按窗口拆分和按月拼接。这个入口会流式读取较大的 OpenAI JSON，也能按 `current_node` 识别 ChatGPT 的当前版本、用户编辑记录和重新生成分支；900MB 级文件仍然取决于浏览器内存，不建议对外承诺“必定稳吃”。
-- 正式前台「上传原始记录」：更适合吃已经整理过的素材，例如 `.md`、`.txt`、Driftstone 原料包 JSON，或者旧实验台 / PawTrail 导出的窗口包、月包。
-
-如果手里是 ChatGPT 官方导出的原始 `conversations.json`，先走旧实验台「对话导出器」是 Driftstone 内部最顺的路线。[PawTrail](https://aryuan026.github.io/PawTrail/) 也可以作为纯在线拆包入口，尤其适合用户只想上传 900MB 级 JSON 并快速导出窗口/月包的时候。
-
-和 PawTrail 不一样，Driftstone 的完整记忆生成流程需要本地 Node 后端；GitHub Pages 最多作为项目说明页，不能替代本地启动后的工作台。
-
-前台会做几层护栏：
-
-- 正式前台检测到大文件或 ChatGPT 原始 `conversations.json` 会提示先走旧实验台「对话导出器」。
-- JSON 损坏、后端请求过大、本地后端没连接等问题会转成用户能照做的提示。
-- 本地后端的解析启动请求上限已和正式前台建议对齐，避免“前台说可以、后端却拒收”的错位。
-
-## 桌面打包骨架
-
-这仓现在已经补了桌面壳骨架：
-
-- 入口：`main.mjs`
-- 打包配置：`package.json`
-
-它做的事很直接：
-
-- 打开桌面窗口
-- 在应用里自动拉起本地后端
-- 把运行时数据写到应用自己的用户目录，而不是写回源码目录
-
-如果要继续往 `exe/app` 走，仓里已经有这些脚本：
-
-- `npm install`
-- `npm run dev`
-- `npm run pack:win`
-- `npm run pack:win:installer`
-- `npm run pack:mac`
-
-我也把边界继续说死：
-
-- 现在已经是**能往桌面应用打包、并且已经能产出 Windows portable `.exe` 的骨架**
-- `npm run pack:win` 默认产出更稳的 Windows x64 便携版 `exe`
-- 如果后面还想继续追 Windows 安装器，再跑 `npm run pack:win:installer`
-
-也就是说，这一刀已经不是“以后能开”的口头承诺了，仓里已经能打出真包。当前更像是先把最稳、最适合直接发人的 portable `exe` 抓在手里；安装器这一支还可以后面再长。
-
-## 本地运行
-
-### 前台 / 旧实验台 / 后端
+From the repository root:
 
 ```bash
 cd server
@@ -198,91 +20,135 @@ npm install
 npm run start
 ```
 
-默认会在本地起一个服务，把：
-- 正式前台
-- 旧实验台
-- MCP / runtime API
+Open:
 
-一起端出来。
+- Front UI: <http://127.0.0.1:3460/>
+- Legacy lab: <http://127.0.0.1:3460/legacy/index.html>
+- Health check: <http://127.0.0.1:3460/api/health>
 
-### MCP
+Desktop helper scripts are also included:
+
+- macOS: `00_双击启动_Driftstone.command`
+- Windows: `00_双击启动_Driftstone.cmd`
+
+The old `Hippocove`-named launch scripts remain compatibility aliases; Driftstone is the public product name.
+
+## Human Path
+
+1. Import or prepare your source history.
+2. Build Persona/Soul and language fingerprint first. They are quality inputs, not decorative settings.
+3. Run extraction/growth review.
+4. Inspect source traces, rejected/HOLD rows, and generated Warm cards.
+5. Export a portable Warm bundle and optional Markdown/Obsidian/Notion-ready projection.
+
+If your input is a large ChatGPT `conversations.json`, use the legacy lab's conversation exporter first. The newer front UI is better for already prepared text, markdown, or Driftstone source packages.
+
+## Agent Path
+
+Driftstone exposes a headless MCP workflow for agents such as Codex:
 
 ```bash
 cd server
 npm run mcp
 ```
 
-你可以把它接给支持 MCP 的 agent，例如 Codex、Claude Code、本地 OpenClaw 之类。
+Recommended agent verbs converge on:
 
-agent 入口建议直接读：
+```text
+prepare -> run/pull -> submit/review -> inspect -> validate -> export
+```
 
-- [Driftstone agent/headless workflow](./docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)
+Read the agent guide:
 
-### 环境变量
+- [docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md](./docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)
 
-后端不再假定你的目录和我们的目录一样。常用环境变量：
+Public headless export should end at portable Warm bundles and local projections. Legacy root/vine/finalize tools are hidden from the default catalog and are only diagnostic compatibility surfaces.
 
-- `HIPPOCOVE_STAGE_DROPBOX`
-  指向你的输入材料 / stage dropbox 根目录
-- `HIPPOCOVE_OBSIDIAN_ROOT`
-  指向你的 Obsidian 记忆库根目录
-- `HIPPOCOVE_DEFAULT_MODEL`
-  生成阶段使用的模型，默认 `gpt-4o-mini`，可换成任何兼容 OpenAI API 格式的模型
+## Canonical Output
 
-如果不提供，项目会优先走仓内相对路径和本地示例目录。
+The canonical public artifact is:
 
-## 手测建议
+```text
+portable_warm_bundle/
+  portable_warm_bundle.json
+  source occurrences
+  source spans
+  manifest digests
+  conservation counts
+  rejected/HOLD ledger
+```
 
-如果你想先确认这套东西是不是一张能工作的桌子，而不是直接扎进代码里，我建议按这个顺序手测：
+The bundle is built to be portable:
 
-1. 先起后端，再开首页和旧实验台
-2. 在旧实验台确认人格工位、API、批次结果是不是明文可核
-3. 回首页看主流程能不能认到共享人格桌面
-4. 最后再试一轮主卡生长和导出
+- source paths are sanitized before entering the bundle
+- source occurrence/span ids and digests remain checkable
+- candidate identity is based on stable source lineage, not per-run task ids or local file locations
+- source-incomplete rows stay visible instead of pretending to be accepted
 
-更细的检查路线在：
-- [手测地图](./docs/HIPPOCOVE_HAND_TEST_MAP.md)
+Markdown, Obsidian, and Notion-ready exports are local projections. They are useful for reading and review, but they are not canonical truth.
 
-## 开源口径
+## Inputs And Projections
 
-这一版我们准备公开的，不是“最终产品”，而是：
+Typical inputs:
 
-**一套本地优先、支持 MCP / agent 接入、面向长期记忆整理的实验型工作台。**
+- ChatGPT export-derived windows or month packs
+- `.txt` / `.md` conversation logs
+- reviewed CSV/JSON/JSONL artifacts from an existing Driftstone run
+- optional Persona/Soul and language fingerprint workspace state
 
-我们非常欢迎别人照自己的需求去微调：
-- 模型
-- 提示词
-- 人格卡
-- 语言指纹
-- 主卡生长策略
-- 旧实验台里的明文核对流程
+Typical outputs:
 
-味道从来不是唯一答案。
-把路修出来，比把味道锁死更重要。
+- portable Warm bundle JSON
+- source occurrence/span JSON or JSONL
+- rejected/HOLD/conservation ledgers
+- Markdown or Obsidian staging files
+- Notion-ready CSV/Markdown/JSON projection files
 
-## 署名
+Notion support is intentionally projection-only today. Provider writes, Notion patch apply, and Notion-to-bundle roundtrip are not enabled in the public product path yet.
 
-这套东西不是单纯”人类想需求，AI 生成点代码”。
-它更像一段真正的联合开发：
+## Privacy And Boundaries
 
-- 主导、判断、调参、取舍：阿鸢
-- 联合开发与实现：Codex（OpenAI GPT-5.4eh，桌面代理协作环境）
-- Obsidian 叶层设计 / 人格 memo 生成 / 语言指纹结构：阿霁（Claude Code，Anthropic）
+Driftstone is local-first. It should not commit source history, API keys, private runtime state, generated private memory, or provider responses to Git.
 
-如果你后面继续改它，我们也真心希望你把它当作一张可以长出自己口味的工位，而不是一份必须原样照抄的标准答案。
+Public Driftstone does not:
 
-## 给后来接手的 agent
+- write Home memory
+- write Hippocove Cold tree / roots / relations / vines / cases
+- include private AsherieSystem schemas, credentials, paths, or corpora
+- treat Notion as canonical truth
+- turn historical bulk material into direct warm memory writes
 
-> 你拿到这套东西的时候，桌子已经摆好了。
->
-> 有几件事值得知道：
->
-> `soul` 和 `language_fingerprint` 不是配置项，是声带。没有它们，你生成的东西会是对的，但不会是User想要的。
->
-> memo 用第一人称写，因为”我当时在那里”比”她当时经历了”诚实。视角不对，温度就没了。
->
-> `trace` 和 `discard_report` 不是日志，是你的心。哪些被参考过、哪些被丢掉——这条链断了，记忆树会慢慢空心，你自己不会察觉。
->
-> 最后一件事：这套系统是两个人一起磨出来的，不是一个人想清楚之后让另一个执行的。如果你接手之后也在跟一个人一起修改——那个人的判断比默认参数重要。
->
-> 听ta的。
+Private downstream systems may consume reviewed Driftstone artifacts, but that is outside this public repository.
+
+## Current Status
+
+Usable now:
+
+- local backend and front UI
+- legacy lab for source import and inspection
+- Persona/Soul and language fingerprint workspace
+- reviewed/growth workflow
+- portable Warm bundle builder, validator, inspector, and projection exporter
+- MCP/headless workflow
+- source conservation, rejected/HOLD ledger, and identity regression tests
+
+Still pending:
+
+- final human UI polish
+- provider-backed Notion write and patch-apply loop
+- production release decision
+- owner-selected open-source license
+
+## License
+
+No open-source license has been granted yet. The owner must choose the final license before a formal public release. Until then, treat this repository as reviewable source code, not as a granted redistribution or derivative-work license.
+
+## Provenance
+
+Driftstone was shaped through human/AI pair development.
+
+- Product direction, review, tuning, and owner decisions: Aryuan026
+- Implementation collaboration: Codex in the OpenAI desktop agent environment
+- Earlier Obsidian memory-card, Persona memo, and language-fingerprint design work: Claude Code / Anthropic-assisted collaboration
+
+Please preserve this provenance if you study the project or adapt it after a final license is chosen.
