@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildMemoryStarMapModel, renderMemoryStarMap } from '../../ui/memory-star-map.js';
+import { buildMemoryStarMapModel, renderMemoryRunDock, renderMemoryStarMap } from '../../ui/memory-star-map.js';
 
 test('memory star map model projects drafts and committed cards without inventing canonical edges', () => {
   const model = buildMemoryStarMapModel({
@@ -49,4 +49,35 @@ test('memory star map render keeps visual affinity boundary visible', () => {
   assert.match(visualEl.innerHTML, /Memory Star Map/);
   assert.match(visualEl.innerHTML, /visual affinity, not canonical edges/);
   assert.doesNotMatch(visualEl.innerHTML, /canonical relationship line/);
+});
+
+test('memory run dock renders human workflow state without adding pipeline truth', () => {
+  const dockEl = { innerHTML: '', dataset: {} };
+  renderMemoryRunDock({
+    dockEl,
+    run: {
+      tone: 'live',
+      phaseLabel: 'Growing Warm cards',
+      headline: 'Organizing 2/5 cards.',
+      detail: 'Card growth is following durable runtime state.',
+      progress: 43,
+      steps: [
+        { label: 'Choose history', state: 'done' },
+        { label: 'Organize', state: 'done' },
+        { label: 'Review', state: 'current' },
+        { label: 'Export', state: 'pending' }
+      ],
+      metrics: [
+        { label: 'Warm cards', value: '5' },
+        { label: 'tasks', value: '2' }
+      ]
+    }
+  });
+
+  assert.equal(dockEl.dataset.tone, 'live');
+  assert.match(dockEl.innerHTML, /Growing Warm cards/);
+  assert.match(dockEl.innerHTML, /width: 43%;/);
+  assert.match(dockEl.innerHTML, /Choose history/);
+  assert.match(dockEl.innerHTML, /Warm cards/);
+  assert.doesNotMatch(dockEl.innerHTML, /source span ledger packet/);
 });

@@ -233,3 +233,47 @@ export function renderMemoryStarMap({
     </div>
   `;
 }
+
+export function renderMemoryRunDock({ dockEl, run = {} } = {}) {
+  if (!dockEl) return;
+
+  const tone = safeText(run.tone, 'stable');
+  const progress = Math.max(0, Math.min(100, Number(run.progress || 0)));
+  const steps = Array.isArray(run.steps) && run.steps.length
+    ? run.steps
+    : [
+        { label: 'Choose history', state: 'current' },
+        { label: 'Organize', state: 'pending' },
+        { label: 'Review', state: 'pending' },
+        { label: 'Export', state: 'pending' }
+      ];
+  const metrics = Array.isArray(run.metrics) ? run.metrics.slice(0, 4) : [];
+
+  dockEl.dataset.tone = tone;
+  dockEl.innerHTML = `
+    <div class="memory-run-copy">
+      <p class="memory-run-kicker">${escapeHtml(run.phaseLabel || 'Ready')}</p>
+      <h3>${escapeHtml(run.headline || 'Choose a history source to begin.')}</h3>
+      <p>${escapeHtml(run.detail || 'Driftstone will keep source evidence attached while it prepares portable Warm memory.')}</p>
+    </div>
+    <div class="memory-run-meter">
+      <div class="memory-run-progress" aria-hidden="true">
+        <span style="width: ${progress}%;"></span>
+      </div>
+      <span class="memory-run-percent">${Math.round(progress)}%</span>
+    </div>
+    <div class="memory-run-steps">
+      ${steps.map((step) => `
+        <span data-state="${escapeHtml(step.state || 'pending')}">${escapeHtml(step.label || '')}</span>
+      `).join('')}
+    </div>
+    <a class="memory-run-details" href="${escapeHtml(run.detailsHref || '#workflowControls')}">${escapeHtml(run.detailsLabel || 'Details')}</a>
+    ${metrics.length ? `
+      <div class="memory-run-metrics">
+        ${metrics.map((item) => `
+          <span><strong>${escapeHtml(item.value || '0')}</strong>${escapeHtml(item.label || '')}</span>
+        `).join('')}
+      </div>
+    ` : ''}
+  `;
+}

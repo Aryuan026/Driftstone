@@ -38,6 +38,27 @@
           </div>
         </div>
 
+        <div class="memory-run-dock" id="memoryRunDock" aria-live="polite">
+          <div class="memory-run-copy">
+            <p class="memory-run-kicker">Ready</p>
+            <h3>Choose a history source to begin.</h3>
+            <p>Driftstone will keep source evidence attached while it prepares portable Warm memory.</p>
+          </div>
+          <div class="memory-run-meter">
+            <div class="memory-run-progress" aria-hidden="true">
+              <span style="width: 0%;"></span>
+            </div>
+            <span class="memory-run-percent">0%</span>
+          </div>
+          <div class="memory-run-steps">
+            <span data-state="current">Choose history</span>
+            <span data-state="pending">Organize</span>
+            <span data-state="pending">Review</span>
+            <span data-state="pending">Export</span>
+          </div>
+          <a class="memory-run-details" href="#workflowControls">Details</a>
+        </div>
+
         <div class="memory-star-dock">
           <div>
             <strong>Canonical truth:</strong> portable Warm bundle
@@ -51,7 +72,7 @@
         </div>
       </article>
 
-      <article class="panel flow-step generation-step">
+      <article class="panel flow-step generation-step" id="workflowControls">
         <div class="panel-head">
           <div>
             <h2>1. Connect model</h2>

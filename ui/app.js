@@ -1,6 +1,6 @@
 import { getJson, postJson } from './api-client.js';
 import { buildRuntimeMaterialsExport } from './bridges/memo-runtime-bridge.js';
-import { renderMemoryStarMap } from './memory-star-map.js';
+import { renderMemoryRunDock, renderMemoryStarMap } from './memory-star-map.js';
 
 const STORAGE_KEY = 'hippocove-runtime-flow-v7';
 const RUNTIME_BUILD_LABEL = 'build 20260508b';
@@ -69,7 +69,8 @@ const els = {
   generateMemoryBtn: document.querySelector('#generateMemoryBtn'),
   downloadBundleBtn: document.querySelector('#downloadBundleBtn'),
   frontGrowthStatusPill: document.querySelector('#frontGrowthStatusPill'),
-  frontGrowthVisual: document.querySelector('#frontGrowthVisual')
+  frontGrowthVisual: document.querySelector('#frontGrowthVisual'),
+  memoryRunDock: document.querySelector('#memoryRunDock')
 };
 
 const state = {
@@ -1826,6 +1827,131 @@ function renderGenerationPanel() {
   setGenerationStatus(runtimeView.statusLabel, runtimeView.statusTone);
 }
 
+function buildMemoryRunDockView() {
+  const parse = deriveParseModel();
+  const generation = buildGenerationRuntimeView();
+  const snapshot = state.growthDashboardSnapshot || {};
+  const cardTotal = Math.max(
+    Number(snapshot?.growth_drafts?.total || 0),
+    Number(snapshot?.staging_cards?.total || 0),
+    Number(snapshot?.card_registry?.summary?.total_cards || 0)
+  );
+  const hasSource = Boolean(getSourcePlainText());
+  const hasPreparedMemory = parse.overview.rootCount > 0;
+  const canExport = !generation.running && cardTotal > 0;
+  const reviewReady = cardTotal > 0;
+  const exportReady = Boolean(generation.generatedBundle || canExport);
+  const steps = [
+    { label: 'Choose history', state: hasSource ? 'done' : 'current' },
+    { label: 'Organize', state: hasPreparedMemory ? 'done' : hasSource ? 'current' : 'pending' },
+    { label: 'Review', state: reviewReady ? 'done' : hasPreparedMemory ? 'current' : 'pending' },
+    { label: 'Export', state: exportReady ? 'done' : reviewReady ? 'current' : 'pending' }
+  ];
+  const metrics = [
+    { label: 'source rows', value: String(parse.overview.rootCount || 0) },
+    { label: 'Warm cards', value: String(cardTotal || 0) },
+    { label: 'tasks', value: String(parse.taskBoard.total || generation.queueTotal || 0) }
+  ];
+
+  if (state.parseError) {
+    return {
+      tone: 'error',
+      phaseLabel: 'Action needed',
+      headline: 'Source organization paused.',
+      detail: state.parseError,
+      progress: Math.max(8, parse.percent),
+      steps,
+      metrics,
+      detailsLabel: 'Open details'
+    };
+  }
+  if (state.growthDashboardError) {
+    return {
+      tone: 'stable',
+      phaseLabel: 'Map waiting',
+      headline: 'The runtime dashboard is reconnecting.',
+      detail: state.growthDashboardError,
+      progress: hasPreparedMemory ? 58 : Math.max(0, parse.percent),
+      steps,
+      metrics,
+      detailsLabel: 'Open details'
+    };
+  }
+  if (generation.running) {
+    return {
+      tone: 'live',
+      phaseLabel: 'Growing Warm cards',
+      headline: generation.queueActive
+        ? `Organizing ${generation.currentIndex || generation.queueCompleted}/${generation.queueTotal} cards.`
+        : 'Warm-card generation is running.',
+      detail: generation.detailText,
+      progress: Math.max(58, Math.min(98, 58 + Math.round(generation.progress * 0.4))),
+      steps,
+      metrics,
+      detailsLabel: 'Open details'
+    };
+  }
+  if (exportReady) {
+    return {
+      tone: 'ready',
+      phaseLabel: 'Ready to take with you',
+      headline: `${cardTotal} Warm-card artifacts are ready for projection.`,
+      detail: 'Validate the portable Warm bundle, then export Notion-ready, Markdown/Obsidian, spreadsheet, or JSON/JSONL projections.',
+      progress: 100,
+      steps,
+      metrics,
+      detailsLabel: 'Export details'
+    };
+  }
+  if (hasPreparedMemory) {
+    return {
+      tone: 'ready',
+      phaseLabel: 'Ready for card growth',
+      headline: `${parse.overview.rootCount} reviewed rows are organized.`,
+      detail: 'Next, grow portable Warm cards from the reviewed source-backed material.',
+      progress: 58,
+      steps,
+      metrics,
+      detailsLabel: 'Open details'
+    };
+  }
+  if (state.parseRunning || parse.percent > 0) {
+    return {
+      tone: state.parsePaused ? 'stable' : 'live',
+      phaseLabel: state.parsePaused ? 'Paused safely' : 'Organizing history',
+      headline: parse.label,
+      detail: parse.detail,
+      progress: Math.max(8, Math.min(56, Math.round(parse.percent * 0.56))),
+      steps,
+      metrics,
+      detailsLabel: 'Open details'
+    };
+  }
+  if (hasSource) {
+    return {
+      tone: 'stable',
+      phaseLabel: 'Source selected',
+      headline: 'History is ready to organize.',
+      detail: 'Start the local run when the model connection and optional Persona/Soul inputs are ready.',
+      progress: 8,
+      steps,
+      metrics,
+      detailsLabel: 'Open details'
+    };
+  }
+
+  return {
+    tone: 'stable',
+    phaseLabel: 'Ready',
+    headline: 'Choose a history source to begin.',
+    detail: 'Driftstone will keep source evidence attached while it prepares portable Warm memory.',
+    progress: 0,
+    steps,
+    metrics,
+    detailsLabel: 'Open details'
+  };
+}
+
 function renderGrowthWatchPanel() {
   if (!els.frontGrowthVisual || !els.frontGrowthStatusPill) return;
   renderMemoryStarMap({
@@ -1834,6 +1960,10 @@ function renderGrowthWatchPanel() {
     snapshot: state.growthDashboardSnapshot || {},
     workspace: getPersonaWorkspaceView(),
     errorText: state.growthDashboardError
+  });
+  renderMemoryRunDock({
+    dockEl: els.memoryRunDock,
+    run: buildMemoryRunDockView()
   });
 }
 
