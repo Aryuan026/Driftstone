@@ -62,6 +62,19 @@ test('legacy workbench visible buttons are uniquely identified and wired', () =>
   assert.deepEqual(unwired, []);
 });
 
+test('legacy workbench literal DOM references resolve to static elements', () => {
+  const domIds = new Set(
+    [...legacyHtml.matchAll(/\bid="([^"]+)"/g)]
+      .map((match) => match[1])
+      .filter((id) => !id.includes('${'))
+  );
+  const literalRefs = [...legacyHtml.matchAll(/getElementById\(['"]([^'"]+)['"]\)/g)]
+    .map((match) => match[1])
+    .filter((id) => !id.includes('${'));
+  const missing = [...new Set(literalRefs.filter((id) => !domIds.has(id)))].sort();
+  assert.deepEqual(missing, []);
+});
+
 test('legacy workbench runtime endpoints are still served by product routes', () => {
   const routeSource = [
     readFileSync(join(repoRoot, 'server', 'routes', 'product', 'runtime-api-profiles.js'), 'utf8'),
