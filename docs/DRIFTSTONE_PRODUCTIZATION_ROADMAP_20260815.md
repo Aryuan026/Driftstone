@@ -39,6 +39,16 @@ private Asherie schema, paths, receipts, or data
 Future export adapters such as RikkaHub or ombre-brain may consume portable
 Warm cards, but they are not part of the current implementation phase.
 
+Private downstream rule:
+
+```text
+Driftstone Studio is a private full-source downstream/superset, not a runtime
+dependency shell. It imports one complete runnable public Driftstone
+checkpoint, records the upstream commit, and selectively syncs future public
+changes inside the private repo. Public Driftstone remains the generic
+upstream; Studio import waits for an explicit reviewed public checkpoint.
+```
+
 ## Operating Rules
 
 - Work in the clean carrier worktree:

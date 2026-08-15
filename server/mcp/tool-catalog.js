@@ -36,6 +36,28 @@ export const TOOLS = [
     }
   },
   {
+    name: 'inspect_portable_warm_bundle',
+    description: '只读检查本地 portable_warm_bundle，返回合同验证、source/ledger 摘要和下一步建议；不会写 Home、Hippocove、Notion 或旧 roots/vines。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        bundle_path: {
+          type: 'string',
+          description: 'portable_warm_bundle.json 的绝对路径。'
+        },
+        bundle_dir: {
+          type: 'string',
+          description: '包含 portable_warm_bundle.json 的 bundle 目录；未传 bundle_path 时使用。'
+        },
+        sample_limit: {
+          type: 'number',
+          description: 'rejected/HOLD 示例最多返回多少条。'
+        }
+      },
+      additionalProperties: false
+    }
+  },
+  {
     name: 'get_growth_context',
     description: '读取给记忆卡生长用的上下文包：人格工位状态、Persona 原料概览、本地记忆工作区，以及可选的兼容 context。',
     inputSchema: {

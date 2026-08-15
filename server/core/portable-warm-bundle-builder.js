@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, readFile, writeFile } from 'fs/promises';
 import { join, resolve } from 'path';
 import { BUNDLE_SCHEMA, validatePortableWarmBundle } from './portable-warm-bundle-contract.js';
 import { getGrowthDraftArtifact, listGrowthDraftArtifacts } from './growth-draft-store.js';
@@ -526,6 +526,116 @@ function toJsonl(rows = []) {
   return `${rows.map((row) => JSON.stringify(row)).join('\n')}${rows.length ? '\n' : ''}`;
 }
 
+function countByReason(rows = []) {
+  return rows.reduce((counts, row) => {
+    const reason = safeText(row?.reason, 'unknown');
+    counts[reason] = Number(counts[reason] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function summarizeLedgerRows(rows = [], limit = 5) {
+  return (Array.isArray(rows) ? rows : []).slice(0, Math.max(0, Number(limit || 5))).map((row) => ({
+    ledger_id: safeText(row?.ledger_id),
+    state: safeText(row?.state),
+    reason: safeText(row?.reason),
+    source_kind: safeText(row?.source_kind),
+    source_id: safeText(row?.source_id),
+    title: safeText(row?.title)
+  }));
+}
+
+function buildSourceSpanIndex(sourceSpans = []) {
+  return new Set((Array.isArray(sourceSpans) ? sourceSpans : []).map((span) => safeText(span?.source_span_id)).filter(Boolean));
+}
+
+function countCardsWithMissingSourceRefs(bundle = {}) {
+  const sourceSpanIds = buildSourceSpanIndex(bundle.source_spans);
+  return (Array.isArray(bundle.warm_cards) ? bundle.warm_cards : []).filter((card) => {
+    const refs = Array.isArray(card?.source_refs?.source_span_ids) ? card.source_refs.source_span_ids : [];
+    return refs.length === 0 || refs.some((id) => !sourceSpanIds.has(safeText(id)));
+  }).length;
+}
+
+function countBoundedSourceSpans(bundle = {}) {
+  return (Array.isArray(bundle.source_spans) ? bundle.source_spans : []).filter((span) => (
+    safeText(span?.source_occurrence_id)
+    && safeText(span?.turn_range)
+    && safeText(span?.excerpt_text)
+  )).length;
+}
+
+function buildBundleInspection({ bundle = {}, bundleFile = '', sampleLimit = 5 } = {}) {
+  const validation = validatePortableWarmBundle(bundle);
+  const rejectedRows = Array.isArray(bundle.rejected_ledger) ? bundle.rejected_ledger : [];
+  const holdRows = Array.isArray(bundle.hold_ledger) ? bundle.hold_ledger : [];
+  const missingSourceRefCards = countCardsWithMissingSourceRefs(bundle);
+  const boundedSourceSpans = countBoundedSourceSpans(bundle);
+  const acceptedRows = Array.isArray(bundle.warm_cards) ? bundle.warm_cards.length : 0;
+  const ledgerCount = rejectedRows.length + holdRows.length;
+  const artifactStatus = validation.ok
+    ? (acceptedRows || ledgerCount ? 'valid_bundle' : 'valid_empty_bundle')
+    : 'invalid_bundle';
+  let projectionReadiness = 'blocked_by_contract_errors';
+  if (validation.ok && !acceptedRows && !ledgerCount) {
+    projectionReadiness = 'nothing_to_project';
+  } else if (validation.ok) {
+    projectionReadiness = ledgerCount ? 'ready_with_review_ledgers' : 'ready';
+  }
+
+  return {
+    ok: validation.ok,
+    schema: 'driftstone_portable_warm_bundle_inspection_v0',
+    bundle_file: safeText(bundleFile),
+    artifact_status: artifactStatus,
+    projection_readiness: projectionReadiness,
+    validation,
+    manifest: bundle?.manifest || {},
+    counts: {
+      ...validation.counts,
+      input_rows: Number(bundle?.conservation?.input_rows || 0),
+      accepted_rows: acceptedRows,
+      rejected_rows: rejectedRows.length,
+      hold_rows: holdRows.length
+    },
+    source_reliability: {
+      bounded_source_spans: boundedSourceSpans,
+      source_spans: Array.isArray(bundle.source_spans) ? bundle.source_spans.length : 0,
+      warm_cards_missing_source_refs: missingSourceRefCards,
+      source_complete: validation.ok && missingSourceRefCards === 0
+    },
+    ledgers: {
+      rejected_by_reason: countByReason(rejectedRows),
+      hold_by_reason: countByReason(holdRows),
+      rejected_samples: summarizeLedgerRows(rejectedRows, sampleLimit),
+      hold_samples: summarizeLedgerRows(holdRows, sampleLimit)
+    },
+    next_actions: validation.ok && projectionReadiness === 'nothing_to_project'
+      ? [
+          'No portable Warm cards, rejected rows, or HOLD rows were found in this bundle.',
+          'Inspect the pipeline scope before exporting projections.'
+        ]
+      : validation.ok
+      ? [
+          ledgerCount ? 'Review rejected_ledger and hold_ledger before treating the bundle as clean.' : '',
+          'Export Markdown/Obsidian/Notion projections from this bundle when the user asks.',
+          'Do not write Home, Hippocove, Notion, or legacy cold graph surfaces from this inspection.'
+        ].filter(Boolean)
+      : [
+          'Fix contract validation errors before projection export.',
+          'Do not use this bundle as canonical memory evidence.'
+        ]
+  };
+}
+
+function resolveBundleFile({ bundlePath = '', bundleDir = '' } = {}) {
+  const explicitPath = safeText(bundlePath);
+  if (explicitPath) return resolve(explicitPath);
+  const dir = safeText(bundleDir);
+  if (dir) return resolve(dir, 'portable_warm_bundle.json');
+  throw new Error('bundle_path or bundle_dir is required');
+}
+
 async function writePortableWarmBundleFiles({ bundle = {}, outputRoot = '' } = {}) {
   const root = resolve(outputRoot || join(PROJECT_ROOT, 'output', 'portable_warm_bundles'));
   const scope = bundle?.manifest?.scope || {};
@@ -552,6 +662,52 @@ async function writePortableWarmBundleFiles({ bundle = {}, outputRoot = '' } = {
   await writeFile(files.rejected_ledger_jsonl, toJsonl(bundle.rejected_ledger), 'utf8');
   await writeFile(files.hold_ledger_jsonl, toJsonl(bundle.hold_ledger), 'utf8');
   return { dir, files };
+}
+
+export async function inspectPortableWarmBundle({
+  bundlePath = '',
+  bundleDir = '',
+  sampleLimit = 5
+} = {}) {
+  let bundleFile;
+  try {
+    bundleFile = resolveBundleFile({ bundlePath, bundleDir });
+  } catch (error) {
+    return {
+      ok: false,
+      schema: 'driftstone_portable_warm_bundle_inspection_v0',
+      bundle_file: '',
+      artifact_status: 'missing_bundle_reference',
+      projection_readiness: 'blocked_by_input_error',
+      error: {
+        message: safeText(error?.message, 'bundle_path or bundle_dir is required')
+      },
+      next_actions: [
+        'Pass bundle_path for portable_warm_bundle.json or bundle_dir for the exported bundle directory.'
+      ]
+    };
+  }
+  let bundle;
+  try {
+    bundle = JSON.parse(await readFile(bundleFile, 'utf8'));
+  } catch (error) {
+    return {
+      ok: false,
+      schema: 'driftstone_portable_warm_bundle_inspection_v0',
+      bundle_file: bundleFile,
+      artifact_status: 'unreadable_bundle',
+      projection_readiness: 'blocked_by_read_error',
+      error: {
+        message: safeText(error?.message, 'Unable to read portable_warm_bundle.json'),
+        code: safeText(error?.code)
+      },
+      next_actions: [
+        'Check that bundle_path points to portable_warm_bundle.json or bundle_dir contains that file.',
+        'Do not use a stale previous bundle as this run output.'
+      ]
+    };
+  }
+  return buildBundleInspection({ bundle, bundleFile, sampleLimit });
 }
 
 export async function exportPortableWarmBundle({

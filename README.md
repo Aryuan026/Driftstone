@@ -54,7 +54,7 @@ Markdown、Obsidian、Notion 都只是这套包的可逆投影；它们方便人
 - MCP 工具接入
 - JSON / JSONL / Notion-ready projection
 
-旧的 roots / vines / final writeback 入口仍保留给兼容流程和历史调试，但它们不是公开产品的新终点。后续私有运行台会单独叫 **Driftstone Studio**，它消费公开 Driftstone core，不把私有 Home/Hippocove schema、路径或数据塞回这个公开仓。
+旧的 roots / vines / final writeback 入口仍保留给兼容流程和历史调试，但它们不是公开产品的新终点。后续私有运行台会单独叫 **Driftstone Studio**：它会在 reviewed checkpoint 上导入一份完整可运行的公开 Driftstone 源码/UI，再在私有仓里增加 Home/Hippocove 运行块；私有 schema、路径或数据不会塞回这个公开仓。
 
 ## 为什么保留旧实验台
 

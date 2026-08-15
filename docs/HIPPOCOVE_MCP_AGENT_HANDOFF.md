@@ -86,6 +86,10 @@ node server/mcp-server.js
 - `export_portable_warm_bundle`
   - 把当前 scope 的 growth drafts / reviewed packet 导出为本地 portable Warm bundle
   - 只写本地 JSON/JSONL 文件；不写 Notion、Home、Hippocove 或旧 roots/vines
+- `inspect_portable_warm_bundle`
+  - 只读检查已经导出的 bundle 文件或目录
+  - 返回合同验证、source 完整度、rejected/HOLD 计数和少量 ledger 摘要
+  - 不返回整包正文、不写任何投影或私有记忆系统
 
 ### 一键快检
 
@@ -129,7 +133,14 @@ node server/mcp-server.js
 7. `list_reviewed_clusters`
 8. 如有需要，AI 做语义合并
 9. `export_portable_warm_bundle`
-10. 只有维护旧兼容实验台时，才调用 `finalize_reviewed_entries`
+10. `inspect_portable_warm_bundle`
+11. 只有维护旧兼容实验台时，才调用 `finalize_reviewed_entries`
+
+`export_portable_warm_bundle` 返回的 `output.dir` 可以直接传给
+`inspect_portable_warm_bundle.bundle_dir`。如果只拿到文件路径，就把
+`portable_warm_bundle.json` 传给 `bundle_path`。inspect 结果里的
+`projection_readiness` 只表示本地 bundle 是否适合继续导出投影，不代表已经写入
+Notion、Home、Hippocove 或任何冷树。
 
 这条路的好处是：
 

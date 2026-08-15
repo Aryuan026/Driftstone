@@ -16,7 +16,7 @@ import { commitGrowthDecision } from './growth-commit-service.js';
 import { getGrowthDraftArtifact, listGrowthDraftArtifacts } from './growth-draft-store.js';
 import { exportGrowthDraftToObsidianStaging } from './obsidian-export-service.js';
 import { buildPortableWarmBundleContractPacket } from './portable-warm-bundle-contract.js';
-import { exportPortableWarmBundle } from './portable-warm-bundle-builder.js';
+import { exportPortableWarmBundle, inspectPortableWarmBundle } from './portable-warm-bundle-builder.js';
 import { getNextPendingTranslationWorkerPacket, getTranslationTaskWorkerPacket } from './memory-translation-task-service.js';
 import {
   loadRuntimeApiConfig,
@@ -374,6 +374,18 @@ export async function exportPortableWarmBundleForTool({
     limit,
     outputRoot,
     writeFiles
+  });
+}
+
+export async function inspectPortableWarmBundleForTool({
+  bundlePath = '',
+  bundleDir = '',
+  sampleLimit = 5
+} = {}) {
+  return inspectPortableWarmBundle({
+    bundlePath,
+    bundleDir,
+    sampleLimit
   });
 }
 

@@ -16,6 +16,7 @@ import {
   getGrowthContextForTool,
   getGrowthLedgerForTool,
   getPortableWarmBundleContractForTool,
+  inspectPortableWarmBundleForTool,
   getMemoryContextForTool,
   getPersonaWorkspaceStateForTool,
   inspectPipelineScope,
@@ -45,6 +46,13 @@ export async function callTool(name, args = {}) {
       limit: args.limit,
       outputRoot: args.output_root,
       writeFiles: args.write_files !== false
+    });
+  }
+  if (name === 'inspect_portable_warm_bundle') {
+    return inspectPortableWarmBundleForTool({
+      bundlePath: args.bundle_path,
+      bundleDir: args.bundle_dir,
+      sampleLimit: args.sample_limit
     });
   }
   if (name === 'run_history_pipeline') {
