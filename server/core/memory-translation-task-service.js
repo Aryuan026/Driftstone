@@ -1,4 +1,4 @@
-import { loadLatestTranslationTaskPacket, loadTranslationTaskByFile } from './translation-task-store.js';
+import { loadCanonicalTranslationTaskByFile, loadLatestTranslationTaskPacket } from './translation-task-store.js';
 
 function buildEmptyTranslationTaskStatus(options = {}) {
   return {
@@ -6,7 +6,8 @@ function buildEmptyTranslationTaskStatus(options = {}) {
     schema: 'hippocove_translation_task_packet_status_v0.1',
     scope: {
       owner_id: String(options.ownerId || options.owner_id || ''),
-      realm_id: String(options.realmId || options.realm_id || '')
+      realm_id: String(options.realmId || options.realm_id || ''),
+      bot_id: String(options.botId || options.bot_id || '')
     },
     latest: {
       generated_at: '',
@@ -71,7 +72,7 @@ function summarizeTaskDoc(task = {}) {
     submit: task?.submit || {},
     writeback: task?.writeback || {},
     next_work: {
-      needs_submission: String(task?.status || 'pending') === 'pending',
+      needs_submission: ['pending', 'submitted'].includes(String(task?.status || 'pending')),
       needs_retry: String(task?.status || 'pending') === 'failed'
     }
   };
@@ -96,8 +97,10 @@ export async function getLatestTranslationTaskPacketStatus(options = {}) {
     const loaded = await loadLatestTranslationTaskPacket({
       ownerId: options.ownerId,
       realmId: options.realmId,
+      botId: options.botId,
       owner_id: options.owner_id,
-      realm_id: options.realm_id
+      realm_id: options.realm_id,
+      bot_id: options.bot_id
     });
     pointer = loaded.pointer;
     packetFile = loaded.packetFile;
@@ -112,7 +115,9 @@ export async function getLatestTranslationTaskPacketStatus(options = {}) {
   const limit = Number.isFinite(options.limit) ? Math.max(1, Number(options.limit)) : 20;
   const tasks = Array.isArray(packet?.tasks) ? packet.tasks : [];
   const summarized = tasks.map(summarizeTaskRow);
-  const nextPending = summarized.find((task) => task.status === 'pending') || null;
+  const nextPending = summarized.find((task) => task.status === 'pending')
+    || summarized.find((task) => task.status === 'submitted')
+    || null;
   const lastApplied = summarized
     .filter((task) => task.applied_at)
     .sort((a, b) => String(b.applied_at).localeCompare(String(a.applied_at)))[0] || null;
@@ -142,7 +147,7 @@ export async function getLatestTranslationTaskPacketStatus(options = {}) {
 }
 
 export async function getTranslationTaskStatus(taskFile) {
-  const task = await loadTranslationTaskByFile(taskFile);
+  const task = await loadCanonicalTranslationTaskByFile(taskFile);
   const normalizedTask = {
     ...task,
     file: taskFile
@@ -162,7 +167,7 @@ export async function getTranslationTaskStatus(taskFile) {
 }
 
 export async function getTranslationTaskWorkerPacket(taskFile) {
-  const task = await loadTranslationTaskByFile(taskFile);
+  const task = await loadCanonicalTranslationTaskByFile(taskFile);
   return {
     ok: true,
     schema: 'hippocove_translation_worker_packet_v0.1',

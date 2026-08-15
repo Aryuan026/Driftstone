@@ -1,4 +1,6 @@
-# Hippocove 本地打开说明
+# Driftstone 本地打开说明
+
+> Driftstone 命名的启动脚本是公开版正门；`Hippocove` 命名脚本只作为旧兼容别名保留。
 
 这份不是给已经熟悉仓的人看的。
 
@@ -10,24 +12,28 @@
 
 直接在仓根目录双击：
 
-- `00_双击启动_Hippocove.command`
+- `00_双击启动_Driftstone.command`
+
+旧别名 `00_双击启动_Hippocove.command` 仍然可用。
 
 它会做三件事：
 
 1. 检查后端依赖是否已经装好
-2. 自动在本机拉起 Hippocove 后端
+2. 自动在本机拉起 Driftstone 本地后端
 3. 打开前台页面 `http://127.0.0.1:3460/`
 
 ### Windows
 
 直接在仓根目录双击：
 
-- `00_双击启动_Hippocove.cmd`
+- `00_双击启动_Driftstone.cmd`
+
+旧别名 `00_双击启动_Hippocove.cmd` 仍然可用。
 
 它会做同样三件事：
 
 1. 检查后端依赖是否已经装好
-2. 自动在本机拉起 Hippocove 后端
+2. 自动在本机拉起 Driftstone 本地后端
 3. 打开前台页面 `http://127.0.0.1:3460/`
 
 跑起来以后，旧实验台在：
@@ -38,10 +44,12 @@
 
 双击仓根目录里的停止脚本：
 
-- macOS：`00_停止_Hippocove.command`
-- Windows：`00_停止_Hippocove.cmd`
+- macOS：`00_停止_Driftstone.command`
+- Windows：`00_停止_Driftstone.cmd`
 
-它会按仓里记录的 PID 把 Hippocove 本地后端停掉。
+旧的 `00_停止_Hippocove.*` 文件仍然可用，只是不再作为推荐入口。
+
+它会按仓里记录的 PID 把 Driftstone 本地后端停掉。
 
 ## 页面里的两个关键入口
 
@@ -119,7 +127,7 @@
 这层壳会：
 
 - 打开桌面窗口
-- 自动拉起 Hippocove 本地后端
+- 自动拉起 Driftstone 本地后端
 - 把运行时数据写进应用用户目录，而不是源码目录
 
 如果你是开发者，后续可以这样继续：

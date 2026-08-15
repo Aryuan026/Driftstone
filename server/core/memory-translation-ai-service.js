@@ -13,7 +13,7 @@ import {
 } from './translation-ai-contract.js';
 import { applyTranslationEntries } from './memory-translation-service.js';
 import { materializeTranslationTasks } from './translation-task-materializer.js';
-import { loadTranslationTaskByFile, updateTranslationTaskStatus } from './translation-task-store.js';
+import { loadCanonicalTranslationTaskByFile, updateTranslationTaskStatus } from './translation-task-store.js';
 import { getMemoryHomePacket } from './memory-home-service.js';
 
 function safeText(value, fallback = '') {
@@ -74,6 +74,51 @@ async function resolveTranslationPacket(body = {}, taskContext = null) {
     packetFile: latest.packetFile,
     packet: latest.packet
   };
+}
+
+function taskScope(taskContext = {}) {
+  return {
+    owner_id: safeText(taskContext?.scope?.owner_id),
+    realm_id: safeText(taskContext?.scope?.realm_id, 'default'),
+    bot_id: safeText(taskContext?.scope?.bot_id)
+  };
+}
+
+function assertTaskScopeAuthority(body = {}, taskContext = null) {
+  if (!taskContext) return null;
+  const authoritative = taskScope(taskContext);
+  const requested = body?.scope && typeof body.scope === 'object' ? body.scope : {};
+  const fields = [
+    ['owner_id', 'owner_id'],
+    ['realm_id', 'realm_id'],
+    ['bot_id', 'bot_id']
+  ];
+  for (const [field, label] of fields) {
+    const wanted = safeText(requested?.[field]);
+    const actual = safeText(authoritative[field]);
+    if (wanted && actual && wanted !== actual) {
+      throw new Error(`task_file scope mismatch: ${label} must be ${actual}`);
+    }
+  }
+  return authoritative;
+}
+
+function buildAuthoritativeScope(body = {}, taskContext = null) {
+  const authoritative = assertTaskScopeAuthority(body, taskContext);
+  if (authoritative) {
+    return buildMemoryScope({
+      ownerId: authoritative.owner_id,
+      realmId: authoritative.realm_id,
+      botId: authoritative.bot_id,
+      mode: 'bot'
+    });
+  }
+  return buildMemoryScope({
+    ownerId: body?.scope?.owner_id,
+    realmId: body?.scope?.realm_id,
+    botId: body?.scope?.bot_id,
+    mode: 'bot'
+  });
 }
 
 function buildBatches(slices, { maxSlices = 2, maxChars = 9000 } = {}) {
@@ -163,18 +208,14 @@ export async function parseAiTranslationTaskSubmission(body = {}, options = {}) 
   const sourceLabel = safeText(body?.source?.label);
 
   if (taskFile) {
-    taskContext = await loadTranslationTaskByFile(taskFile);
+    taskContext = await loadCanonicalTranslationTaskByFile(taskFile);
+    assertTaskScopeAuthority(body, taskContext);
     if (options.markSubmitted !== false) {
       await markTaskAsSubmitted(taskFile, sourceLabel);
     }
   }
 
-  const scope = buildMemoryScope({
-    ownerId: body?.scope?.owner_id || taskContext?.scope?.owner_id,
-    realmId: body?.scope?.realm_id || taskContext?.scope?.realm_id,
-    botId: body?.scope?.bot_id || taskContext?.scope?.bot_id,
-    mode: 'bot'
-  });
+  const scope = buildAuthoritativeScope(body, taskContext);
   const { packet, packetFile } = await resolveTranslationPacket(body, taskContext);
   const rawOutput = safeText(body?.raw_output || '');
   const parsed = Array.isArray(body?.entries)
@@ -221,6 +262,43 @@ export async function parseAiTranslationTaskSubmission(body = {}, options = {}) 
   }
 
   const normalizedEntries = normalizeTranslationEntries(parsed.entries, packet);
+  if (normalizedEntries.length === 0) {
+    const reason = 'No valid translation entries remained after normalization.';
+    if (taskFile && options.markFailure !== false) {
+      await markTaskAsFailed(taskFile, {
+        parseMode: parsed.mode,
+        parsedEntries: 0,
+        sourceLabel,
+        reason,
+        rawOutput
+      });
+    }
+    const failureHome = await getMemoryHomePacket({
+      ownerId: scope.owner_id || packet?.scope?.owner_id || '',
+      realmId: scope.realm_id || packet?.scope?.realm_id || 'default',
+      botId: scope.bot_id || packet?.scope?.bot_id || '',
+      mode: 'bot'
+    });
+
+    return {
+      ok: false,
+      schema: 'hippocove_translation_ai_parse_v0.1',
+      error: reason,
+      scope: {
+        ...scope,
+        isolation_stage: 'translation_packet'
+      },
+      packet_file: packetFile,
+      task_file: taskFile,
+      batch_id: taskContext?.summary?.batch_id || '',
+      parse_mode: parsed.mode,
+      parsed_entries: 0,
+      entries: [],
+      home: failureHome?.ok ? failureHome : {},
+      home_summary: failureHome?.ok && failureHome?.home_summary ? failureHome.home_summary : {},
+      translator_contract: buildTranslatorContract()
+    };
+  }
   return {
     ok: true,
     schema: 'hippocove_translation_ai_parse_v0.1',
@@ -294,7 +372,8 @@ export async function prepareAiTranslationTasks(body = {}) {
   const materialized = await materializeTranslationTasks(payload, {
     label: safeText(body?.source?.label || `${safeText(hydrated.packet_id)}__ai_tasks`),
     owner_id: scope.owner_id || hydrated?.scope?.owner_id || '',
-    realm_id: scope.realm_id || hydrated?.scope?.realm_id || 'default'
+    realm_id: scope.realm_id || hydrated?.scope?.realm_id || 'default',
+    bot_id: scope.bot_id || hydrated?.scope?.bot_id || ''
   });
 
   const taskFileByBatch = new Map(
@@ -408,13 +487,8 @@ export async function failAiTranslationTask(body = {}) {
     };
   }
 
-  const taskContext = await loadTranslationTaskByFile(taskFile);
-  const scope = buildMemoryScope({
-    ownerId: body?.scope?.owner_id || taskContext?.scope?.owner_id,
-    realmId: body?.scope?.realm_id || taskContext?.scope?.realm_id,
-    botId: body?.scope?.bot_id || taskContext?.scope?.bot_id,
-    mode: 'bot'
-  });
+  const taskContext = await loadCanonicalTranslationTaskByFile(taskFile);
+  const scope = buildAuthoritativeScope(body, taskContext);
   const reason = safeText(body?.error || body?.error_note || 'Translator worker failed before submission.');
   const rawPreview = safeText(body?.raw_output || '').slice(0, 500);
 

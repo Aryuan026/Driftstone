@@ -74,28 +74,28 @@ const ROUTE_GROUPS = [
   },
   {
     id: 'memory-read',
-    label: 'Memory Read Lane',
-    lane: 'product',
-    note: '读 bay / root / context / home / search 这条主路。',
+    label: 'Legacy Memory Read Lane',
+    lane: 'diagnostic',
+    note: '旧 bay/root/context/home/search 兼容读取面；不是公开 portable_warm_bundle 真相。',
     handler: handleMemoryReadRoute,
     routes: [
       { method: 'GET', path: '/api/memory/overview', summary: '读当前 memory bay 总览。' },
       { method: 'GET', path: '/api/memory/scopes', summary: '列出 scope。' },
       { method: 'GET', path: '/api/memory/scope', summary: '读单个 scope 卡。' },
-      { method: 'GET', path: '/api/memory/home', summary: '读产品面 home 包。' },
+      { method: 'GET', path: '/api/memory/home', summary: '读旧兼容 home 包。' },
       { method: 'GET', path: '/api/memory/entry', summary: '读入口页聚合卡。' },
       { method: 'GET', path: '/api/memory/search', summary: '按 query 搜索根。' },
       { method: 'GET', path: '/api/memory/root', summary: '读单个 root。' },
-      { method: 'GET', path: '/api/memory/context', summary: '组装 bot/context 包。' },
+      { method: 'GET', path: '/api/memory/context', summary: '组装旧 bot/context 兼容包。' },
       { method: 'GET', path: '/api/memory/shadow', summary: '回场读影层切片。' },
       { method: 'GET', path: '/api/memory/audit/recall', summary: '召回自检。' }
     ]
   },
   {
     id: 'memory-pipeline',
-    label: 'Memory Pipeline Lane',
-    lane: 'product',
-    note: 'ingest -> translate -> write -> advance 这条写入主路。',
+    label: 'Legacy Memory Pipeline Lane',
+    lane: 'diagnostic',
+    note: '旧 ingest -> translate -> write -> advance 兼容推进面；公开主路后续收口到 portable_warm_bundle export。',
     handler: handleMemoryAdvanceRoute,
     routes: [
       { method: 'POST', path: '/api/memory/advance', summary: '让 bay 往前推进一格。' },
@@ -127,12 +127,12 @@ const ROUTE_GROUPS = [
     id: 'memory-reviewed',
     label: 'Reviewed Merge Lane',
     lane: 'product',
-    note: '批后去冗余与最终写入前的中间层。',
+    note: '批后去冗余与 portable_warm_bundle 前的中间层；旧 finalize 仍保留为兼容出口。',
     handler: handleMemoryReviewedRoute,
     routes: [
       { method: 'POST', path: '/api/memory/reviewed/append', summary: '把单批提炼结果落进 reviewed 中间层。' },
       { method: 'POST', path: '/api/memory/reviewed/clusters', summary: '读取当前 reviewed 候选簇。' },
-      { method: 'POST', path: '/api/memory/reviewed/finalize', summary: '完成去冗余并正式写入。' }
+      { method: 'POST', path: '/api/memory/reviewed/finalize', legacy: true, summary: 'LEGACY/COMPAT：完成去冗余并写入旧 roots/vines 兼容层。' }
     ]
   },
   {
@@ -168,12 +168,12 @@ const ROUTE_GROUPS = [
   },
   {
     id: 'memory-write',
-    label: 'Memory Write Lane',
-    lane: 'product',
-    note: '标准合同写入根和藤。',
+    label: 'Legacy Memory Write Lane',
+    lane: 'diagnostic',
+    note: '旧标准合同写入 roots/vines 兼容层；公开 Driftstone 不把这里当最终真相。',
     handler: handleMemoryWriteRoute,
     routes: [
-      { method: 'POST', path: '/api/memory/write', summary: '按标准合同写入 memory truth。' }
+      { method: 'POST', path: '/api/memory/write', summary: 'LEGACY/COMPAT：按旧合同写入 roots/vines 兼容层。' }
     ]
   },
   {
@@ -207,14 +207,24 @@ const ROUTE_GROUPS = [
   }
 ];
 
-function buildRouteCatalog() {
-  return ROUTE_GROUPS.map((group) => ({
-    id: group.id,
-    label: group.label,
-    lane: group.lane,
-    note: group.note,
-    routes: group.routes.map((route) => ({ ...route }))
-  }));
+function asRouteCatalogRoute(route) {
+  const { legacy, ...publicRoute } = route;
+  return publicRoute;
+}
+
+export function buildRouteCatalog({ includeDiagnostic = false } = {}) {
+  return ROUTE_GROUPS
+    .filter((group) => includeDiagnostic || group.lane !== 'diagnostic')
+    .map((group) => ({
+      id: group.id,
+      label: group.label,
+      lane: group.lane,
+      note: group.note,
+      routes: group.routes
+        .filter((route) => includeDiagnostic || !route.legacy)
+        .map(asRouteCatalogRoute)
+    }))
+    .filter((group) => group.routes.length > 0);
 }
 
 async function handleMetaRoute(req, res, url) {
@@ -223,9 +233,13 @@ async function handleMetaRoute(req, res, url) {
     json(res, 405, { ok: false, error: 'Method not allowed' });
     return true;
   }
+  const includeDiagnostic = url.searchParams.get('include_diagnostic') === 'true'
+    || url.searchParams.get('includeDiagnostic') === 'true';
   json(res, 200, {
     ok: true,
-    groups: buildRouteCatalog()
+    diagnostic_hidden: !includeDiagnostic,
+    diagnostic_hint: includeDiagnostic ? '' : 'Pass include_diagnostic=true to include legacy/diagnostic route catalog entries.',
+    groups: buildRouteCatalog({ includeDiagnostic })
   });
   return true;
 }
@@ -238,11 +252,14 @@ export async function dispatchRegisteredRoute(req, res, url) {
 }
 
 export function buildNotFoundPayload() {
+  const groups = buildRouteCatalog();
   return {
     ok: false,
     error: 'Not found',
-    groups: buildRouteCatalog(),
-    routes: ROUTE_GROUPS.flatMap((group) =>
+    diagnostic_hidden: true,
+    diagnostic_hint: 'GET /api/meta/routes?include_diagnostic=true includes legacy/diagnostic route catalog entries.',
+    groups,
+    routes: groups.flatMap((group) =>
       group.routes.map((route) => `${route.method} ${route.path}`)
     )
   };

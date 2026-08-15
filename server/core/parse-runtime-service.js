@@ -421,6 +421,7 @@ async function refreshTaskStatus(scope = {}) {
     return await getLatestTranslationTaskPacketStatus({
       owner_id: scope.owner_id,
       realm_id: scope.realm_id,
+      bot_id: scope.bot_id,
       limit: 12
     });
   } catch {
@@ -593,6 +594,7 @@ async function runParseRuntimeWorker(scope = {}) {
         const nextTask = await getNextPendingTranslationWorkerPacket({
           owner_id: normalizedScope.owner_id,
           realm_id: normalizedScope.realm_id,
+          bot_id: normalizedScope.bot_id,
           limit: 1
         });
         const currentLabel = safeText(nextTask?.next_task?.summary?.batch_id || nextTask?.next_task?.task_label || '当前分片');

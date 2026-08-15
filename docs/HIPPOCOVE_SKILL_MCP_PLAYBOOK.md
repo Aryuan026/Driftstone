@@ -1,8 +1,15 @@
-# Hippocove Skill / MCP 接入说明
+# Driftstone Legacy Skill / MCP Playbook
 
-这份是写给两种人看的：
+> Legacy note: this file keeps older workbench observations and compatibility
+> notes under the old `HIPPOCOVE_*` filename. New agents should start from
+> [`DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md`](./DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md).
+> Public Driftstone's endpoint is `portable_warm_bundle` plus local projections
+> with review-backflow anchors, not roots/vines, Home, Hippocove, Notion, or
+> privacy UI writes.
 
-- 要继续接手 Hippocove 的人类开发者
+这份旧记录是写给两种人看的：
+
+- 要继续接手 Driftstone / 旧实验台兼容面的开发者
 - 要替人类跑步骤、但需要边界清楚的辅助 AI / agent
 
 它不讲宣传口径，主要讲三件事：
@@ -15,7 +22,7 @@
 
 ## 1. 先看全局地图
 
-Hippocove 现在不是一张纯网页。
+Driftstone 现在不是一张纯网页。
 
 它更像：
 
@@ -33,18 +40,20 @@ Hippocove 现在不是一张纯网页。
 
 所以现在最稳的理解不是：
 
-> Hippocove 已经是一套纯自动 agent 平台
+> Driftstone 已经是一套纯自动 agent 平台
 
 而是：
 
-> Hippocove 已经有一条可被 agent 接住的大骨架，但最后的整编确认与现实隐私处理，仍然保留人工把关位。
+> Driftstone 已经有一条可被 agent 接住的大骨架，但最后的整编确认与现实隐私处理，仍然保留人工把关位。
 
 ### 1.1 如果别人只是想把这套工位点亮
 
 现在最稳的仓内入口不是让人自己猜 `localhost:3460`，而是直接让他双击仓根目录里对应系统的启动脚本：
 
-- macOS：`00_双击启动_Hippocove.command`
-- Windows：`00_双击启动_Hippocove.cmd`
+- macOS：`00_双击启动_Driftstone.command`
+- Windows：`00_双击启动_Driftstone.cmd`
+
+旧的 `00_双击启动_Hippocove.*` 仍是兼容别名；新说明优先使用 Driftstone 命名。
 
 这把钥匙会自动：
 
@@ -62,7 +71,7 @@ Hippocove 现在不是一张纯网页。
 
 ### 2.1 代码目录
 
-- 项目根：`/Users/mac/Documents/Codex/0-github/202604-Hippocove`
+- 项目根：仓库根目录
 
 ### 2.2 运行时 / 缓存 / 用户数据
 
@@ -110,6 +119,11 @@ Hippocove 现在不是一张纯网页。
 
 ### 3.1 已经有 MCP 工具、适合直接给 agent 的部分
 
+新公共主路优先使用
+[`DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md`](./DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)
+里的 `prepare/run/resume/inspect/review/export/validate` 词表。本节保留旧工具清单，
+用于定位兼容调用。
+
 入口：
 
 - `server/mcp-server.js`
@@ -149,7 +163,7 @@ Hippocove 现在不是一张纯网页。
 - 准备原始记录
 - 拉取下一张提炼任务
 - 写回 reviewed
-- finalize 到 truth layer
+- legacy finalize 到旧 roots/vines 兼容层
 - 读/写人格工位
 - 生成主卡草稿
 - 看 registry / ledger
@@ -215,9 +229,9 @@ Hippocove 现在不是一张纯网页。
 下面这段不是唯一模板，但已经够给别的辅助 AI 当工作说明。
 
 ```md
-# Hippocove Operator
+# Driftstone Operator
 
-你在 Hippocove 里不是网页用户，而是流程操作员。
+你在 Driftstone 里不是网页用户，而是流程操作员。
 
 你的目标：
 - 优先使用现有 MCP 工具和 runtime 路由
@@ -233,8 +247,8 @@ Hippocove 现在不是一张纯网页。
 5. 如果是人格工位阶段，用 get_persona_workspace_state / save_persona_workspace_state / generate_soul_draft / generate_language_fingerprint
 6. 如果是主卡阶段，用 get_growth_context -> build_growth_task -> generate_growth_draft
 7. 如果要导出单卡，用 export_growth_draft_to_obsidian
-8. 如果要导出整编包，改走 runtime memo-compact 路由
-9. 如果发现现实世界隐私，不擅自发布最终包，把结果交回人工在隐私筛查页处理
+8. 如果要公开稳定出口，改走 `export_portable_warm_bundle` 和 `export_portable_warm_projection`
+9. 如果发现现实世界隐私，不擅自发布最终包，把结果交回人工处理
 
 硬边界：
 - 不把网页按钮当成唯一真相，优先以后端 scope 和 packet 为准
@@ -427,7 +441,7 @@ Hippocove 现在不是一张纯网页。
 
 ### 9.2 它依赖可写本地磁盘
 
-Hippocove 运行时会写：
+Driftstone 运行时会写：
 
 - `data/runtime_save/...`
 - `output/obsidian_staging/...`
@@ -469,7 +483,7 @@ GitHub Pages 只会发静态文件，不会给你本地可写 scope。
 
 ## 10. 一句话交底
 
-Hippocove 现在最适合被理解成：
+Driftstone 现在最适合被理解成：
 
 > 一套已经跑通主链、适合被 agent 接住大部分中段流程、但仍保留人工最终把关位的本地记忆工作台。
 

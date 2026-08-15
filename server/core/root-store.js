@@ -41,12 +41,13 @@ async function resolveRootsDir(options = {}) {
       exists: false
     };
   }
+  const pointerPath = join(SQL_ROOTS_DIR, 'latest.json');
   return {
     dir: SQL_ROOTS_DIR,
     scope_mode: 'global_fallback',
     owner_id: '',
     realm_id: '',
-    exists: true
+    exists: await fileExists(pointerPath)
   };
 }
 

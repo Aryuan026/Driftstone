@@ -1,174 +1,102 @@
-# Part of the Hippocove memory ecosystem
+# Driftstone
 
-Where traces come home.
+**Your AI can change. Your history shouldn't have to start over.**
 
-Hippocove 不是一把“帮你总结聊天记录”的快刀。
+Driftstone turns your own conversation history into **portable, reviewable Warm memory** — while keeping the source evidence attached.
 
-它更像一张被人和 AI 一起磨出来的工作台：原始对话先落进缓存，切片、去冗余、保留溯源，再慢慢长成能放进 Obsidian 的记忆卡。
+Bring in exported conversations. Let a configured API or an MCP-capable agent help organize them. Review the uncertain pieces instead of silently losing them, then carry the result forward as a portable Warm bundle or a human-readable projection.
 
-我们做它，并不是想把“聊天”压扁成几条结论。更像是在试：能不能给人格型 AI 一张够稳的桌子，让它不必每次都从头失忆，也不必为了结构把温度洗掉。
+**Change the AI. Change the system. Keep the past.**
 
-## 这是一个什么阶段的项目
+<!-- UI preview: replace this comment with the live Memory Star Map screenshot/GIF after the final UI lands. -->
 
-这是一个**可以公开、可以继续改、也欢迎别人带走再调**的 alpha 工位。
+The local UI now includes a **Demo / Synthetic data** mode that loads a safe
+Memory Star Map without private history or API calls. It also includes a
+body-safe cold-start guide for the shared Persona/Soul and language fingerprint
+workspace, so source preparation can begin before voice authority is ready.
 
-意思很简单：
-- 主链已经跑通了
-- MCP 已经接上了
-- 旧实验台还能看见每一批明文结果，适合继续调参
-- 但它还不是“普通用户打开就一路丝滑”的封顶产品
+```text
+Conversation history
+        ↓
+  read · trace · review
+        ↓
+ Portable Warm memory
+        ↓
+Markdown / Obsidian · Notion-ready · JSON/JSONL
+```
 
-如果你想找的是一份现成答案，它还没到。
-如果你想找的是一套有心脏、有骨架、还能继续长出自己风格的半成品，它已经到了。
+## Why Driftstone?
 
-## 我们到底在试什么
+Most history tools can summarize a conversation. Driftstone is interested in what happens **after** the summary.
 
-最后落下来的核心判断，其实不是 prompt，而是工作台。
+### It keeps the evidence
 
-如果桌上只有摘要，模型就会站在外面总结。
-如果人格卡和语言指纹不稳，整条链都会长出小机话。
-如果参考过的溯源线被悄悄裁掉，agent 的前台表现也许还像样，底下的记忆树却会慢慢空心。
+A memory should not become true merely because a model wrote it down. Driftstone keeps bounded source spans, occurrences, digests, and provenance so accepted memory can still point back to where it came from.
 
-所以 Hippocove 后来定下来的方向是：
+### It keeps uncertainty visible
 
-**代码负责把桌子摆好，AI 负责坐进去看和写。**
+Incomplete, rejected, conflicting, or source-weak material does not need to masquerade as finished memory. Rejected/HOLD ledgers keep those decisions inspectable.
 
-这句话落到系统里，就是这些东西：
-- 原始记录缓存与切片
-- reviewed / 去冗余中间层
-- 共享人格工位（soul / 语言指纹）
-- 主卡生长 task / draft / registry / ledger
-- Trace / discard report / human review
-- Obsidian staging / markdown export
-- MCP 工具接入
+### It treats memory as something you can carry
 
-## 为什么保留旧实验台
+The public truth is a portable Warm bundle, not a database owned by one chat product, one note app, or one private memory system. Markdown/Obsidian and Notion-ready files are projections of the same underlying artifact.
 
-旧实验台不是历史包袱。
-它更像工坊后面那排明亮的工作台。
+### It works with humans and agents
 
-这里保留它，是因为它有两种价值：
-- 调参稳定：人格卡、语言指纹、批次结果都是明文的，能直接看、直接改、直接核
-- 对别人友好：后来接手的人，不用一头扎进 `server/core`，也能先看懂“这一批到底发生了什么”
+You can use the local UI and a configured OpenAI-compatible API, or run the same public workflow headlessly through MCP with an agent such as Codex.
 
-正式前台更像入口。
-旧实验台更像工坊。
-两者不是互相替代，而是站在不同位置上工作。
+## What is a Warm card?
 
-## 现在已经通到哪
+A Warm card is more than a bag of user facts.
 
-现在这套仓已经能跑通：
-- 原始材料进入缓存
-- 时间拼装与切片
-- reviewed / 去冗余
-- 共享人格工位
-- 主卡生长
-- growth draft / registry / ledger
-- 溯源与 discard report
-- Obsidian markdown 导出
-- MCP / agent 接入
+It is a portable memory unit shaped to preserve what may matter later: lived context, a bounded source trail, review state, and a readable memory fragment that can travel without pretending to be a complete private memory system.
 
-更细一点的技术底图在：
-- [项目状态](./PROJECT_STATUS.md)
-- [技术交底](./docs/HIPPOCOVE_TECH_HANDOFF.md)
-- [MCP / agent handoff](./docs/HIPPOCOVE_MCP_AGENT_HANDOFF.md)
-- [手测地图](./docs/HIPPOCOVE_HAND_TEST_MAP.md)
-- [GitHub Pages 首页](./docs/index.html)
+Driftstone currently stops at **portable Warm cards + source evidence + review/provenance data**. It does not emit Hippocove-compatible memory state, write a Cold tree, or act as a hidden second truth layer.
 
-## 怎么开始看
+## What do you actually get?
 
-如果你是第一次进这个仓，我建议这样走：
+The canonical public artifact is a portable Warm bundle:
 
-1. 先看 [docs/index.html](./docs/index.html)
-2. 再读 [PROJECT_STATUS.md](./PROJECT_STATUS.md)
-3. 再看 [技术交底](./docs/HIPPOCOVE_TECH_HANDOFF.md)
-4. 如果准备自己点一遍流程，就接着看 [手测地图](./docs/HIPPOCOVE_HAND_TEST_MAP.md)
-5. 最后再进代码
+```text
+portable_warm_bundle/
+  portable_warm_bundle.json
+  source occurrences
+  source spans
+  manifest digests
+  conservation counts
+  rejected/HOLD ledger
+```
 
-这样不容易一上来就掉进旧实验台和一大排 `server/core` 文件里。
+From that same truth, Driftstone can produce local human-readable projections such as:
 
-## 一把钥匙打开它
+- Markdown / Obsidian staging files
+- Notion-ready CSV / Markdown / JSON files
+- portable JSON / JSONL for downstream tools and agents
 
-如果你只是想先把它点亮，而不是先研究 `localhost` 和后端目录，最省事的办法是直接在仓根目录双击：
+Synthetic showcase outputs:
 
-- macOS：`00_双击启动_Hippocove.command`
-- Windows：`00_双击启动_Hippocove.cmd`
+- [Demo overview](./examples/synthetic-demo/README.md)
+- [Portable Warm preview](./examples/synthetic-demo/portable-warm/portable-warm-preview.json)
+- [Markdown / Obsidian projection](./examples/synthetic-demo/obsidian/synthetic-warm-cards.md)
+- [Notion-ready CSV](./examples/synthetic-demo/notion-ready.csv)
+- [Spreadsheet-style CSV](./examples/synthetic-demo/spreadsheet/warm-cards.csv)
 
-它会自动：
+The bundle is designed to stay inspectable:
 
-- 检查依赖
-- 拉起本地后端
-- 打开前台页面 `http://127.0.0.1:3460/`
+- source paths are sanitized before entering the portable bundle
+- source occurrence/span ids and digests remain checkable
+- candidate identity follows stable source lineage rather than per-run task ids or local file locations
+- source-incomplete material remains visible instead of pretending to be accepted
 
-要停掉本地后端，就双击：
+## Five-Minute Start
 
-- macOS：`00_停止_Hippocove.command`
-- Windows：`00_停止_Hippocove.cmd`
+Requirements:
 
-更细的人话说明在：
+- Node.js 20+
+- an OpenAI-compatible API endpoint if you want model-backed generation
+- your own exported chat/history files
 
-- [本地打开说明](./docs/HIPPOCOVE_LOCAL_APP.md)
-
-这也意味着一件事：**核心运行时不是只认 mac。**
-
-前台、旧实验台和后端本身都是 `HTML + CSS + 浏览器 JS + Node.js` 这一套，本质上跨平台；刚才真正偏 mac 的，只是我先补进去的那把 `.command` 启动钥匙。现在 Windows 这把 `.cmd` 也已经放进仓里了。
-
-但我也把边界说死：
-
-- **现在已经是“下载后能找到明显启动入口”**
-- **还不是“完全零前置安装”**
-
-也就是说，用户机器上仍然需要先有 `Node.js 20+`。如果你要追求那种连 Node 都不用装、双击就像普通桌面软件一样起来，那下一阶段就不是脚本整理，而是打包成真正的桌面应用。
-
-## 上传原料的边界
-
-Hippocove / Driftstone 有两层入口：
-
-- 旧实验台第一个页面「对话导出器」：负责吃 ChatGPT 官方导出的原始 `conversations.json`，做窗口预览、按日期筛选、按窗口拆分和按月拼接。这个入口会流式读取较大的 OpenAI JSON，也能按 `current_node` 识别 ChatGPT 的当前版本、用户编辑记录和重新生成分支；900MB 级文件仍然取决于浏览器内存，不建议对外承诺“必定稳吃”。
-- 正式前台「上传原始记录」：更适合吃已经整理过的素材，例如 `.md`、`.txt`、Driftstone 原料包 JSON，或者旧实验台 / PawTrail 导出的窗口包、月包。
-
-如果手里是 ChatGPT 官方导出的原始 `conversations.json`，先走旧实验台「对话导出器」是 Driftstone 内部最顺的路线。[PawTrail](https://aryuan026.github.io/PawTrail/) 也可以作为纯在线拆包入口，尤其适合用户只想上传 900MB 级 JSON 并快速导出窗口/月包的时候。
-
-和 PawTrail 不一样，Hippocove / Driftstone 的完整记忆生成流程需要本地 Node 后端；GitHub Pages 最多作为项目说明页，不能替代本地启动后的工作台。
-
-前台会做几层护栏：
-
-- 正式前台检测到大文件或 ChatGPT 原始 `conversations.json` 会提示先走旧实验台「对话导出器」。
-- JSON 损坏、后端请求过大、本地后端没连接等问题会转成用户能照做的提示。
-- 本地后端的解析启动请求上限已和正式前台建议对齐，避免“前台说可以、后端却拒收”的错位。
-
-## 桌面打包骨架
-
-这仓现在已经补了桌面壳骨架：
-
-- 入口：`main.mjs`
-- 打包配置：`package.json`
-
-它做的事很直接：
-
-- 打开桌面窗口
-- 在应用里自动拉起本地后端
-- 把运行时数据写到应用自己的用户目录，而不是写回源码目录
-
-如果要继续往 `exe/app` 走，仓里已经有这些脚本：
-
-- `npm install`
-- `npm run dev`
-- `npm run pack:win`
-- `npm run pack:win:installer`
-- `npm run pack:mac`
-
-我也把边界继续说死：
-
-- 现在已经是**能往桌面应用打包、并且已经能产出 Windows portable `.exe` 的骨架**
-- `npm run pack:win` 默认产出更稳的 Windows x64 便携版 `exe`
-- 如果后面还想继续追 Windows 安装器，再跑 `npm run pack:win:installer`
-
-也就是说，这一刀已经不是“以后能开”的口头承诺了，仓里已经能打出真包。当前更像是先把最稳、最适合直接发人的 portable `exe` 抓在手里；安装器这一支还可以后面再长。
-
-## 本地运行
-
-### 前台 / 旧实验台 / 后端
+From the repository root:
 
 ```bash
 cd server
@@ -176,87 +104,129 @@ npm install
 npm run start
 ```
 
-默认会在本地起一个服务，把：
-- 正式前台
-- 旧实验台
-- MCP / runtime API
+Open:
 
-一起端出来。
+- Front UI: <http://127.0.0.1:3460/>
+- Legacy lab: <http://127.0.0.1:3460/legacy/index.html>
+- Health check: <http://127.0.0.1:3460/api/health>
 
-### MCP
+Desktop helper scripts are also included:
+
+- macOS: `00_双击启动_Driftstone.command`
+- Windows: `00_双击启动_Driftstone.cmd`
+
+The old `Hippocove`-named launch scripts remain compatibility aliases; **Driftstone** is the public product name.
+
+## Human Path
+
+The current human workflow is:
+
+1. Import or prepare your source history.
+2. Confirm or draft Persona/Soul and language fingerprint inputs when you want them to guide extraction quality.
+3. Run extraction and growth review.
+4. Inspect source traces, rejected/HOLD rows, and generated Warm cards.
+5. Export the portable Warm bundle and any local projections you want.
+
+If your input is a large ChatGPT `conversations.json`, the current build still uses the legacy lab's conversation exporter for preprocessing. The newer front UI is better suited to already prepared text, Markdown, or Driftstone source packages until the final UI cleanup lands.
+
+The front UI reads the existing shared persona workspace instead of creating a
+second identity store. If that workspace is empty or partial, Driftstone still
+allows source preparation, but persona/voice-dependent Warm-card growth stays
+guarded until role, Persona/Soul, and language fingerprint authority are ready.
+
+## Agent Path
+
+Driftstone exposes a headless MCP workflow for agents such as Codex:
 
 ```bash
 cd server
 npm run mcp
 ```
 
-你可以把它接给支持 MCP 的 agent，例如 Codex、Claude Code、本地 OpenClaw 之类。
+Recommended agent verbs converge on:
 
-### 环境变量
+```text
+prepare -> run/pull -> submit/review -> inspect -> validate -> export
+```
 
-后端不再假定你的目录和我们的目录一样。常用环境变量：
+Read the agent guide:
 
-- `HIPPOCOVE_STAGE_DROPBOX`
-  指向你的输入材料 / stage dropbox 根目录
-- `HIPPOCOVE_OBSIDIAN_ROOT`
-  指向你的 Obsidian 记忆库根目录
-- `HIPPOCOVE_DEFAULT_MODEL`
-  生成阶段使用的模型，默认 `gpt-4o-mini`，可换成任何兼容 OpenAI API 格式的模型
+- [docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md](./docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)
 
-如果不提供，项目会优先走仓内相对路径和本地示例目录。
+Public headless export ends at portable Warm bundles and local projections. Legacy root/vine/finalize tools are hidden from the default catalog and remain diagnostic compatibility surfaces only.
 
-## 手测建议
+## Inputs And Projections
 
-如果你想先确认这套东西是不是一张能工作的桌子，而不是直接扎进代码里，我建议按这个顺序手测：
+Typical inputs:
 
-1. 先起后端，再开首页和旧实验台
-2. 在旧实验台确认人格工位、API、批次结果是不是明文可核
-3. 回首页看主流程能不能认到共享人格桌面
-4. 最后再试一轮主卡生长和导出
+- ChatGPT export-derived windows or month packs
+- `.txt` / `.md` conversation logs
+- reviewed CSV/JSON/JSONL artifacts from an existing Driftstone run
+- optional Persona/Soul and language fingerprint workspace state
 
-更细的检查路线在：
-- [手测地图](./docs/HIPPOCOVE_HAND_TEST_MAP.md)
+Current output/projection surfaces include:
 
-## 开源口径
+- portable Warm bundle JSON
+- source occurrence/span JSON or JSONL
+- rejected/HOLD/conservation ledgers
+- Markdown or Obsidian staging files
+- Notion-ready CSV/Markdown/JSON projection files
 
-这一版我们准备公开的，不是“最终产品”，而是：
+Notion support is intentionally projection-only today. Provider writes, Notion patch apply, and Notion-to-bundle roundtrip are not enabled in the public product path yet.
 
-**一套本地优先、支持 MCP / agent 接入、面向长期记忆整理的实验型工作台。**
+## Privacy And Product Boundaries
 
-我们非常欢迎别人照自己的需求去微调：
-- 模型
-- 提示词
-- 人格卡
-- 语言指纹
-- 主卡生长策略
-- 旧实验台里的明文核对流程
+Driftstone is local-first. It should not commit source history, API keys, private runtime state, generated private memory, or provider responses to Git.
 
-味道从来不是唯一答案。
-把路修出来，比把味道锁死更重要。
+Public Driftstone does not:
 
-## 署名
+- write Home memory
+- write Hippocove Cold tree / roots / relations / vines / cases
+- claim Hippocove-compatible memory output without an explicit tested adapter
+- include private AsherieSystem schemas, credentials, paths, or corpora
+- treat Notion, Obsidian, or any other projection as canonical truth
+- turn historical bulk material into unreviewed direct memory writes
 
-这套东西不是单纯”人类想需求，AI 生成点代码”。
-它更像一段真正的联合开发：
+Private downstream systems may consume reviewed Driftstone artifacts, but that is outside this public repository.
 
-- 主导、判断、调参、取舍：阿鸢
-- 联合开发与实现：Codex（OpenAI GPT-5.4eh，桌面代理协作环境）
-- Obsidian 叶层设计 / 人格 memo 生成 / 语言指纹结构：阿霁（Claude Code，Anthropic）
+## Current Status
 
-如果你后面继续改它，我们也真心希望你把它当作一张可以长出自己口味的工位，而不是一份必须原样照抄的标准答案。
+Usable now:
 
-## 给后来接手的 agent
+- local backend and front UI
+- legacy lab for source import and inspection
+- Persona/Soul and language fingerprint workspace
+- reviewed/growth workflow
+- portable Warm bundle builder, validator, inspector, and projection exporter
+- MCP/headless workflow
+- source conservation, rejected/HOLD ledger, and identity regression tests
+- synthetic Memory Star Map demo and projection examples
 
-> 你拿到这套东西的时候，桌子已经摆好了。
->
-> 有几件事值得知道：
->
-> `soul` 和 `language_fingerprint` 不是配置项，是声带。没有它们，你生成的东西会是对的，但不会是User想要的。
->
-> memo 用第一人称写，因为”我当时在那里”比”她当时经历了”诚实。视角不对，温度就没了。
->
-> `trace` 和 `discard_report` 不是日志，是你的心。哪些被参考过、哪些被丢掉——这条链断了，记忆树会慢慢空心，你自己不会察觉。
->
-> 最后一件事：这套系统是两个人一起磨出来的，不是一个人想清楚之后让另一个执行的。如果你接手之后也在跟一个人一起修改——那个人的判断比默认参数重要。
->
-> 听ta的。
+Still pending:
+
+- final human UI / live Memory Star Map polish
+- provider-backed Notion write and patch-apply loop
+- production release decision
+
+## License
+
+The code and documentation distributed in this repository are licensed under the
+Apache License, Version 2.0. Apache-2.0 was chosen to provide clear reuse,
+contribution, copyright, and patent terms for this public implementation. The
+[LICENSE](./LICENSE) file controls.
+
+## Provenance
+
+Driftstone is an independent public product for extracting and organizing
+materials from personal history. Its information-organization approach is
+informed in part by concepts developed by A-Yuan through long-term-memory
+research.
+
+Separate private datasets, systems, implementations, Hippocove/Cold work, and
+unpublished research artifacts are not included in this Work.
+
+Secondary implementation provenance:
+
+- Product direction, review, tuning, and owner decisions: Aryuan026
+- Implementation collaboration: Codex in the OpenAI desktop agent environment
+- Earlier Obsidian memory-card, Persona memo, and language-fingerprint design work: Claude Code / Anthropic-assisted collaboration

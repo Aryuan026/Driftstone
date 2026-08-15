@@ -1,8 +1,8 @@
 {
-  "name": "hippocove-desktop",
+  "name": "driftstone-desktop",
   "private": true,
   "version": "0.1.0",
-  "description": "Hippocove local workbench desktop shell",
+  "description": "Driftstone local memory workbench desktop shell",
   "author": "Aryuan026",
   "type": "module",
   "main": "main.mjs",
@@ -18,8 +18,8 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.hippocove.desktop",
-    "productName": "Hippocove",
+    "appId": "com.driftstone.desktop",
+    "productName": "Driftstone",
     "electronVersion": "35.7.5",
     "directories": {
       "output": "dist"
@@ -47,7 +47,7 @@
       "category": "public.app-category.productivity"
     },
     "win": {
-      "artifactName": "Hippocove-${version}-${arch}.${ext}",
+      "artifactName": "Driftstone-${version}-${arch}.${ext}",
       "target": [
         {
           "target": "portable",

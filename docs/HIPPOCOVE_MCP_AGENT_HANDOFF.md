@@ -1,4 +1,10 @@
-# Hippocove MCP Agent Handoff
+# Driftstone MCP Agent Handoff
+
+> 文件名还保留旧 `HIPPOCOVE_*` 命名，方便旧链接不失效；本说明的公开产品边界以 Driftstone 为准。
+
+> 新 agent 建议优先阅读 Driftstone 命名的正门：
+> [`DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md`](./DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)。
+> 本文件保留为旧链接兼容与更长解释。
 
 这份说明不是写给网页用户的。
 
@@ -29,12 +35,12 @@
 所以现在最顺手的不是“单纯 API 对话页”，而是：
 
 - 一个本地 agent 壳
-- 背后挂 Hippocove MCP
+- 背后挂 Driftstone MCP
 - 远端模型只负责思考，不负责搬运和落盘
 
 ## 2. 启动方式
 
-Hippocove 的 MCP 入口在：
+Driftstone 的 MCP 入口在：
 
 - `server/mcp-server.js`
 
@@ -53,14 +59,14 @@ node server/mcp-server.js
 
 ## 3. 给 agent 的 MCP 配置
 
-通用思路是把这只本地进程注册成一个 `hippocove` 工具源。
+通用思路是把这只本地进程注册成一个 `driftstone` 工具源。旧客户端如果已经配置成 `hippocove`，可以暂时保留别名；公开文档新写法统一用 `driftstone`。
 
 示例：
 
 ```json
 {
   "mcpServers": {
-    "hippocove": {
+    "driftstone": {
       "command": "node",
       "args": ["server/mcp-server.js"]
     }
@@ -78,16 +84,30 @@ node server/mcp-server.js
 - `inspect_pipeline_scope`
   - 看当前 scope 跑到哪一站
 - `get_memory_context`
-  - 不翻全库，直接取紧凑上下文
+  - 不翻全库，直接取旧兼容紧凑上下文
+- `get_portable_warm_bundle_contract`
+  - 读取公开 Driftstone portable Warm bundle 合同和 projection 边界
+- `export_portable_warm_bundle`
+  - 把当前 scope 的 growth drafts / reviewed packet 导出为本地 portable Warm bundle
+  - 只写本地 JSON/JSONL 文件；不写 Notion、Home、Hippocove 或旧 roots/vines
+- `inspect_portable_warm_bundle`
+  - 只读检查已经导出的 bundle 文件或目录
+  - 返回合同验证、source 完整度、rejected/HOLD 计数和少量 ledger 摘要
+  - 不返回整包正文、不写任何投影或私有记忆系统
+- `export_portable_warm_projection`
+  - 从本地 bundle 生成 Markdown / Obsidian / Notion-ready JSONL 投影包
+  - 只写本地文件；不连接 Notion，不写 Home/Hippocove，也不进入旧 roots/vines
+  - Notion-ready JSONL 保留 `candidate_id`、`notion_sync_hash` 和空 `notion_page_id`，方便以后显式写入与回流
 
 ### 一键快检
 
 - `run_history_pipeline`
-  - 一次性从原始记录跑到最终写回
+  - LEGACY/COMPAT：一次性从原始记录跑到旧兼容收口
   - 更适合：
     - 烟雾测试
     - 小样本验收
     - 本地快检
+  - 不要把它当成公开 Driftstone 新产品终点；新的稳定终点应是 portable Warm bundle / projection export
 
 ### 真正给远端 AI 接力的分步工具
 
@@ -105,11 +125,12 @@ node server/mcp-server.js
   - 查看 reviewed 的 cluster
   - 给 AI 判断哪些需要进一步语义合并
 - `finalize_reviewed_entries`
-  - 把 reviewed 最终写回 roots / vines
+  - LEGACY/COMPAT：把 reviewed materialize 到旧 roots / vines 兼容层
+  - 这不是公开 Driftstone portable Warm bundle 出口，也不是 Home/Hippocove cold tree 写入
 
 ## 5. 推荐工作流
 
-真正适合长期跑的路线不是一键到底，而是这条：
+真正适合长期跑的路线不是一键到底，而是这条。当前已有分步提炼和旧兼容 finalize；公开产品化后的推荐终点会收口到 portable Warm bundle / projection export，而不是 roots/vines final writeback。
 
 1. `prepare_history_source`
 2. `pull_translation_task`
@@ -119,7 +140,36 @@ node server/mcp-server.js
 6. 重复 2-5，直到没有待处理任务
 7. `list_reviewed_clusters`
 8. 如有需要，AI 做语义合并
-9. `finalize_reviewed_entries`
+9. `export_portable_warm_bundle`
+10. `inspect_portable_warm_bundle`
+11. `export_portable_warm_projection`
+12. 只有维护旧兼容实验台时，才调用 `finalize_reviewed_entries`
+
+`export_portable_warm_bundle` 返回的 `output.dir` 可以直接传给
+`inspect_portable_warm_bundle.bundle_dir`。如果只拿到文件路径，就把
+`portable_warm_bundle.json` 传给 `bundle_path`。inspect 结果里的
+`projection_readiness` 只表示本地 bundle 是否适合继续导出投影，不代表已经写入
+Notion、Home、Hippocove 或任何冷树。
+
+如果 `inspect_portable_warm_bundle.projection_readiness` 是 `ready` 或
+`ready_with_review_ledgers`，agent 可以继续调用
+`export_portable_warm_projection`。它会生成：
+
+- `00_chat_human_entry.md`
+- `01_warm_cards.md`
+- `02_review_ledger.md`
+- `obsidian/`
+- `notion/*.jsonl`
+- `projection_manifest.json`
+
+这些都是本地投影，不是第二份真相。后续如果人类要求写 Notion，写入器也应从
+`candidate_id + notion_sync_hash + base digest` 做显式回流，不要把 Notion 页面反过来
+当 canonical memory。
+
+`export_portable_warm_projection.output_root` 不是任意落盘口。MCP 会把它限制在项目
+`output/` 或系统临时目录里，避免 agent 无意把 source projection 写进私有同步盘或
+外部 vault。人类真正要搬到 Obsidian / Notion 时，应从这个本地投影包显式复制或走后续
+受控写入器。
 
 这条路的好处是：
 
@@ -137,7 +187,8 @@ scope 下面会留下：
 - translation packet
 - task packet
 - reviewed packet
-- final writeback
+- portable bundle / projection packet
+- legacy final writeback packet（仅兼容流程）
 
 所以只要 `owner_id + realm_id` 不换，远端 AI 下一次回来还能接着干。
 
@@ -154,7 +205,8 @@ scope 下面会留下：
 
 - 提炼阶段可以换模型
 - reviewed 合并阶段也可以换模型
-- finalize 不依赖外部模型
+- portable bundle / projection export 不应依赖外部模型
+- legacy finalize 不依赖外部模型，但它不是公开新终点
 
 只要前面的 packet 和 tasks 已经落下来，后面谁来接都行。
 
@@ -169,7 +221,9 @@ scope 下面会留下：
 - 只根据当前 task packet 产出 entries
 - 如果任务是写 Memo，必须从内位视角落笔：我在里面，不在外面观察或解释
 - 不要自己发明新的落盘路径
-- 所有写回都通过 `submit_translation_entries` 或 `finalize_reviewed_entries`
+- reviewed 写回通过 `submit_translation_entries`
+- portable 产物通过 `export_portable_warm_bundle` 或后续同合同 projection export
+- `finalize_reviewed_entries` 只在维护旧 roots/vines 兼容层时使用
 - 如果当前 task 不适合安全提炼，用 `fail_translation_task`
 
 对于写作型任务，推荐把这句直接写进任务合同：
@@ -193,7 +247,7 @@ scope 下面会留下：
 
 ## 10. 一句话总结
 
-Hippocove 现在最适合被当成：
+Driftstone 现在最适合被当成：
 
 - 一个本地记忆流水线工具箱
 - 而不是一个自己思考的 API 中间商

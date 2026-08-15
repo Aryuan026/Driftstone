@@ -24,6 +24,7 @@ export async function runNextProgrammaticTranslationTask(body = {}) {
   const nextTaskResult = await getNextPendingTranslationWorkerPacket({
     owner_id: scope.owner_id,
     realm_id: scope.realm_id,
+    bot_id: scope.bot_id,
     limit: Number(body?.limit || 20)
   });
   const workerPacket = nextTaskResult?.next_task || null;

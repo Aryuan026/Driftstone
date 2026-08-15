@@ -1,12 +1,16 @@
-# Hippocove Project Status
+# Driftstone Project Status
 
-Last updated: 2026-04-19
+Last updated: 2026-08-15
 
 ## Release Position
 
 - Stage: Open alpha / experimental workbench
-- Intended publish folder: `0-github/202604-Hippocove`
+- License: Apache-2.0
+- Release gate: HOLD for final human UI review before merge/release.
+- Intended publish folder: public Driftstone repo
 - Intended publish style: repo + GitHub Pages + local backend + MCP
+- Public product boundary: portable Warm bundle + source occurrence/span/digest + manifest + rejected/HOLD ledger
+- Private boundary: Home/Hippocove cold tree, root/vine/case graph, private runtime data, and canonical memory writes stay outside this repo
 
 ## What Is Stable Enough To Publish
 
@@ -18,6 +22,7 @@ Last updated: 2026-04-19
 - Trace + discard report + human merge guidance exist
 - Obsidian markdown export works
 - MCP can drive the workflow as tools instead of manual rereading
+- Portable Warm bundle contract is documented and exposed to agents
 
 ## What Is Still Intentionally Experimental
 
@@ -25,6 +30,7 @@ Last updated: 2026-04-19
 - Model-specific warmth / voice quality is not universal
 - Legacy workbench still carries real production weight
 - Some SQL / Persona alignment is heuristic rather than fully semantic
+- Old roots/vines/finalize paths still exist as legacy/diagnostic compatibility
 - Open-source defaults should be treated as starting points, not final taste
 
 ## Publish Intention
@@ -36,6 +42,9 @@ The point is to let other people:
 - keep the trace chain intact,
 - swap in their own models and prompts,
 - and continue tuning for their own memory style.
+
+The public repo should not be read as a Home/Hippocove cold-tree product. Markdown,
+Obsidian, and Notion are projections of Driftstone artifacts, not canonical truth.
 
 ## Main Entry Points
 

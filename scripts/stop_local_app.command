@@ -6,7 +6,7 @@ TMP_DIR="$ROOT_DIR/tmp/local-app"
 PID_FILE="$TMP_DIR/backend.pid"
 
 if [ ! -f "$PID_FILE" ]; then
-  echo "没有找到 Hippocove 本地后端的 PID 记录。"
+  echo "没有找到 Driftstone 本地后端的 PID 记录。"
   exit 0
 fi
 
@@ -19,7 +19,7 @@ fi
 
 if kill -0 "$PID" 2>/dev/null; then
   kill "$PID"
-  echo "已停止 Hippocove 本地后端（PID $PID）。"
+  echo "已停止 Driftstone 本地后端（PID $PID）。"
 else
   echo "PID $PID 已经不在运行，只清理记录。"
 fi

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { getScopedGrowthDraftDir, safeScopeSegment } from './path-config.js';
@@ -21,21 +22,200 @@ function clipText(value = '', limit = 24) {
   return text.length > limit ? `${text.slice(0, Math.max(0, limit - 1))}…` : text;
 }
 
-function nowStamp() {
-  return new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-function buildArtifactId({ cardType = 'memo', familyId = '', title = '', taskId = '' } = {}) {
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`;
+  if (isPlainObject(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+function shortHash(value, length = 16) {
+  return createHash('sha256').update(String(value || '')).digest('hex').slice(0, length);
+}
+
+function sha256Text(value = '') {
+  return `sha256:${createHash('sha256').update(String(value || '')).digest('hex')}`;
+}
+
+function nowStamp(generatedAt = '') {
+  const date = generatedAt ? new Date(generatedAt) : new Date();
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  return safeDate.toISOString().replace(/[-:.TZ]/g, '').slice(0, 17);
+}
+
+function buildArtifactId({ cardType = 'memo', familyId = '', title = '', taskId = '', generatedAt = '' } = {}) {
   return [
     safeScopeSegment(cardType, 'memo'),
     safeScopeSegment(familyId, 'general').slice(0, 24),
     safeScopeSegment(title || taskId, 'draft').slice(0, 48),
-    nowStamp()
+    nowStamp(generatedAt)
   ].join('_');
 }
 
-async function writeUtf8(filePath, text = '') {
-  await writeFile(filePath, String(text || ''), 'utf-8');
+function candidateSuffix(index = 1) {
+  return index <= 1 ? '' : `_${String(index).padStart(3, '0')}`;
+}
+
+function sourceSnippetLineageSeed(snippet = {}) {
+  if (!isPlainObject(snippet)) return null;
+  const sourceFile = safeText(snippet.file || snippet.source_file || snippet.source_ref);
+  const sourceRef = safeText(snippet.source_ref);
+  const messageIds = Array.isArray(snippet.message_ids)
+    ? snippet.message_ids.map((item) => safeText(item)).filter(Boolean).sort()
+    : [];
+  const seed = {
+    source_bundle_id: safeText(snippet.source_bundle_id || snippet.bundle_id),
+    source_window_id: safeText(snippet.source_window_id),
+    source_window_title: safeText(snippet.source_window_title || snippet.source_window),
+    source_msg_range: safeText(snippet.source_msg_range || snippet.turn_range || snippet.message_range),
+    message_ids: messageIds,
+    topic_id: safeText(snippet.topic_id || snippet.topic_ids)
+  };
+  const hasStableSourceIdentity = Boolean(
+    seed.source_bundle_id
+    || seed.source_window_id
+    || seed.source_window_title
+    || seed.source_msg_range
+    || seed.message_ids.length
+    || seed.topic_id
+  );
+  if (!hasStableSourceIdentity && sourceFile) {
+    seed.source_file_digest = sha256Text(sourceFile);
+  }
+  if (!hasStableSourceIdentity && sourceRef) {
+    seed.source_ref_digest = sha256Text(sourceRef);
+  }
+  return Object.values(seed).some((value) => Array.isArray(value) ? value.length : safeText(value)) ? seed : null;
+}
+
+function collectSourceSnippetLineageSeeds(draft = {}) {
+  const containers = [
+    draft?.source_review?.primary_evidence,
+    draft?.source_review?.related_evidence,
+    draft?.evidence?.primary,
+    draft?.evidence?.related,
+    draft
+  ];
+  const seeds = [];
+  for (const container of containers) {
+    const lists = [
+      container?.source_scene_snippets,
+      container?.source_snippets
+    ];
+    for (const list of lists) {
+      if (!Array.isArray(list)) continue;
+      for (const snippet of list) {
+        const seed = sourceSnippetLineageSeed(snippet);
+        if (seed) seeds.push(stableJson(seed));
+      }
+    }
+  }
+  return Array.from(new Set(seeds)).sort();
+}
+
+function collectFrontmatterLineageSeeds(draft = {}) {
+  const frontmatter = draft?.frontmatter || {};
+  const cardEntry = draft?.card_entry || {};
+  const rows = [];
+  const sourcePacketId = safeText(frontmatter.source_packet_id || cardEntry.source_packet_id);
+  if (sourcePacketId) rows.push(stableJson({ source_packet_id: sourcePacketId }));
+  const sourceRefs = [
+    ...(Array.isArray(frontmatter.source_refs) ? frontmatter.source_refs : []),
+    ...(Array.isArray(cardEntry.source_refs) ? cardEntry.source_refs : [])
+  ].map((item) => safeText(item)).filter(Boolean).sort();
+  if (sourceRefs.length) {
+    rows.push(stableJson({
+      source_refs_digest: `sha256:${createHash('sha256').update(stableJson(sourceRefs)).digest('hex')}`
+    }));
+  }
+  const sourceRanges = [
+    ...(Array.isArray(frontmatter.source_windows) ? frontmatter.source_windows : []),
+    ...(Array.isArray(frontmatter.source_msg_ranges) ? frontmatter.source_msg_ranges : [])
+  ].map((item) => safeText(item)).filter(Boolean).sort();
+  if (sourceRanges.length) {
+    rows.push(stableJson({ source_ranges: sourceRanges }));
+  }
+  return rows;
+}
+
+export function buildGrowthLogicalCandidateId({
+  cardType = 'memo',
+  familyId = '',
+  task = {},
+  draft = {}
+} = {}) {
+  const existing = safeText(
+    draft?.logical_candidate_id
+    || draft?.card_entry?.logical_candidate_id
+    || draft?.card_entry?.candidate_id
+    || draft?.card_entry?.stable_candidate_id
+  );
+  if (existing) return existing;
+  const explicitPacketId = safeText(task?.packet_id);
+  const sourceKey = safeText(
+    draft?.target_card_id
+    || draft?.card_entry?.card_id
+    || explicitPacketId
+    || draft?.frontmatter?.source_packet_id
+    || draft?.card_entry?.source_packet_id
+  );
+  const sourceLineage = sourceKey
+    ? [stableJson({ source_key: sourceKey })]
+    : [
+        ...collectSourceSnippetLineageSeeds(draft),
+        ...collectFrontmatterLineageSeeds(draft)
+      ];
+  if (!sourceLineage.length) return '';
+  return `warm_logic_${shortHash(stableJson({
+    card_type: cardType,
+    family_id: familyId,
+    source_lineage: sourceLineage
+  }), 20)}`;
+}
+
+async function writeUtf8(filePath, text = '', options = {}) {
+  await writeFile(filePath, String(text || ''), {
+    encoding: 'utf-8',
+    ...options
+  });
+}
+
+async function writeDraftFilesExclusive({
+  baseDir = '',
+  artifactIdBase = '',
+  payloadBase = {},
+  markdown = ''
+} = {}) {
+  for (let attempt = 1; attempt <= 1000; attempt += 1) {
+    const artifactId = `${artifactIdBase}${candidateSuffix(attempt)}`;
+    const markdownFile = join(baseDir, `${artifactId}.md`);
+    const jsonFile = join(baseDir, `${artifactId}.json`);
+    const payload = {
+      ...payloadBase,
+      artifact_id: artifactId
+    };
+    let wroteMarkdown = false;
+    try {
+      await writeUtf8(markdownFile, markdown ? `${markdown}\n` : '', { flag: 'wx' });
+      wroteMarkdown = true;
+      await writeUtf8(jsonFile, `${JSON.stringify(payload, null, 2)}\n`, { flag: 'wx' });
+      return {
+        artifactId,
+        markdownFile,
+        jsonFile
+      };
+    } catch (error) {
+      if (wroteMarkdown) await rm(markdownFile, { force: true });
+      if (error?.code === 'EEXIST') continue;
+      throw error;
+    }
+  }
+  throw new Error('Could not allocate a unique growth draft artifact id.');
 }
 
 async function readJsonIfExists(filePath, fallback = null) {
@@ -92,6 +272,7 @@ function buildDraftSummary(doc = {}, fileInfo = {}) {
   );
   return {
     artifact_id: safeText(fileInfo.artifact_id),
+    logical_candidate_id: safeText(doc?.logical_candidate_id),
     generated_at: safeText(doc?.generated_at),
     card_type: safeText(task?.card_type || draft?.card_entry?.card_type, 'memo'),
     family_id: safeText(draft?.frontmatter?.family || draft?.card_entry?.family_id, 'unassigned'),
@@ -123,13 +304,22 @@ export async function saveGrowthDraftArtifact({
   familyId = '',
   task = {},
   draft = {},
-  api = {}
+  api = {},
+  generatedAt = ''
 } = {}) {
-  const artifactId = buildArtifactId({
+  const resolvedGeneratedAt = safeText(generatedAt) || new Date().toISOString();
+  const artifactIdBase = buildArtifactId({
     cardType,
     familyId,
     title: draft?.frontmatter?.title || draft?.target_card_id || '',
-    taskId: task?.task_id || ''
+    taskId: task?.task_id || '',
+    generatedAt: resolvedGeneratedAt
+  });
+  const logicalCandidateId = buildGrowthLogicalCandidateId({
+    cardType,
+    familyId,
+    task,
+    draft
   });
   const baseDir = join(
     getScopedGrowthDraftDir(ownerId, realmId),
@@ -137,12 +327,11 @@ export async function saveGrowthDraftArtifact({
   );
   await mkdir(baseDir, { recursive: true });
 
-  const markdownFile = join(baseDir, `${artifactId}.md`);
-  const jsonFile = join(baseDir, `${artifactId}.json`);
   const markdown = safeText(draft?.markdown);
-  const payload = {
+  const payloadBase = {
     schema: 'growth_draft_artifact_v0.1',
-    generated_at: new Date().toISOString(),
+    generated_at: resolvedGeneratedAt,
+    logical_candidate_id: logicalCandidateId,
     scope: {
       owner_id: safeText(ownerId),
       realm_id: safeText(realmId, 'default')
@@ -152,12 +341,21 @@ export async function saveGrowthDraftArtifact({
     draft
   };
 
-  await writeUtf8(markdownFile, markdown ? `${markdown}\n` : '');
-  await writeUtf8(jsonFile, `${JSON.stringify(payload, null, 2)}\n`);
+  const {
+    artifactId,
+    markdownFile,
+    jsonFile
+  } = await writeDraftFilesExclusive({
+    baseDir,
+    artifactIdBase,
+    payloadBase,
+    markdown
+  });
 
   return {
     ok: true,
     artifact_id: artifactId,
+    logical_candidate_id: logicalCandidateId,
     dir: baseDir,
     markdown_file: markdownFile,
     json_file: jsonFile
@@ -244,6 +442,7 @@ export async function getGrowthDraftArtifact({
     ok: true,
     schema: 'growth_draft_artifact_v0.1',
     artifact_id: safeArtifactId,
+    logical_candidate_id: safeText(doc?.logical_candidate_id),
     generated_at: safeText(doc?.generated_at),
     scope: doc.scope || {
       owner_id: safeText(ownerId),

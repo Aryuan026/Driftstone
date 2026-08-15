@@ -23,6 +23,21 @@ async function readJson(filePath) {
   return JSON.parse(raw);
 }
 
+async function allocatePacketDir(dir, label = '') {
+  const base = safeSegment(label || 'reviewed');
+  for (let index = 0; index < 1000; index += 1) {
+    const suffix = index === 0 ? nowStamp() : `${nowStamp()}_${String(index + 1).padStart(3, '0')}`;
+    const packetDir = join(dir, 'packets', `${base}_${suffix}`);
+    try {
+      await mkdir(packetDir, { recursive: false });
+      return packetDir;
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+    }
+  }
+  throw new Error('Unable to allocate reviewed packet directory');
+}
+
 export async function loadLatestRuntimeReviewedPointer({ ownerId = '', realmId = '' } = {}) {
   const dir = getScopedReviewedDir(ownerId, realmId);
   return readJson(join(dir, 'latest.json'));
@@ -33,6 +48,10 @@ export async function loadLatestRuntimeReviewedPacket({ ownerId = '', realmId = 
   const packetFile = join(pointer.latest_packet, 'packet.json');
   const packet = await readJson(packetFile);
   return { pointer, packetFile, packet };
+}
+
+export async function loadRuntimeReviewedPacketByFile(packetFile = '') {
+  return readJson(packetFile);
 }
 
 export async function ensureRuntimeReviewedPacket({
@@ -51,8 +70,8 @@ export async function ensureRuntimeReviewedPacket({
   }
 
   const dir = getScopedReviewedDir(ownerId, realmId);
-  const packetDir = join(dir, 'packets', safeSegment(label || `reviewed_${nowStamp()}`));
-  await mkdir(packetDir, { recursive: true });
+  await mkdir(join(dir, 'packets'), { recursive: true });
+  const packetDir = await allocatePacketDir(dir, label);
 
   const generatedAt = new Date().toISOString();
   const packet = {

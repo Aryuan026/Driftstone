@@ -27,6 +27,9 @@ data/inbox/*.json
 outbox/**
 !outbox/
 !outbox/README.md
+output/**
+!output/
+!output/README.md
 docs/audits/checkpoints/**
 !docs/audits/checkpoints/
 !docs/audits/checkpoints/README.md

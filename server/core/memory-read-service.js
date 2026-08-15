@@ -124,6 +124,7 @@ export async function getMemoryOverview(options = {}) {
     ok: true,
     schema: 'memory_overview_v0.1',
     source: {
+      status: storage.exists ? 'ready' : 'uninitialized',
       latest_snapshot: pointer.latest_snapshot,
       root_count: pointer.root_count || roots.length,
       latest_seen_at: latestSeen,

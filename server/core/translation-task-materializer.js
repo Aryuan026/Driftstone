@@ -20,7 +20,8 @@ export async function materializeTranslationTasks(payload = {}, options = {}) {
   const generatedAt = new Date().toISOString();
   const ownerId = options.owner_id || '';
   const realmId = options.realm_id || '';
-  const tasksDir = getScopedTranslationTaskDir(ownerId, realmId);
+  const botId = options.bot_id || '';
+  const tasksDir = getScopedTranslationTaskDir(ownerId, realmId, botId);
   const label = safeSegment(options.label || payload?.packet_id || `task_${Date.now()}`);
   const packetDir = join(tasksDir, 'packets', label);
   const taskFilesDir = join(packetDir, 'tasks');
@@ -70,11 +71,11 @@ export async function materializeTranslationTasks(payload = {}, options = {}) {
       file: taskFile,
       doc: taskDoc,
       row: {
-      task_index: index + 1,
-      batch_id: task.batch_id || '',
-      slice_count: task.slice_count || 0,
-      total_chars: task.total_chars || 0,
-      file: taskFile
+        task_index: index + 1,
+        batch_id: task.batch_id || '',
+        slice_count: task.slice_count || 0,
+        total_chars: task.total_chars || 0,
+        file: taskFile
       }
     });
   }
@@ -118,7 +119,8 @@ export async function materializeTranslationTasks(payload = {}, options = {}) {
     latest_packet: packetDir,
     scope: {
       owner_id: ownerId,
-      realm_id: realmId
+      realm_id: realmId,
+      bot_id: botId
     }
   }, null, 2)}\n`, 'utf-8');
 
@@ -130,7 +132,8 @@ export async function materializeTranslationTasks(payload = {}, options = {}) {
     tasks: taskPacketRows,
     scope: {
       owner_id: ownerId,
-      realm_id: realmId
+      realm_id: realmId,
+      bot_id: botId
     }
   };
 }

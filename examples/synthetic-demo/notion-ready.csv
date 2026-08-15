@@ -1,0 +1,5 @@
+candidate_id,title,card_type,importance,review_state,source_span_ids,projection_note
+demo-warm-harbor-lantern,Harbor lantern ritual,memo,major,accepted,demo-span-harbor-001,Readable Notion row from fictional source evidence
+demo-warm-atlas-room,Atlas room research habit,fact,major,accepted,demo-span-atlas-001,Project preference suitable for review
+demo-warm-library-door,Library door boundary rule,family,major,accepted,demo-span-library-001,Boundary rule with explicit demo relation
+demo-hold-silver-archive,Silver archive source check,case,draft,hold,demo-span-silver-001,Visible HOLD row for review examples

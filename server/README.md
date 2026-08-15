@@ -1,8 +1,10 @@
-# Hippocove Backend
+# Driftstone Local Backend
 
 这只后端不是“又一层包装”。
 
 它更像一间后厨：前台、旧实验台、MCP、agent，最后都应该通过这里读同一张桌子、写同一套账本。
+
+公开 Driftstone 的产品终点是 portable Warm bundle 及其 source occurrence / span / digest / manifest / rejected ledger。旧 `roots/vines`、`finalize`、`memory-write` 入口目前仍为兼容和诊断保留，但不能被新的 agent 当成公开产品的最终写入层。
 
 ## 这只后端负责什么
 
@@ -73,7 +75,7 @@
 - Trace / discard report / human review
 - Obsidian staging export
 
-### 3. 原始材料主链
+### 3. 原始材料主链与旧兼容收口
 
 - `POST /api/memory/ingest`
 - `POST /api/memory/translate`
@@ -87,9 +89,10 @@
 - 原始记录进缓存
 - translation task
 - reviewed 中间层
-- 去冗余与正式写入前收口
+- 去冗余与 portable Warm bundle 前的中间层
+- `finalize` 仍会走旧 roots/vines 兼容层，不是公开 Driftstone 的新终点
 
-### 4. 读侧与回场
+### 4. 旧兼容读侧与诊断回场
 
 - `GET /api/memory/overview`
 - `GET /api/memory/scopes`
@@ -105,8 +108,10 @@
 这条线负责：
 
 - bay 总览
-- root/context/shadow
+- root/context/shadow 旧兼容读取
 - 召回自检
+
+这些接口能帮助调试历史流水线，但不要把它们读出的 root/home/context 当作 Home/Hippocove canonical truth。
 
 ## 旧实验台为什么还保留
 
@@ -143,13 +148,40 @@ MCP 入口文件：
 
 - `mcp-server.js`
 
+agent/headless 正门说明：
+
+- [../docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md](../docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)
+
 这层不是为了把页面自动化，而是为了让支持 MCP 的 agent 直接拿到：
 
 - 人格工位状态
 - growth task
 - growth draft
 - card registry / ledger
-- export 能力
+- Obsidian export 能力
+- portable Warm bundle export / inspect / projection export 能力
+
+## Reviewed CSV 守恒诊断
+
+Reviewed CSV 是 portable Warm bundle 前很重要的一道入口账。公开版不会默认读取作者机器上的历史目录；如果要检查自己的
+`02_reviewed`，需要在仓库根目录显式传路径：
+
+```bash
+node scripts/debug/regression_reviewed_csv_conservation.mjs --reviewed-dir /path/to/02_reviewed --out-dir /path/to/local-output
+```
+
+也可以传 stage dropbox 根目录，脚本会读取其中的 `02_reviewed`：
+
+```bash
+node scripts/debug/regression_reviewed_csv_conservation.mjs --dropbox /path/to/stage-dropbox --month 2025-03
+```
+
+这只脚本只做本地诊断：
+
+- quoted multiline CSV 会按逻辑 record 解析，不按物理行误切。
+- 未闭合引号、字段数多/少会 fail closed，并写入 rejected rows ledger。
+- 如果传入 `--out-dir`，本轮 ledger 会原子替换旧结果，避免旧成功结果冒充本轮成功。
+- 它不会写 Home、Hippocove、Notion，也不会生成最终记忆。
 
 ## 环境变量
 
@@ -161,6 +193,8 @@ MCP 入口文件：
   - 你的输入材料 / stage dropbox 根目录
 - `HIPPOCOVE_OBSIDIAN_ROOT`
   - 你的 Obsidian staging 根目录
+
+新的 portable bundle / Notion-ready projection 不应依赖作者机器上的私有 Home、Hippocove 或 raw corpus 路径。
 
 如果不设，项目会优先使用仓内相对路径和示例目录。
 

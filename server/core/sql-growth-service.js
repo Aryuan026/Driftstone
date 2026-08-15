@@ -8,7 +8,7 @@ import { buildVineSnapshot, materializeSqlVines } from './vine-materializer.js';
 export async function getBackendHealth() {
   return {
     ok: true,
-    area: 'hippocove-backend',
+    area: 'driftstone-backend',
     mode: 'local-json-runtime-save',
     message: '后端骨架已起，默认使用本地 runtime save 与仓内示例目录。'
   };

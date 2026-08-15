@@ -1,0 +1,58 @@
+{
+  "package_kind": "driftstone_synthetic_demo_preview",
+  "schema_note": "Fictional compact preview for public UI examples; not a private owner bundle.",
+  "demo": {
+    "synthetic": true,
+    "label": "Demo / Synthetic data"
+  },
+  "warm_cards": [
+    {
+      "card_id": "demo://warm/harbor-lantern",
+      "candidate_id": "demo-warm-harbor-lantern",
+      "title": "Harbor lantern ritual",
+      "card_type": "memo",
+      "importance": "major",
+      "source_span_ids": ["demo-span-harbor-001"],
+      "review_state": "accepted"
+    },
+    {
+      "card_id": "demo://warm/atlas-room",
+      "candidate_id": "demo-warm-atlas-room",
+      "title": "Atlas room research habit",
+      "card_type": "fact",
+      "importance": "major",
+      "source_span_ids": ["demo-span-atlas-001"],
+      "review_state": "accepted"
+    },
+    {
+      "card_id": "demo://warm/library-door",
+      "candidate_id": "demo-warm-library-door",
+      "title": "Library door boundary rule",
+      "card_type": "family",
+      "importance": "major",
+      "source_span_ids": ["demo-span-library-001"],
+      "review_state": "accepted"
+    }
+  ],
+  "explicit_relationships": [
+    {
+      "from_id": "demo://warm/harbor-lantern",
+      "to_id": "demo://warm/blue-bridge",
+      "kind": "explicit_relationship"
+    },
+    {
+      "from_id": "demo://warm/atlas-room",
+      "to_id": "demo://warm/workbench-maps",
+      "kind": "source_backed_project_link"
+    },
+    {
+      "from_id": "demo://warm/library-door",
+      "to_id": "demo://warm/morning-ledger",
+      "kind": "reviewed_boundary_rule"
+    }
+  ],
+  "projection_boundary": {
+    "visual_affinity_is_canonical": false,
+    "notion_is_canonical_truth": false
+  }
+}

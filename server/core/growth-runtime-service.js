@@ -292,7 +292,8 @@ async function buildGrowthRuntimeQueue(scope = {}, options = {}) {
   try {
     const latest = await loadLatestTranslationTaskPacket({
       ownerId: scope.owner_id,
-      realmId: scope.realm_id
+      realmId: scope.realm_id,
+      botId: scope.bot_id
     });
     const rows = Array.isArray(latest?.packet?.tasks) ? latest.packet.tasks : [];
     const taskDocs = await Promise.all(rows.map(async (row = {}) => ({

@@ -39,12 +39,13 @@ async function resolveVinesDir(options = {}) {
       exists: false
     };
   }
+  const pointerPath = join(SQL_VINES_DIR, 'latest.json');
   return {
     dir: SQL_VINES_DIR,
     scope_mode: 'global_fallback',
     owner_id: '',
     realm_id: '',
-    exists: true
+    exists: await fileExists(pointerPath)
   };
 }
 
