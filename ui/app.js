@@ -1,5 +1,6 @@
 import { getJson, postJson } from './api-client.js';
 import { buildRuntimeMaterialsExport } from './bridges/memo-runtime-bridge.js';
+import { renderMemoryStarMap } from './memory-star-map.js';
 
 const STORAGE_KEY = 'hippocove-runtime-flow-v7';
 const RUNTIME_BUILD_LABEL = 'build 20260508b';
@@ -184,16 +185,16 @@ function describeSourceError(error, file) {
 
   if (error?.code === 'SOURCE_TOO_LARGE') {
     reason = '这个文件太大，不适合直接丢进 Driftstone 前台。';
-    action = '请先到旧实验台的“对话导出器”做按月拼接，再把生成的窗口/月包带回这里；PawTrail 也可以作为在线拆包入口。';
+    action = '请先用 Advanced / Legacy 的 conversation exporter 做按月或按窗口拆包，再把生成的 Driftstone source package 带回这里；PawTrail 也可以作为在线拆包入口。';
   } else if (error?.code === 'CHATGPT_EXPORT') {
     reason = '检测到这是 ChatGPT 原始 conversations.json。';
-    action = '请先点右上角“旧实验台”，在第一个“对话导出器”页面做按月拼接；之后再把导出的窗口/月包上传到这里。';
+    action = '请先打开 Advanced / Legacy，在 conversation exporter 页面做按月或按窗口拆包；之后再把导出的 Driftstone source package 上传到这里。';
   } else if (error?.code === 'INVALID_JSON') {
     reason = '这个 JSON 没有读完整，或格式已经损坏。';
-    action = '请重新下载/导出文件；如果是 ChatGPT 原始导出，请先用旧实验台“对话导出器”读取。';
+    action = '请重新下载/导出文件；如果是 ChatGPT 原始导出，请先用 Advanced / Legacy conversation exporter 读取。';
   } else if (error?.code === 'PAYLOAD_TOO_LARGE' || /request body too large/i.test(raw)) {
     reason = '这批素材太大，启动解析时没法一次送进本地后端。';
-    action = '请减少本次上传文件数量，或先在旧实验台按月/按窗口拆成更小的包后分批处理。';
+    action = '请减少本次上传文件数量，或先按月/窗口拆成更小的 source package 后分批处理。';
   } else if (/failed to fetch|networkerror|load failed/i.test(raw)) {
     reason = '前台没有连上本地后端。';
     action = '请确认本地启动脚本还开着，然后刷新页面重试。';
@@ -651,13 +652,13 @@ function renderPersonaBridgePanel() {
   }
   if (workspace.source === 'remote' && parts.length) {
     els.personaBridgeSummary.textContent = `当前桌面：${parts.join(' · ')}`;
-    els.personaBridgeMeta.textContent = '请在旧实验台收集表达指纹、汇总人格卡草稿。这里默认读取共享桌面的最新内容。';
+    els.personaBridgeMeta.textContent = 'Persona/Soul workspace 已接入；这里默认读取共享桌面的最新内容。';
   } else if (workspace.source === 'local_fallback' && parts.length) {
-    els.personaBridgeSummary.textContent = `旧实验台本地有草稿，但共享桌面还没跟上。先打开一次人格工位，让它把最新内容同步过来。`;
-    els.personaBridgeMeta.textContent = '请在旧实验台收集表达指纹、汇总人格卡草稿。';
+    els.personaBridgeSummary.textContent = `本地有 persona 草稿，但共享 workspace 还没跟上。先打开一次 persona workspace，让它把最新内容同步过来。`;
+    els.personaBridgeMeta.textContent = 'Persona/Soul workspace can guide Warm-card voice when needed.';
   } else {
-    els.personaBridgeSummary.textContent = '还没读到共享人格桌面，请先去旧实验台补人设卡和语言指纹。';
-    els.personaBridgeMeta.textContent = '请在旧实验台收集表达指纹、汇总人格卡草稿。';
+    els.personaBridgeSummary.textContent = '还没读到共享 persona workspace；你可以先准备 source history，之后再补 Soul 与 language fingerprint。';
+    els.personaBridgeMeta.textContent = 'Persona/Soul workspace can guide Warm-card voice when needed.';
   }
 }
 
@@ -1721,47 +1722,47 @@ function buildGenerationRuntimeView(snapshot = state.growthDashboardSnapshot || 
   let detailText = safeText(runtimeState?.generationLabel ?? runtimeState?.label, state.generationLabel);
   let statusLabel = generatedBundle ? '可下载' : '未开始';
   let statusTone = generatedBundle ? 'ready' : 'stable';
-  let buttonLabel = generatedBundle ? '重新生成' : '开始生成';
+  let buttonLabel = generatedBundle ? 'Regenerate' : 'Generate Warm cards';
 
   if (queueActive) {
     meterText = `${queueCompleted}/${queueTotal}`;
     if (running) {
       detailText = `正在写第 ${currentIndex}/${queueTotal} 张 · ${currentItemLabel || '当前材料'}`;
-      statusLabel = '生长中';
+      statusLabel = 'Forming';
       statusTone = 'live';
-      buttonLabel = '生长中';
+      buttonLabel = 'Forming';
     } else if (phase === 'failed') {
       detailText = `卡在第 ${currentIndex || Math.min(queueCompleted + 1, queueTotal)}/${queueTotal} 张 · ${clipInlineText(errorText || currentItemLabel || '这一张没接住', 72)}`;
       statusLabel = '待继续';
       statusTone = 'error';
-      buttonLabel = '继续生成';
+      buttonLabel = 'Resume';
     } else if (paused || phase === 'paused') {
       detailText = `停在第 ${currentIndex || Math.min(queueCompleted + 1, queueTotal)}/${queueTotal} 张前 · ${currentItemLabel || '可以从断点继续'}`;
       statusLabel = '已暂停';
       statusTone = 'stable';
-      buttonLabel = '继续生成';
+      buttonLabel = 'Resume';
     } else if (queueCompleted >= queueTotal) {
       detailText = stagedTotal
         ? `这轮 ${queueTotal} 张已经顺序写完 · 已落库 ${stagedTotal} 张`
         : `这轮 ${queueTotal} 张已经顺序写完 · 当前产物仍以草稿为主`;
       statusLabel = '已完成';
       statusTone = 'ready';
-      buttonLabel = '重新生成';
+      buttonLabel = 'Regenerate';
     } else if (queueCompleted > 0) {
       detailText = `已经写到第 ${queueCompleted}/${queueTotal} 张 · ${currentItemLabel || safeText(runtimeState?.label, '可以继续往后推')}`;
       statusLabel = '待继续';
       statusTone = 'stable';
-      buttonLabel = '继续生成';
+      buttonLabel = 'Resume';
     } else {
       detailText = `已排好 ${queueTotal} 张生长队列`;
       statusLabel = '待开始';
       statusTone = 'stable';
-      buttonLabel = '开始生成';
+      buttonLabel = 'Generate Warm cards';
     }
   } else if (running) {
-    statusLabel = '生成中';
+    statusLabel = 'Generating';
     statusTone = 'live';
-    buttonLabel = '生成中';
+    buttonLabel = 'Generating';
   }
 
   return {
@@ -1797,228 +1798,43 @@ function renderGenerationPanel() {
   state.generatedBundle = runtimeView.generatedBundle;
 
   els.generateMemoryBtn.disabled = runtimeView.running || !canGenerate;
-  els.generateMemoryBtn.textContent = canGenerate ? runtimeView.buttonLabel : '开始生成';
+  els.generateMemoryBtn.textContent = canGenerate ? runtimeView.buttonLabel : 'Generate Warm cards';
   els.downloadBundleBtn.disabled = !(runtimeView.generatedBundle || canDownloadGrowthBundle) || runtimeView.running;
   els.generationProgressFill.style.width = `${runtimeView.progress}%`;
   els.generationProgressText.textContent = runtimeView.meterText;
   els.generationProgressDetail.textContent = runtimeView.detailText;
   if (els.compactBridgeMeta) {
     els.compactBridgeMeta.textContent = canDownloadGrowthBundle
-      ? '这一步会先把太像的卡收成主记忆，再把整编后的 Obsidian 包交给你。'
-      : '主卡写完后，会先去旧实验台的“记忆整编”里收成更适合召回的主记忆。';
+      ? 'This step can compact similar cards, then export a readable Markdown/Obsidian projection.'
+      : 'After Warm cards are generated, Driftstone can export readable projections from the same local truth.';
   }
   if (els.compactBridgeSummary) {
     if (runtimeView.running) {
-      els.compactBridgeSummary.textContent = `这轮还在生长中，停下后会把 ${Math.max(availableMemoTotal, runtimeView.queueTotal || 0)} 张原始卡再收紧一遍。`;
+      els.compactBridgeSummary.textContent = `This run is still forming; ${Math.max(availableMemoTotal, runtimeView.queueTotal || 0)} candidate cards are visible in the map/projection layer.`;
     } else if (canDownloadGrowthBundle) {
-      els.compactBridgeSummary.textContent = `当前这轮可继续整编 ${availableMemoTotal} 张卡；下载按钮默认拿整编后的主记忆包。`;
+      els.compactBridgeSummary.textContent = `This run has ${availableMemoTotal} cards available for projection export.`;
     } else {
-      els.compactBridgeSummary.textContent = '这一步会先把太像的卡收一遍，再把整编后的包交给你。';
+      els.compactBridgeSummary.textContent = 'Projection files are for reading and review; the portable Warm bundle remains canonical.';
     }
   }
 
   if (!canGenerate) {
-    setGenerationStatus('待同步', 'stable');
+    setGenerationStatus('Needs persona', 'stable');
     return;
   }
 
   setGenerationStatus(runtimeView.statusLabel, runtimeView.statusTone);
 }
 
-function buildFrontGrowthGraph(snapshot = {}) {
-  function hashString(text = '') {
-    let hash = 2166136261;
-    const src = String(text || '');
-    for (let i = 0; i < src.length; i += 1) {
-      hash ^= src.charCodeAt(i);
-      hash = Math.imul(hash, 16777619);
-    }
-    return hash >>> 0;
-  }
-
-  function between(seed, min, max) {
-    const ratio = (seed % 10000) / 10000;
-    return min + (max - min) * ratio;
-  }
-
-  const drafts = Array.isArray(snapshot?.growth_drafts?.drafts) ? snapshot.growth_drafts.drafts : [];
-  const staged = Array.isArray(snapshot?.staging_cards?.cards) ? snapshot.staging_cards.cards : [];
-  const seen = new Set();
-  const allCards = [];
-
-  drafts.forEach((item) => {
-    const title = safeText(item?.title, '未命名草稿');
-    const cardType = safeText(item?.card_type, 'memo').toLowerCase();
-    const key = `draft::${title}::${cardType}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    allCards.push({
-      id: safeText(item?.artifact_id, key),
-      title,
-      card_type: cardType,
-      source: 'draft',
-      stamp: safeText(item?.generated_at)
-    });
-  });
-
-  staged.forEach((item) => {
-    const title = safeText(item?.title, '未命名主卡');
-    const cardType = safeText(item?.card_type, 'memo').toLowerCase();
-    const key = `staged::${safeText(item?.file_path, `${title}:${cardType}`)}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    allCards.push({
-      id: safeText(item?.file_path, key),
-      title,
-      card_type: cardType,
-      source: 'staged',
-      stamp: safeText(item?.updated_at)
-    });
-  });
-
-  allCards.sort((a, b) => String(b.stamp || '').localeCompare(String(a.stamp || '')));
-  const cards = allCards.slice(0, 40);
-
-  const root = { x: 320, y: 152, r: 4.4 };
-  const anchors = {
-    memo: { x: 196, y: 96, radius: 90 },
-    family: { x: 214, y: 228, radius: 74 },
-    fact: { x: 438, y: 92, radius: 74 },
-    case: { x: 462, y: 214, radius: 68 }
-  };
-
-  const grouped = new Map();
-  cards.forEach((item) => {
-    const key = anchors[item.card_type] ? item.card_type : 'memo';
-    const list = grouped.get(key) || [];
-    list.push(item);
-    grouped.set(key, list);
-  });
-
-  const hubs = Object.entries(anchors)
-    .map(([cardType, anchor]) => ({
-      id: `${cardType}-hub`,
-      card_type: cardType,
-      x: anchor.x,
-      y: anchor.y,
-      r: Math.max(2.3, 2.3 + ((grouped.get(cardType)?.length || 0) * 0.18))
-    }))
-    .filter((item) => (grouped.get(item.card_type)?.length || 0) > 0);
-
-  const stars = [];
-  hubs.forEach((hub) => {
-    const anchor = anchors[hub.card_type];
-    const list = grouped.get(hub.card_type) || [];
-    list.forEach((item, index) => {
-      const seed = hashString(`${item.id}::${index}`);
-      const angle = ((seed % 360) + index * 37) * (Math.PI / 180);
-      const radius = between(seed >>> 1, 18, anchor.radius);
-      stars.push({
-        id: item.id,
-        title: item.title,
-        source: item.source,
-        card_type: hub.card_type,
-        x: Math.round(anchor.x + Math.cos(angle) * radius),
-        y: Math.round(anchor.y + Math.sin(angle) * radius),
-        r: item.source === 'draft' ? 2.7 : 2.1,
-        parent: hub.id
-      });
-    });
-  });
-
-  const ambientCount = Math.min(190, 42 + cards.length * 4);
-  const ambient = Array.from({ length: ambientCount }).map((_, index) => {
-    const seed = hashString(`ambient::${cards.length}::${index}`);
-    return {
-      x: Math.round(between(seed, 10, 630)),
-      y: Math.round(between(seed >>> 1, 10, 294)),
-      r: between(seed >>> 2, 0.45, 1.75),
-      a: between(seed >>> 3, 0.12, 0.7)
-    };
-  });
-
-  return {
-    root,
-    hubs,
-    stars,
-    ambient,
-    counts: {
-      memo: cards.filter((item) => item.card_type === 'memo').length,
-      family: cards.filter((item) => item.card_type === 'family').length,
-      fact: cards.filter((item) => item.card_type === 'fact').length,
-      case: cards.filter((item) => item.card_type === 'case').length
-    },
-    total: cards.length
-  };
-}
-
 function renderGrowthWatchPanel() {
   if (!els.frontGrowthVisual || !els.frontGrowthStatusPill) return;
-  const snapshot = state.growthDashboardSnapshot || {};
-  const graph = buildFrontGrowthGraph(snapshot);
-  const activeScope = snapshot?.active_scope || null;
-  let label = '待命';
-  let tone = 'stable';
-  if (state.growthDashboardError) {
-    label = '未连上';
-    tone = 'stable';
-  } else if (graph.total) {
-    label = '生长中';
-    tone = 'live';
-  } else if (activeScope) {
-    label = '已接入';
-    tone = 'stable';
-  }
-  els.frontGrowthStatusPill.textContent = label;
-  els.frontGrowthStatusPill.className = `status-pill ${tone}`;
-  const ambient = graph.ambient.map((item) => `
-    <circle class="front-growth-ambient" cx="${item.x}" cy="${item.y}" r="${item.r}" opacity="${item.a}"></circle>
-  `).join('');
-  const rootLinks = graph.hubs.map((hub) => `
-    <line class="front-growth-link root" x1="${graph.root.x}" y1="${graph.root.y}" x2="${hub.x}" y2="${hub.y}"></line>
-  `).join('');
-  const starLinks = graph.stars.map((item) => {
-    const parent = graph.hubs.find((hub) => hub.id === item.parent) || graph.root;
-    return `<line class="front-growth-link star ${item.source === 'draft' ? 'active' : ''}" x1="${parent.x}" y1="${parent.y}" x2="${item.x}" y2="${item.y}"></line>`;
-  }).join('');
-  const hubs = graph.hubs.map((hub) => `
-    <circle class="front-growth-node hub ${hub.card_type}" cx="${hub.x}" cy="${hub.y}" r="${hub.r}"></circle>
-  `).join('');
-  const stars = graph.stars.map((item) => `
-    <circle class="front-growth-node star ${item.card_type} ${item.source === 'draft' ? 'active' : 'stable'}" cx="${item.x}" cy="${item.y}" r="${item.r}">
-      <title>${escapeHtml(item.title)}</title>
-    </circle>
-  `).join('');
-  const workspace = getPersonaWorkspaceView();
-  const memoryName = safeText(workspace.charName, 'Companion');
-  const helperText = state.growthDashboardError
-    ? escapeHtml(state.growthDashboardError)
-    : '半壁星河与卿度，一念灵犀两心知';
-
-  els.frontGrowthVisual.innerHTML = `
-    <div class="front-growth-shell">
-      <svg class="front-growth-map" viewBox="0 0 640 304" role="img" aria-label="Obsidian 星图">
-        <rect class="front-growth-bg" x="0" y="0" width="640" height="304" rx="14"></rect>
-        ${ambient}
-        <circle class="front-growth-glow" cx="${graph.root.x}" cy="${graph.root.y}" r="92"></circle>
-        ${rootLinks}
-        ${starLinks}
-        ${hubs}
-        <circle class="front-growth-node root active" cx="${graph.root.x}" cy="${graph.root.y}" r="${graph.root.r}"></circle>
-        ${stars}
-      </svg>
-      <div class="front-growth-overlay">
-        <div class="front-growth-caption">${escapeHtml(memoryName)}-Memory</div>
-        <div class="front-growth-counts">
-          <span>Memo ${graph.counts.memo}</span>
-          <span>Family ${graph.counts.family}</span>
-          <span>Fact ${graph.counts.fact}</span>
-          <span>Case ${graph.counts.case}</span>
-        </div>
-        <div class="front-growth-hint">${helperText}</div>
-      </div>
-    </div>
-  `;
+  renderMemoryStarMap({
+    visualEl: els.frontGrowthVisual,
+    statusEl: els.frontGrowthStatusPill,
+    snapshot: state.growthDashboardSnapshot || {},
+    workspace: getPersonaWorkspaceView(),
+    errorText: state.growthDashboardError
+  });
 }
 
 function syncGenerationRuntimeFromSnapshot(snapshot = {}) {
@@ -2277,7 +2093,7 @@ async function refreshGrowthDashboard() {
     syncGenerationRuntimeFromSnapshot(state.growthDashboardSnapshot || {});
     state.growthDashboardError = '';
   } catch (error) {
-    state.growthDashboardError = safeText(error?.message, '主卡生长看板暂时没跟上');
+    state.growthDashboardError = safeText(error?.message, 'Memory Star Map is waiting for the runtime dashboard');
   }
   renderGenerationPanel();
   renderGrowthWatchPanel();
@@ -2771,7 +2587,7 @@ async function generateMemoryBundle() {
   const workspace = getPersonaWorkspaceView();
   const personaSeed = workspace.personaCard;
   if (!personaSeed) {
-    state.generationLabel = '请先让旧实验台把人格工位同步上来';
+    state.generationLabel = 'Please sync the Persona/Soul workspace first';
     renderGenerationPanel();
     return;
   }
@@ -2898,7 +2714,7 @@ async function downloadBundle() {
   if (!state.generatedBundle) return;
   const lines = [
     '---',
-    `title: Obsidian Persona Memory Draft`,
+    `title: Driftstone Portable Warm Memory Draft`,
     `generated_at: ${state.generatedBundle.generated_at}`,
     `source_label: ${state.generatedBundle.source_label || ''}`,
     `session_id: ${state.generatedBundle.session_id || ''}`,
