@@ -9,6 +9,7 @@ const EXPECTED_TOOL_NAMES = [
   'get_portable_warm_bundle_contract',
   'export_portable_warm_bundle',
   'inspect_portable_warm_bundle',
+  'export_portable_warm_projection',
   'get_growth_context',
   'build_growth_task',
   'generate_growth_draft',
@@ -66,6 +67,14 @@ test('MCP dispatch can inspect a missing portable warm bundle without pretending
   assert.equal(packet.ok, false);
   assert.equal(packet.artifact_status, 'unreadable_bundle');
   assert.equal(packet.projection_readiness, 'blocked_by_read_error');
+});
+
+test('MCP dispatch can export a projection without pretending a missing bundle succeeded', async () => {
+  const packet = await callTool('export_portable_warm_projection', {
+    bundle_path: '/tmp/driftstone-synthetic-missing-projection-bundle.json'
+  });
+  assert.equal(packet.ok, false);
+  assert.equal(packet.projection_status, 'blocked_by_read_error');
 });
 
 test('MCP dispatch keeps unknown tool calls explicit', async () => {

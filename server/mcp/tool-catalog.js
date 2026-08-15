@@ -58,6 +58,28 @@ export const TOOLS = [
     }
   },
   {
+    name: 'export_portable_warm_projection',
+    description: '从本地 portable_warm_bundle 导出 Markdown/Obsidian/Notion-ready JSONL 投影包；只写本地文件，不连接 Notion、不写 Home/Hippocove。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        bundle_path: {
+          type: 'string',
+          description: 'portable_warm_bundle.json 的绝对路径。'
+        },
+        bundle_dir: {
+          type: 'string',
+          description: '包含 portable_warm_bundle.json 的 bundle 目录；未传 bundle_path 时使用。'
+        },
+        output_root: {
+          type: 'string',
+          description: '本地投影输出根目录；不填则写入项目 output/portable_warm_projections。MCP 只允许项目 output/ 或系统临时目录。'
+        }
+      },
+      additionalProperties: false
+    }
+  },
+  {
     name: 'get_growth_context',
     description: '读取给记忆卡生长用的上下文包：人格工位状态、Persona 原料概览、本地记忆工作区，以及可选的兼容 context。',
     inputSchema: {

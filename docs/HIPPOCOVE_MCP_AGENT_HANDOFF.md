@@ -90,6 +90,10 @@ node server/mcp-server.js
   - 只读检查已经导出的 bundle 文件或目录
   - 返回合同验证、source 完整度、rejected/HOLD 计数和少量 ledger 摘要
   - 不返回整包正文、不写任何投影或私有记忆系统
+- `export_portable_warm_projection`
+  - 从本地 bundle 生成 Markdown / Obsidian / Notion-ready JSONL 投影包
+  - 只写本地文件；不连接 Notion，不写 Home/Hippocove，也不进入旧 roots/vines
+  - Notion-ready JSONL 保留 `candidate_id`、`notion_sync_hash` 和空 `notion_page_id`，方便以后显式写入与回流
 
 ### 一键快检
 
@@ -134,13 +138,34 @@ node server/mcp-server.js
 8. 如有需要，AI 做语义合并
 9. `export_portable_warm_bundle`
 10. `inspect_portable_warm_bundle`
-11. 只有维护旧兼容实验台时，才调用 `finalize_reviewed_entries`
+11. `export_portable_warm_projection`
+12. 只有维护旧兼容实验台时，才调用 `finalize_reviewed_entries`
 
 `export_portable_warm_bundle` 返回的 `output.dir` 可以直接传给
 `inspect_portable_warm_bundle.bundle_dir`。如果只拿到文件路径，就把
 `portable_warm_bundle.json` 传给 `bundle_path`。inspect 结果里的
 `projection_readiness` 只表示本地 bundle 是否适合继续导出投影，不代表已经写入
 Notion、Home、Hippocove 或任何冷树。
+
+如果 `inspect_portable_warm_bundle.projection_readiness` 是 `ready` 或
+`ready_with_review_ledgers`，agent 可以继续调用
+`export_portable_warm_projection`。它会生成：
+
+- `00_chat_human_entry.md`
+- `01_warm_cards.md`
+- `02_review_ledger.md`
+- `obsidian/`
+- `notion/*.jsonl`
+- `projection_manifest.json`
+
+这些都是本地投影，不是第二份真相。后续如果人类要求写 Notion，写入器也应从
+`candidate_id + notion_sync_hash + base digest` 做显式回流，不要把 Notion 页面反过来
+当 canonical memory。
+
+`export_portable_warm_projection.output_root` 不是任意落盘口。MCP 会把它限制在项目
+`output/` 或系统临时目录里，避免 agent 无意把 source projection 写进私有同步盘或
+外部 vault。人类真正要搬到 Obsidian / Notion 时，应从这个本地投影包显式复制或走后续
+受控写入器。
 
 这条路的好处是：
 

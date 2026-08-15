@@ -5,6 +5,7 @@ import {
   getGrowthDraftForTool,
   exportGrowthDraftToObsidianForTool,
   exportPortableWarmBundleForTool,
+  exportPortableWarmProjectionForTool,
   commitGrowthDecisionForTool,
   appendGrowthLedgerEntryForTool,
   buildFingerprintCandidatePoolForTool,
@@ -53,6 +54,13 @@ export async function callTool(name, args = {}) {
       bundlePath: args.bundle_path,
       bundleDir: args.bundle_dir,
       sampleLimit: args.sample_limit
+    });
+  }
+  if (name === 'export_portable_warm_projection') {
+    return exportPortableWarmProjectionForTool({
+      bundlePath: args.bundle_path,
+      bundleDir: args.bundle_dir,
+      outputRoot: args.output_root
     });
   }
   if (name === 'run_history_pipeline') {

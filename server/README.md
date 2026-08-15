@@ -155,7 +155,7 @@ MCP 入口文件：
 - growth draft
 - card registry / ledger
 - Obsidian export 能力
-- portable Warm bundle export 能力
+- portable Warm bundle export / inspect / projection export 能力
 
 ## 环境变量
 
