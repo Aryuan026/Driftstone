@@ -15,6 +15,7 @@ import { appendGrowthLedgerEntry, getGrowthLedgerSnapshot } from './growth-ledge
 import { commitGrowthDecision } from './growth-commit-service.js';
 import { getGrowthDraftArtifact, listGrowthDraftArtifacts } from './growth-draft-store.js';
 import { exportGrowthDraftToObsidianStaging } from './obsidian-export-service.js';
+import { buildPortableWarmBundleContractPacket } from './portable-warm-bundle-contract.js';
 import { getNextPendingTranslationWorkerPacket, getTranslationTaskWorkerPacket } from './memory-translation-task-service.js';
 import {
   loadRuntimeApiConfig,
@@ -349,6 +350,10 @@ export async function listRuntimeApiProfilesForTool() {
       updated_at: ''
     })
   };
+}
+
+export function getPortableWarmBundleContractForTool() {
+  return buildPortableWarmBundleContractPacket();
 }
 
 async function resolveApiSelection({ mode = 'local_programmatic', apiProfileName = '' } = {}) {

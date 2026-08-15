@@ -16,6 +16,7 @@ import {
   getCardRegistryForTool,
   getGrowthContextForTool,
   getGrowthLedgerForTool,
+  getPortableWarmBundleContractForTool,
   getMemoryContextForTool,
   getPersonaWorkspaceStateForTool,
   inspectPipelineScope,
@@ -35,6 +36,15 @@ const TOOLS = [
   {
     name: 'list_api_profiles',
     description: '列出 Hippocove 当前可用的 API 方案，并返回本地快检模式。',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false
+    }
+  },
+  {
+    name: 'get_portable_warm_bundle_contract',
+    description: '读取公开 Driftstone portable_warm_bundle 合同、Notion 投影边界和禁止写入的私有冷树字段；只读，不触碰用户素材。',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -515,6 +525,9 @@ function asTextContent(value) {
 async function callTool(name, args = {}) {
   if (name === 'list_api_profiles') {
     return listRuntimeApiProfilesForTool();
+  }
+  if (name === 'get_portable_warm_bundle_contract') {
+    return getPortableWarmBundleContractForTool();
   }
   if (name === 'run_history_pipeline') {
     return runHistoryPipeline({
