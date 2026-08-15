@@ -1,6 +1,8 @@
-# Data Layout
+# Driftstone Local Data Skeleton
 
-`data/` now keeps only the product-friendly local skeleton:
+`data/` keeps only the public Driftstone local skeleton. It is a doorway for
+local-only inputs and runtime state, not a place for bundled history, private
+memory artifacts, generated packets, or release payloads.
 
 - `inbox/`
   - local drop zone for raw inputs
