@@ -24,6 +24,13 @@ portable_warm_bundle + manifest + source occurrence/span/digest + rejected/HOLD 
 `memory-write.js` 目前仍服务旧 roots/vines 兼容层。它不能被新的公开
 Driftstone agent 当作最终可移植 Warm bundle 出口。
 
+`GET /api/meta/routes` 默认只列公开产品路由。需要维护旧实验台或诊断旧
+roots/vines 兼容层时，显式加：
+
+```text
+?include_diagnostic=true
+```
+
 判断标准很简单：
 
 - 如果这是新前厅会直接用到的主路或仍需保留的兼容路，就放这里

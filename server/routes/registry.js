@@ -132,7 +132,7 @@ const ROUTE_GROUPS = [
     routes: [
       { method: 'POST', path: '/api/memory/reviewed/append', summary: '把单批提炼结果落进 reviewed 中间层。' },
       { method: 'POST', path: '/api/memory/reviewed/clusters', summary: '读取当前 reviewed 候选簇。' },
-      { method: 'POST', path: '/api/memory/reviewed/finalize', summary: 'LEGACY/COMPAT：完成去冗余并写入旧 roots/vines 兼容层。' }
+      { method: 'POST', path: '/api/memory/reviewed/finalize', legacy: true, summary: 'LEGACY/COMPAT：完成去冗余并写入旧 roots/vines 兼容层。' }
     ]
   },
   {
@@ -207,14 +207,24 @@ const ROUTE_GROUPS = [
   }
 ];
 
-function buildRouteCatalog() {
-  return ROUTE_GROUPS.map((group) => ({
-    id: group.id,
-    label: group.label,
-    lane: group.lane,
-    note: group.note,
-    routes: group.routes.map((route) => ({ ...route }))
-  }));
+function asRouteCatalogRoute(route) {
+  const { legacy, ...publicRoute } = route;
+  return publicRoute;
+}
+
+export function buildRouteCatalog({ includeDiagnostic = false } = {}) {
+  return ROUTE_GROUPS
+    .filter((group) => includeDiagnostic || group.lane !== 'diagnostic')
+    .map((group) => ({
+      id: group.id,
+      label: group.label,
+      lane: group.lane,
+      note: group.note,
+      routes: group.routes
+        .filter((route) => includeDiagnostic || !route.legacy)
+        .map(asRouteCatalogRoute)
+    }))
+    .filter((group) => group.routes.length > 0);
 }
 
 async function handleMetaRoute(req, res, url) {
@@ -223,9 +233,13 @@ async function handleMetaRoute(req, res, url) {
     json(res, 405, { ok: false, error: 'Method not allowed' });
     return true;
   }
+  const includeDiagnostic = url.searchParams.get('include_diagnostic') === 'true'
+    || url.searchParams.get('includeDiagnostic') === 'true';
   json(res, 200, {
     ok: true,
-    groups: buildRouteCatalog()
+    diagnostic_hidden: !includeDiagnostic,
+    diagnostic_hint: includeDiagnostic ? '' : 'Pass include_diagnostic=true to include legacy/diagnostic route catalog entries.',
+    groups: buildRouteCatalog({ includeDiagnostic })
   });
   return true;
 }
@@ -238,11 +252,14 @@ export async function dispatchRegisteredRoute(req, res, url) {
 }
 
 export function buildNotFoundPayload() {
+  const groups = buildRouteCatalog();
   return {
     ok: false,
     error: 'Not found',
-    groups: buildRouteCatalog(),
-    routes: ROUTE_GROUPS.flatMap((group) =>
+    diagnostic_hidden: true,
+    diagnostic_hint: 'GET /api/meta/routes?include_diagnostic=true includes legacy/diagnostic route catalog entries.',
+    groups,
+    routes: groups.flatMap((group) =>
       group.routes.map((route) => `${route.method} ${route.path}`)
     )
   };
