@@ -236,6 +236,17 @@ Adaptation rules:
 - Write rejected/conservation ledger instead of silently carrying bad rows.
 - Require explicit source directory/month; no default fake all-month input.
 
+Public implementation scope:
+
+- `server/core/csv-reader.js` owns quoted multiline parsing and malformed CSV
+  diagnostics.
+- `scripts/debug/regression_reviewed_csv_conservation.mjs` is a local diagnostic
+  for user-supplied reviewed CSV directories only.
+- The script may verify private 13-month counts when the owner points it at
+  private data, but those paths and counts are not public fixtures or canonical
+  repo truth.
+- Home import review-row/customs packet generation is not part of public main.
+
 Acceptance:
 
 - Quoted multiline CSV passes.

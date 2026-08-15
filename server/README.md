@@ -161,6 +161,28 @@ agent/headless 正门说明：
 - Obsidian export 能力
 - portable Warm bundle export / inspect / projection export 能力
 
+## Reviewed CSV 守恒诊断
+
+Reviewed CSV 是 portable Warm bundle 前很重要的一道入口账。公开版不会默认读取作者机器上的历史目录；如果要检查自己的
+`02_reviewed`，需要在仓库根目录显式传路径：
+
+```bash
+node scripts/debug/regression_reviewed_csv_conservation.mjs --reviewed-dir /path/to/02_reviewed --out-dir /path/to/local-output
+```
+
+也可以传 stage dropbox 根目录，脚本会读取其中的 `02_reviewed`：
+
+```bash
+node scripts/debug/regression_reviewed_csv_conservation.mjs --dropbox /path/to/stage-dropbox --month 2025-03
+```
+
+这只脚本只做本地诊断：
+
+- quoted multiline CSV 会按逻辑 record 解析，不按物理行误切。
+- 未闭合引号、字段数多/少会 fail closed，并写入 rejected rows ledger。
+- 如果传入 `--out-dir`，本轮 ledger 会原子替换旧结果，避免旧成功结果冒充本轮成功。
+- 它不会写 Home、Hippocove、Notion，也不会生成最终记忆。
+
 ## 环境变量
 
 公开版不再假定你的目录结构和作者机器一样。
