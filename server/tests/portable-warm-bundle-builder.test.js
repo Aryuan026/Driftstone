@@ -10,6 +10,7 @@ import { validatePortableWarmBundle } from '../core/portable-warm-bundle-contrac
 function buildGrowthDraftArtifact(overrides = {}) {
   return {
     artifact_id: 'memo_synthetic_001',
+    logical_candidate_id: 'warm_logic_synthetic_001',
     generated_at: '2026-08-15T00:00:00.000Z',
     scope: {
       owner_id: 'owner',
@@ -82,6 +83,7 @@ test('builder keeps candidate_id stable across title and body edits', () => {
     generatedAt: '2026-08-15T00:00:00.000Z',
     growthDraftArtifacts: [
       buildGrowthDraftArtifact({
+        artifact_id: 'memo_synthetic_002',
         draft: {
           ...buildGrowthDraftArtifact().draft,
           frontmatter: {
@@ -105,6 +107,7 @@ test('builder keeps candidate_id stable across title and body edits', () => {
 test('builder rejects growth drafts without stable candidate identity', () => {
   const artifact = buildGrowthDraftArtifact();
   delete artifact.artifact_id;
+  delete artifact.logical_candidate_id;
   const bundle = buildPortableWarmBundle({
     scope: {
       owner_id: 'owner',
@@ -118,6 +121,35 @@ test('builder rejects growth drafts without stable candidate identity', () => {
   assert.equal(bundle.warm_cards.length, 0);
   assert.equal(bundle.rejected_ledger.length, 1);
   assert.equal(bundle.rejected_ledger[0].reason, 'missing_stable_candidate_identity');
+});
+
+test('builder sanitizes source_file before it enters the canonical bundle', () => {
+  const privateSources = [
+    { source: '/Users/alice/private/history.jsonl', label: 'history.jsonl' },
+    { source: '/home/alice/private/history.jsonl', label: 'history.jsonl' },
+    { source: 'C:\\Users\\Alice\\private\\history.jsonl', label: 'history.jsonl' },
+    { source: '\\\\server\\share\\private\\history.jsonl', label: 'history.jsonl' }
+  ];
+  for (const item of privateSources) {
+    const artifact = buildGrowthDraftArtifact();
+    artifact.draft.source_review.primary_evidence.source_scene_snippets[0].file = item.source;
+    const bundle = buildPortableWarmBundle({
+      scope: {
+        owner_id: 'owner',
+        realm_id: 'realm'
+      },
+      generatedAt: '2026-08-15T00:00:00.000Z',
+      growthDraftArtifacts: [artifact]
+    });
+    const body = JSON.stringify(bundle);
+    assert.equal(validatePortableWarmBundle(bundle).ok, true);
+    assert.equal(bundle.source_occurrences[0].source_file, item.label);
+    assert.match(bundle.source_occurrences[0].source_file_digest, /^sha256:[a-f0-9]{64}$/);
+    assert.equal(body.includes('/Users/alice'), false);
+    assert.equal(body.includes('/home/alice'), false);
+    assert.equal(body.includes('C:\\Users\\Alice'), false);
+    assert.equal(body.includes('\\\\server\\share'), false);
+  }
 });
 
 test('builder holds growth drafts without bounded source spans', () => {

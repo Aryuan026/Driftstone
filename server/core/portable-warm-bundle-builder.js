@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { mkdir, readFile, writeFile } from 'fs/promises';
-import { join, resolve } from 'path';
+import { isAbsolute, join, resolve } from 'path';
 import { BUNDLE_SCHEMA, buildPortableWarmLedgerId, validatePortableWarmBundle } from './portable-warm-bundle-contract.js';
 import { getGrowthDraftArtifact, listGrowthDraftArtifacts } from './growth-draft-store.js';
 import { PROJECT_ROOT, safeScopeSegment } from './path-config.js';
@@ -50,6 +50,28 @@ function textLength(value = '') {
 
 function digestObject(value) {
   return sha256(stableJson(value));
+}
+
+function isPrivatePathLike(text = '') {
+  return Boolean(
+    isAbsolute(text)
+    || /^[A-Za-z]:[\\/]/u.test(text)
+    || /^\\\\[^\\]+\\[^\\]+/u.test(text)
+    || text.includes('/Users/')
+    || text.includes('/home/')
+    || text.includes('/srv/')
+    || text.includes('\\')
+    || text.includes('/')
+  );
+}
+
+function sanitizeSourceFileLabel(value = '') {
+  const text = safeText(value);
+  if (!text) return '';
+  if (!isPrivatePathLike(text)) return text;
+  const normalized = text.replace(/[\\/]+$/u, '');
+  const parts = normalized.split(/[\\/]+/u).filter(Boolean);
+  return parts[parts.length - 1] || 'local_source';
 }
 
 function pickFirstText(values = [], fallback = '') {
@@ -112,6 +134,32 @@ function inferArchiveBucket(artifact = {}) {
   ], 'stable');
 }
 
+function inferLogicalCandidateId(artifact = {}) {
+  const draft = artifact?.draft || {};
+  const direct = safeText(
+    artifact?.logical_candidate_id
+    || draft?.logical_candidate_id
+    || draft?.card_entry?.logical_candidate_id
+    || draft?.card_entry?.candidate_id
+    || draft?.card_entry?.stable_candidate_id
+  );
+  if (direct) return direct;
+  const sourceKey = safeText(
+    draft?.target_card_id
+    || draft?.card_entry?.card_id
+    || artifact?.task?.task_id
+    || artifact?.task?.packet_id
+    || draft?.frontmatter?.source_packet_id
+    || draft?.card_entry?.source_packet_id
+  );
+  if (!sourceKey) return '';
+  return `warm_logic_${shortHash(stableJson({
+    card_type: safeText(artifact?.task?.card_type || draft?.card_entry?.card_type, 'memo'),
+    family_id: safeText(draft?.frontmatter?.family || draft?.card_entry?.family_id || artifact?.task?.family_id, 'unassigned'),
+    source_key: sourceKey
+  }), 20)}`;
+}
+
 function renderPortableCardMarkdown({ title = '', livingFragment = '', feelingAsFact = '', futureUseHint = '', markdown = '' } = {}) {
   const existing = safeText(markdown);
   if (existing) return existing;
@@ -171,7 +219,8 @@ function normalizeSnippet(snippet = {}) {
   ]);
   return {
     source_bundle_id: safeText(snippet.source_bundle_id || snippet.bundle_id),
-    source_file: sourceFile,
+    source_file: sanitizeSourceFileLabel(sourceFile),
+    source_file_digest: sourceFile ? sha256(sourceFile) : '',
     source_window: sourceWindow,
     turn_range: turnRange,
     message_ids: Array.isArray(snippet.message_ids) ? uniqueStrings(snippet.message_ids, 64) : [],
@@ -194,6 +243,7 @@ function registerSourceSpan(state, snippet = {}) {
   const sourceIdSeed = stableJson({
     source_bundle_id: snippet.source_bundle_id,
     source_file: snippet.source_file,
+    source_file_digest: snippet.source_file_digest,
     source_window: snippet.source_window
   });
   const sourceOccurrenceId = `occ_${shortHash(stableJson({
@@ -206,6 +256,7 @@ function registerSourceSpan(state, snippet = {}) {
       source_id: `source_${shortHash(sourceIdSeed)}`,
       source_kind: 'growth_source_snippet',
       source_file: safeText(snippet.source_file),
+      source_file_digest: safeText(snippet.source_file_digest),
       source_window: safeText(snippet.source_window),
       turn_range: safeText(snippet.turn_range),
       message_ids: Array.isArray(snippet.message_ids) ? snippet.message_ids : [],
@@ -278,8 +329,9 @@ function buildRejectedEntry({ sourceKind = '', sourceId = '', reason = '', row =
 }
 
 function addGrowthDraftArtifact(state, artifact = {}) {
-  const artifactId = safeText(artifact?.artifact_id || artifact?.draft?.card_entry?.card_id || artifact?.json_file);
-  if (!artifactId) {
+  const artifactId = safeText(artifact?.artifact_id || artifact?.json_file);
+  const logicalCandidateId = inferLogicalCandidateId(artifact);
+  if (!logicalCandidateId) {
     state.rejected_ledger.push(buildRejectedEntry({
       sourceKind: 'growth_draft',
       sourceId: `missing_identity_${shortHash(stableJson(artifact))}`,
@@ -293,7 +345,7 @@ function addGrowthDraftArtifact(state, artifact = {}) {
   if (!title || !livingFragment) {
     state.rejected_ledger.push(buildRejectedEntry({
       sourceKind: 'growth_draft',
-      sourceId: artifactId,
+      sourceId: artifactId || logicalCandidateId,
       reason: 'missing_title_or_living_fragment',
       row: artifact
     }));
@@ -304,7 +356,7 @@ function addGrowthDraftArtifact(state, artifact = {}) {
   if (decision === 'skip' || decision === 'hold') {
     state.hold_ledger.push(buildHoldEntry({
       sourceKind: 'growth_draft',
-      sourceId: artifactId,
+      sourceId: artifactId || logicalCandidateId,
       title,
       reason: `growth_decision_${decision}`,
       row: artifact
@@ -317,7 +369,7 @@ function addGrowthDraftArtifact(state, artifact = {}) {
   if (!reliableSnippets.length) {
     state.hold_ledger.push(buildHoldEntry({
       sourceKind: 'growth_draft',
-      sourceId: artifactId,
+      sourceId: artifactId || logicalCandidateId,
       title,
       reason: 'missing_bounded_source_span',
       row: artifact
@@ -327,7 +379,7 @@ function addGrowthDraftArtifact(state, artifact = {}) {
   if (snippets.length !== reliableSnippets.length) {
     state.hold_ledger.push(buildHoldEntry({
       sourceKind: 'growth_draft',
-      sourceId: artifactId,
+      sourceId: artifactId || logicalCandidateId,
       title,
       reason: 'mixed_source_quality_requires_review',
       row: artifact
@@ -353,7 +405,7 @@ function addGrowthDraftArtifact(state, artifact = {}) {
   const futureUseHint = inferFutureUseHint(artifact);
   const candidateId = `warm_${shortHash(stableJson({
     source: 'growth_draft',
-    artifact_id: artifactId
+    logical_candidate_id: logicalCandidateId
   }))}`;
   state.warm_cards.push({
     candidate_id: candidateId,

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { getScopedGrowthDraftDir, safeScopeSegment } from './path-config.js';
@@ -21,21 +22,108 @@ function clipText(value = '', limit = 24) {
   return text.length > limit ? `${text.slice(0, Math.max(0, limit - 1))}…` : text;
 }
 
-function nowStamp() {
-  return new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-function buildArtifactId({ cardType = 'memo', familyId = '', title = '', taskId = '' } = {}) {
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`;
+  if (isPlainObject(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+function shortHash(value, length = 16) {
+  return createHash('sha256').update(String(value || '')).digest('hex').slice(0, length);
+}
+
+function nowStamp(generatedAt = '') {
+  const date = generatedAt ? new Date(generatedAt) : new Date();
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  return safeDate.toISOString().replace(/[-:.TZ]/g, '').slice(0, 17);
+}
+
+function buildArtifactId({ cardType = 'memo', familyId = '', title = '', taskId = '', generatedAt = '' } = {}) {
   return [
     safeScopeSegment(cardType, 'memo'),
     safeScopeSegment(familyId, 'general').slice(0, 24),
     safeScopeSegment(title || taskId, 'draft').slice(0, 48),
-    nowStamp()
+    nowStamp(generatedAt)
   ].join('_');
 }
 
-async function writeUtf8(filePath, text = '') {
-  await writeFile(filePath, String(text || ''), 'utf-8');
+function candidateSuffix(index = 1) {
+  return index <= 1 ? '' : `_${String(index).padStart(3, '0')}`;
+}
+
+function buildLogicalCandidateId({
+  cardType = 'memo',
+  familyId = '',
+  task = {},
+  draft = {}
+} = {}) {
+  const existing = safeText(
+    draft?.logical_candidate_id
+    || draft?.card_entry?.logical_candidate_id
+    || draft?.card_entry?.candidate_id
+    || draft?.card_entry?.stable_candidate_id
+  );
+  if (existing) return existing;
+  const sourceKey = safeText(
+    draft?.target_card_id
+    || draft?.card_entry?.card_id
+    || task?.task_id
+    || task?.packet_id
+    || draft?.frontmatter?.source_packet_id
+    || draft?.card_entry?.source_packet_id
+  );
+  if (!sourceKey) return '';
+  return `warm_logic_${shortHash(stableJson({
+    card_type: cardType,
+    family_id: familyId,
+    source_key: sourceKey
+  }), 20)}`;
+}
+
+async function writeUtf8(filePath, text = '', options = {}) {
+  await writeFile(filePath, String(text || ''), {
+    encoding: 'utf-8',
+    ...options
+  });
+}
+
+async function writeDraftFilesExclusive({
+  baseDir = '',
+  artifactIdBase = '',
+  payloadBase = {},
+  markdown = ''
+} = {}) {
+  for (let attempt = 1; attempt <= 1000; attempt += 1) {
+    const artifactId = `${artifactIdBase}${candidateSuffix(attempt)}`;
+    const markdownFile = join(baseDir, `${artifactId}.md`);
+    const jsonFile = join(baseDir, `${artifactId}.json`);
+    const payload = {
+      ...payloadBase,
+      artifact_id: artifactId
+    };
+    let wroteMarkdown = false;
+    try {
+      await writeUtf8(markdownFile, markdown ? `${markdown}\n` : '', { flag: 'wx' });
+      wroteMarkdown = true;
+      await writeUtf8(jsonFile, `${JSON.stringify(payload, null, 2)}\n`, { flag: 'wx' });
+      return {
+        artifactId,
+        markdownFile,
+        jsonFile
+      };
+    } catch (error) {
+      if (wroteMarkdown) await rm(markdownFile, { force: true });
+      if (error?.code === 'EEXIST') continue;
+      throw error;
+    }
+  }
+  throw new Error('Could not allocate a unique growth draft artifact id.');
 }
 
 async function readJsonIfExists(filePath, fallback = null) {
@@ -92,6 +180,7 @@ function buildDraftSummary(doc = {}, fileInfo = {}) {
   );
   return {
     artifact_id: safeText(fileInfo.artifact_id),
+    logical_candidate_id: safeText(doc?.logical_candidate_id),
     generated_at: safeText(doc?.generated_at),
     card_type: safeText(task?.card_type || draft?.card_entry?.card_type, 'memo'),
     family_id: safeText(draft?.frontmatter?.family || draft?.card_entry?.family_id, 'unassigned'),
@@ -123,13 +212,22 @@ export async function saveGrowthDraftArtifact({
   familyId = '',
   task = {},
   draft = {},
-  api = {}
+  api = {},
+  generatedAt = ''
 } = {}) {
-  const artifactId = buildArtifactId({
+  const resolvedGeneratedAt = safeText(generatedAt) || new Date().toISOString();
+  const artifactIdBase = buildArtifactId({
     cardType,
     familyId,
     title: draft?.frontmatter?.title || draft?.target_card_id || '',
-    taskId: task?.task_id || ''
+    taskId: task?.task_id || '',
+    generatedAt: resolvedGeneratedAt
+  });
+  const logicalCandidateId = buildLogicalCandidateId({
+    cardType,
+    familyId,
+    task,
+    draft
   });
   const baseDir = join(
     getScopedGrowthDraftDir(ownerId, realmId),
@@ -137,12 +235,11 @@ export async function saveGrowthDraftArtifact({
   );
   await mkdir(baseDir, { recursive: true });
 
-  const markdownFile = join(baseDir, `${artifactId}.md`);
-  const jsonFile = join(baseDir, `${artifactId}.json`);
   const markdown = safeText(draft?.markdown);
-  const payload = {
+  const payloadBase = {
     schema: 'growth_draft_artifact_v0.1',
-    generated_at: new Date().toISOString(),
+    generated_at: resolvedGeneratedAt,
+    logical_candidate_id: logicalCandidateId,
     scope: {
       owner_id: safeText(ownerId),
       realm_id: safeText(realmId, 'default')
@@ -152,12 +249,21 @@ export async function saveGrowthDraftArtifact({
     draft
   };
 
-  await writeUtf8(markdownFile, markdown ? `${markdown}\n` : '');
-  await writeUtf8(jsonFile, `${JSON.stringify(payload, null, 2)}\n`);
+  const {
+    artifactId,
+    markdownFile,
+    jsonFile
+  } = await writeDraftFilesExclusive({
+    baseDir,
+    artifactIdBase,
+    payloadBase,
+    markdown
+  });
 
   return {
     ok: true,
     artifact_id: artifactId,
+    logical_candidate_id: logicalCandidateId,
     dir: baseDir,
     markdown_file: markdownFile,
     json_file: jsonFile
@@ -244,6 +350,7 @@ export async function getGrowthDraftArtifact({
     ok: true,
     schema: 'growth_draft_artifact_v0.1',
     artifact_id: safeArtifactId,
+    logical_candidate_id: safeText(doc?.logical_candidate_id),
     generated_at: safeText(doc?.generated_at),
     scope: doc.scope || {
       owner_id: safeText(ownerId),

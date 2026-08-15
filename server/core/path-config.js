@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -71,6 +72,16 @@ export function safeScopeSegment(value, fallback = 'default') {
   return text || fallback;
 }
 
+function scopeSegmentDigest(value = '') {
+  return createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16);
+}
+
+function safeHashedScopeSegment(value = '', fallback = 'default') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return `${safeScopeSegment(raw, fallback).slice(0, 48)}__${scopeSegmentDigest(raw)}`;
+}
+
 export function getScopedTruthDir(ownerId = '', realmId = '') {
   return join(
     SCOPED_TRUTH_DIR,
@@ -121,7 +132,7 @@ export function getScopedTranslationDir(ownerId = '', realmId = '') {
 
 export function getScopedTranslationTaskDir(ownerId = '', realmId = '', botId = '') {
   const taskRoot = join(getScopedTruthDir(ownerId, realmId), 'translation_tasks');
-  const scopedBot = safeScopeSegment(botId, '');
+  const scopedBot = safeHashedScopeSegment(botId, '');
   return scopedBot ? join(taskRoot, 'bots', scopedBot) : taskRoot;
 }
 

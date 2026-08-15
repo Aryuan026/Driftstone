@@ -99,6 +99,7 @@ const KEYSETS = {
     'source_id',
     'source_kind',
     'source_file',
+    'source_file_digest',
     'source_window',
     'turn_range',
     'message_ids',
@@ -157,6 +158,7 @@ const REQUIRED_KEYS = {
     'source_id',
     'source_kind',
     'source_file',
+    'source_file_digest',
     'source_window',
     'turn_range',
     'message_ids',
@@ -377,6 +379,20 @@ function validateDigestField(root, key, path, errors) {
   }
 }
 
+function isPrivateSourceFileLabel(value = '') {
+  const text = safeText(value);
+  if (!text) return false;
+  return Boolean(
+    text.includes('/')
+    || text.includes('\\')
+    || /^[A-Za-z]:[\\/]/u.test(text)
+    || /^\\\\[^\\]+\\[^\\]+/u.test(text)
+    || text.includes('/Users/')
+    || text.includes('/home/')
+    || text.includes('/srv/')
+  );
+}
+
 function walkForbiddenKeys(value, path, errors) {
   if (Array.isArray(value)) {
     value.forEach((item, index) => walkForbiddenKeys(item, `${path}[${index}]`, errors));
@@ -488,10 +504,19 @@ function validateSourceOccurrence(item, index, errors) {
   ['source_occurrence_id', 'source_id', 'source_kind', 'turn_range', 'digest'].forEach((key) => {
     validateStringField(item, key, basePath, errors);
   });
-  ['source_file', 'source_window', 'source_time'].forEach((key) => {
+  ['source_file', 'source_file_digest', 'source_window', 'source_time'].forEach((key) => {
     validateStringField(item, key, basePath, errors, { allowEmpty: true });
   });
   validateStringArrayField(item, 'message_ids', basePath, errors);
+  if (safeText(item?.source_file) && !safeText(item?.source_file_digest)) {
+    pushError(errors, `${basePath}.source_file_digest`, 'source_file_digest is required when source_file is present.');
+  }
+  if (safeText(item?.source_file_digest) && !SHA256_DIGEST_RE.test(item.source_file_digest)) {
+    pushError(errors, `${basePath}.source_file_digest`, 'source_file_digest must be a lowercase sha256:64hex digest.');
+  }
+  if (isPrivateSourceFileLabel(item?.source_file)) {
+    pushError(errors, `${basePath}.source_file`, 'source_file must be a sanitized label, not a local or private path.');
+  }
   if (!safeText(item?.source_occurrence_id)) {
     pushError(errors, `${basePath}.source_occurrence_id`, 'source_occurrence_id is required.');
   }
@@ -843,6 +868,7 @@ export function buildPortableWarmBundleContractPacket() {
         'source_id',
         'source_kind',
         'source_file',
+        'source_file_digest',
         'source_window',
         'turn_range',
         'message_ids',
@@ -891,7 +917,7 @@ export function buildPortableWarmBundleContractPacket() {
         {
           name: 'Source Occurrences',
           purpose: 'Source file/window/turn occurrence index for readback.',
-          key_fields: ['source_occurrence_id', 'bundle_id', 'source_kind', 'source_file', 'source_window', 'digest']
+          key_fields: ['source_occurrence_id', 'bundle_id', 'source_kind', 'source_file', 'source_file_digest', 'source_window', 'digest']
         },
         {
           name: 'Source Spans',

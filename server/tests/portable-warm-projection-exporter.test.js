@@ -10,6 +10,7 @@ import { exportPortableWarmProjection } from '../core/portable-warm-projection-e
 function buildGrowthDraftArtifact({ sourceFile = '/tmp/projection-source.json' } = {}) {
   return {
     artifact_id: 'memo_projection_001',
+    logical_candidate_id: 'warm_logic_projection_001',
     generated_at: '2026-08-15T00:00:00.000Z',
     scope: {
       owner_id: 'owner',

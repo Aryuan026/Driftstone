@@ -388,6 +388,55 @@ test('headless queue without task_file is partitioned by bot_id', async () => {
   assert.equal(stillPulledB.next_task.task_file, preparedB.next_task.task_file);
 });
 
+test('headless queue keeps raw bot_id partition when safe scope segments collide', async () => {
+  const ownerId = 'owner-colliding-bots';
+  const realmId = 'realm-colliding-bots';
+  const botSlash = 'bot/a';
+  const botUnderscore = 'bot_a';
+  const inputSlash = join(dataRoot, 'colliding-bot-slash.txt');
+  const inputUnderscore = join(dataRoot, 'colliding-bot-underscore.txt');
+  await writeFile(inputSlash, 'user: bot slash synthetic line\n', 'utf8');
+  await writeFile(inputUnderscore, 'user: bot underscore synthetic line\n', 'utf8');
+
+  const preparedSlash = await prepareHistorySource({
+    filePaths: [inputSlash],
+    ownerId,
+    realmId,
+    botId: botSlash,
+    targetChars: 1200,
+    maxSlices: 1,
+    entryLimit: 2
+  });
+  const preparedUnderscore = await prepareHistorySource({
+    filePaths: [inputUnderscore],
+    ownerId,
+    realmId,
+    botId: botUnderscore,
+    targetChars: 1200,
+    maxSlices: 1,
+    entryLimit: 2
+  });
+
+  assert.notEqual(dirname(dirname(dirname(preparedSlash.next_task.task_file))), dirname(dirname(dirname(preparedUnderscore.next_task.task_file))));
+
+  const pulledSlash = await pullTranslationTaskForTool({
+    ownerId,
+    realmId,
+    botId: botSlash
+  });
+  assert.equal(pulledSlash.next_task.task_file, preparedSlash.next_task.task_file);
+  assert.equal(pulledSlash.next_task.scope.bot_id, botSlash);
+  assert.notEqual(pulledSlash.next_task.task_file, preparedUnderscore.next_task.task_file);
+
+  const pulledUnderscore = await pullTranslationTaskForTool({
+    ownerId,
+    realmId,
+    botId: botUnderscore
+  });
+  assert.equal(pulledUnderscore.next_task.task_file, preparedUnderscore.next_task.task_file);
+  assert.equal(pulledUnderscore.next_task.scope.bot_id, botUnderscore);
+});
+
 test('same-task replay repairs stale task packet row after interrupted applied write', async () => {
   const inputFile = join(dataRoot, 'stale-packet-row-source.txt');
   await writeFile(inputFile, 'user: stale packet row synthetic line\n', 'utf8');

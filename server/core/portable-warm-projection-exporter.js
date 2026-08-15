@@ -190,7 +190,7 @@ function buildNotionSourceSpanRow({ bundle = {}, span = {}, occurrence = {}, can
     source_span_id: safeText(span?.source_span_id),
     source_occurrence_id: safeText(span?.source_occurrence_id),
     source_file: sanitizeSourceFileLabel(occurrence?.source_file),
-    source_file_digest: occurrence?.source_file ? sha256(occurrence.source_file) : '',
+    source_file_digest: safeText(occurrence?.source_file_digest || (occurrence?.source_file ? sha256(occurrence.source_file) : '')),
     source_window: safeText(occurrence?.source_window),
     turn_range: safeText(span?.turn_range),
     message_ids: Array.isArray(span?.message_ids) ? span.message_ids : [],

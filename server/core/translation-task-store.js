@@ -24,6 +24,21 @@ function canonicalTaskError() {
   return new Error('task_file is not a canonical translation task');
 }
 
+function assertExactPacketScope(packet = {}, {
+  ownerId = '',
+  realmId = '',
+  botId = ''
+} = {}) {
+  const scope = packet?.scope || {};
+  if (
+    safeText(scope.owner_id) !== safeText(ownerId)
+    || safeText(scope.realm_id || 'default') !== safeText(realmId || 'default')
+    || safeText(scope.bot_id) !== safeText(botId)
+  ) {
+    throw canonicalTaskError();
+  }
+}
+
 export async function loadTranslationTaskPacketByFile(packetFile) {
   return readJson(packetFile);
 }
@@ -146,6 +161,11 @@ export async function loadLatestTranslationTaskPacket({
   });
   const packetFile = join(pointer.latest_packet, 'packet.json');
   const packet = await loadTranslationTaskPacketByFile(packetFile);
+  assertExactPacketScope(packet, {
+    ownerId: normalizedOwnerId,
+    realmId: normalizedRealmId,
+    botId: normalizedBotId
+  });
   return {
     pointer,
     packetFile,

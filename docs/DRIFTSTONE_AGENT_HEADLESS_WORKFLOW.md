@@ -78,9 +78,9 @@ same state machine instead of inventing another path.
 | `validate` | Check the bundle contract, ledgers and source completeness. | `get_portable_warm_bundle_contract`, `inspect_portable_warm_bundle` |
 
 Legacy compatibility tools remain callable but should not be presented as the
-normal public endpoint. The MCP `tools/list` response now hides them by default;
-maintenance clients can pass `include_legacy_tools: true` when they explicitly
-need old diagnostics.
+normal public endpoint. The server hides and rejects them by default. Maintainers
+must start the MCP server with `DRIFTSTONE_MCP_ENABLE_LEGACY_TOOLS=1` before a
+client `include_legacy_tools: true` request can list or call the old diagnostics.
 
 | legacy tool | current role |
 | --- | --- |

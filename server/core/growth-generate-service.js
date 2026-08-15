@@ -1322,6 +1322,7 @@ export async function generateGrowthDraft({
     draft.ledger_entry.payload = {
       ...(draft.ledger_entry.payload || {}),
       artifact_id: artifact.artifact_id,
+      logical_candidate_id: artifact.logical_candidate_id,
       markdown_file: artifact.markdown_file,
       json_file: artifact.json_file
     };

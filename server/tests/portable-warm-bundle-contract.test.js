@@ -34,10 +34,16 @@ function withoutKey(value = {}, key = '') {
 function sealBundle(bundle) {
   const sealed = {
     ...bundle,
-    source_occurrences: (Array.isArray(bundle.source_occurrences) ? bundle.source_occurrences : []).map((occurrence) => ({
-      ...occurrence,
-      digest: digestObject(withoutKey(occurrence, 'digest'))
-    })),
+    source_occurrences: (Array.isArray(bundle.source_occurrences) ? bundle.source_occurrences : []).map((occurrence) => {
+      const next = {
+        ...occurrence,
+        source_file_digest: occurrence.source_file_digest ?? (occurrence.source_file ? sha256(occurrence.source_file) : '')
+      };
+      return {
+        ...next,
+        digest: digestObject(withoutKey(next, 'digest'))
+      };
+    }),
     manifest: {
       candidate_count: Array.isArray(bundle.warm_cards) ? bundle.warm_cards.length : 0,
       source_span_count: Array.isArray(bundle.source_spans) ? bundle.source_spans.length : 0,
@@ -100,10 +106,16 @@ function resealBundlePreservingShape(bundle) {
 function resealBundleIncludingOccurrenceDigests(bundle) {
   const sealed = JSON.parse(JSON.stringify(bundle));
   if (Array.isArray(sealed.source_occurrences)) {
-    sealed.source_occurrences = sealed.source_occurrences.map((occurrence) => ({
-      ...occurrence,
-      digest: digestObject(withoutKey(occurrence, 'digest'))
-    }));
+    sealed.source_occurrences = sealed.source_occurrences.map((occurrence) => {
+      const next = {
+        ...occurrence,
+        source_file_digest: occurrence.source_file_digest ?? (occurrence.source_file ? sha256(occurrence.source_file) : '')
+      };
+      return {
+        ...next,
+        digest: digestObject(withoutKey(next, 'digest'))
+      };
+    });
   }
   return resealBundlePreservingShape(sealed);
 }
@@ -551,6 +563,7 @@ test('public bundle rejects required schema deletions after reseal', () => {
   delete bundle.warm_cards[0].portable_warm_card.body_markdown;
   delete bundle.warm_cards[0].portable_warm_card.living_fragment;
   delete bundle.source_occurrences[0].source_kind;
+  delete bundle.source_occurrences[0].source_file_digest;
   delete bundle.source_occurrences[0].turn_range;
   delete bundle.source_occurrences[0].message_ids;
   delete bundle.source_occurrences[0].source_time;
@@ -575,6 +588,7 @@ test('public bundle rejects required schema deletions after reseal', () => {
     'warm_cards[0].portable_warm_card.body_markdown',
     'warm_cards[0].portable_warm_card.living_fragment',
     'source_occurrences[0].source_kind',
+    'source_occurrences[0].source_file_digest',
     'source_occurrences[0].turn_range',
     'source_occurrences[0].message_ids',
     'source_occurrences[0].source_time',
@@ -615,6 +629,23 @@ test('public bundle rejects private sentinel array elements after full reseal', 
   ].forEach((path) => {
     assert.equal(paths.has(path), true, `expected validation error at ${path}`);
   });
+});
+
+test('public bundle rejects private source_file paths after full reseal', () => {
+  const privateSources = [
+    '/Users/alice/private/history.jsonl',
+    '/home/alice/private/history.jsonl',
+    'C:\\Users\\Alice\\private\\history.jsonl',
+    '\\\\server\\share\\private\\history.jsonl'
+  ];
+  for (const sourceFile of privateSources) {
+    const bundle = buildValidBundle();
+    bundle.source_occurrences[0].source_file = sourceFile;
+    bundle.source_occurrences[0].source_file_digest = sha256(sourceFile);
+    const result = validatePortableWarmBundle(resealBundleIncludingOccurrenceDigests(bundle));
+    assert.equal(result.ok, false, `expected private path rejection for ${sourceFile}`);
+    assert.ok(result.errors.some((item) => item.path === 'source_occurrences[0].source_file'));
+  }
 });
 
 test('public bundle rejects duplicate string refs after full reseal', () => {
