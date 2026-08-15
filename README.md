@@ -85,7 +85,8 @@ Markdown、Obsidian、Notion 都只是这套包的可逆投影；它们方便人
 更细一点的技术底图在：
 - [项目状态](./PROJECT_STATUS.md)
 - [技术交底](./docs/HIPPOCOVE_TECH_HANDOFF.md)
-- [MCP / agent handoff](./docs/HIPPOCOVE_MCP_AGENT_HANDOFF.md)
+- [Driftstone agent/headless workflow](./docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)
+- [MCP / agent handoff 旧链接](./docs/HIPPOCOVE_MCP_AGENT_HANDOFF.md)
 - [手测地图](./docs/HIPPOCOVE_HAND_TEST_MAP.md)
 - [GitHub Pages 首页](./docs/index.html)
 
@@ -97,7 +98,8 @@ Markdown、Obsidian、Notion 都只是这套包的可逆投影；它们方便人
 2. 再读 [PROJECT_STATUS.md](./PROJECT_STATUS.md)
 3. 再看 [技术交底](./docs/HIPPOCOVE_TECH_HANDOFF.md)
 4. 如果准备自己点一遍流程，就接着看 [手测地图](./docs/HIPPOCOVE_HAND_TEST_MAP.md)
-5. 最后再进代码
+5. 如果是 agent / MCP 接手，读 [Driftstone agent/headless workflow](./docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)
+6. 最后再进代码
 
 这样不容易一上来就掉进旧实验台和一大排 `server/core` 文件里。
 
@@ -207,6 +209,10 @@ npm run mcp
 ```
 
 你可以把它接给支持 MCP 的 agent，例如 Codex、Claude Code、本地 OpenClaw 之类。
+
+agent 入口建议直接读：
+
+- [Driftstone agent/headless workflow](./docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)
 
 ### 环境变量
 

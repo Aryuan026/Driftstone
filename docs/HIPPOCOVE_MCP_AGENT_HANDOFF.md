@@ -2,6 +2,10 @@
 
 > 文件名还保留旧 `HIPPOCOVE_*` 命名，方便旧链接不失效；本说明的公开产品边界以 Driftstone 为准。
 
+> 新 agent 建议优先阅读 Driftstone 命名的正门：
+> [`DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md`](./DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)。
+> 本文件保留为旧链接兼容与更长解释。
+
 这份说明不是写给网页用户的。
 
 它是给能调用工具的 agent 用的，比如：

@@ -148,6 +148,10 @@ MCP 入口文件：
 
 - `mcp-server.js`
 
+agent/headless 正门说明：
+
+- [../docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md](../docs/DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md)
+
 这层不是为了把页面自动化，而是为了让支持 MCP 的 agent 直接拿到：
 
 - 人格工位状态

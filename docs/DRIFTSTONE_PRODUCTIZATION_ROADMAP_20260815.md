@@ -438,14 +438,18 @@ Next phase:
 
 P0:
 
-- Public route/MCP descriptions still expose old roots/vines write path.
-- Existing generators do not yet emit `driftstone_portable_warm_bundle_v0`.
-- Current clean carrier has the new contract but not the CSV/conservation Green
-  patch from `042764d`.
+- None known for the current local export-only public endpoint after the
+  portable Warm bundle, inspector, local projection exporter and Driftstone
+  agent workflow docs landed.
 
 P1:
 
-- Product naming still mixes Hippocove and Driftstone.
+- The CSV/conservation Green patch from `codex/driftstone-csv-ledger@042764d`
+  still needs a public-product port before Driftstone can claim hardened
+  all-month CSV import quality.
+- Product naming still has legacy `HIPPOCOVE_*` filenames and double-click
+  scripts for compatibility; current entry docs now route agents through
+  Driftstone-named workflow docs.
 - `path-config` creates runtime directories on import, which is awkward for pure
   inspect/validate tools.
 - No root `LICENSE` or `NOTICE` file is present in the inspected public worktree.
