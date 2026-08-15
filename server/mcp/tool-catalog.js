@@ -18,6 +18,24 @@ export const TOOLS = [
     }
   },
   {
+    name: 'export_portable_warm_bundle',
+    description: '把当前 scope 的 growth drafts/reviewed packet 导出为公开 Driftstone portable_warm_bundle；不会写 Home、Hippocove、Notion 或旧 roots/vines。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        owner_id: { type: 'string' },
+        realm_id: { type: 'string' },
+        bot_id: { type: 'string' },
+        card_type: { type: 'string' },
+        limit: { type: 'number' },
+        output_root: { type: 'string' },
+        write_files: { type: 'boolean' }
+      },
+      required: ['owner_id', 'realm_id'],
+      additionalProperties: false
+    }
+  },
+  {
     name: 'get_growth_context',
     description: '读取给记忆卡生长用的上下文包：人格工位状态、Persona 原料概览、本地记忆工作区，以及可选的兼容 context。',
     inputSchema: {

@@ -7,6 +7,7 @@ import { callTool } from '../mcp/tool-dispatch.js';
 const EXPECTED_TOOL_NAMES = [
   'list_api_profiles',
   'get_portable_warm_bundle_contract',
+  'export_portable_warm_bundle',
   'get_growth_context',
   'build_growth_task',
   'generate_growth_draft',
@@ -43,6 +44,18 @@ test('MCP dispatch can call the portable warm bundle contract tool', async () =>
   assert.equal(packet.ok, true);
   assert.equal(packet.product_boundary.projections_are_truth, false);
   assert.equal(packet.notion_projection_proposal.canonical_truth, false);
+});
+
+test('MCP dispatch can export a portable warm bundle without writing files', async () => {
+  const packet = await callTool('export_portable_warm_bundle', {
+    owner_id: 'synthetic-owner-with-no-runtime-data',
+    realm_id: 'synthetic-realm',
+    write_files: false
+  });
+  assert.equal(packet.ok, true);
+  assert.equal(packet.bundle.schema, 'driftstone_portable_warm_bundle_v0');
+  assert.equal(packet.output.dir, '');
+  assert.equal(packet.conservation.accepted_rows, 0);
 });
 
 test('MCP dispatch keeps unknown tool calls explicit', async () => {

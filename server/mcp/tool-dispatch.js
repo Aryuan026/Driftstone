@@ -4,6 +4,7 @@ import {
   listGrowthDraftsForTool,
   getGrowthDraftForTool,
   exportGrowthDraftToObsidianForTool,
+  exportPortableWarmBundleForTool,
   commitGrowthDecisionForTool,
   appendGrowthLedgerEntryForTool,
   buildFingerprintCandidatePoolForTool,
@@ -34,6 +35,17 @@ export async function callTool(name, args = {}) {
   }
   if (name === 'get_portable_warm_bundle_contract') {
     return getPortableWarmBundleContractForTool();
+  }
+  if (name === 'export_portable_warm_bundle') {
+    return exportPortableWarmBundleForTool({
+      ownerId: args.owner_id,
+      realmId: args.realm_id,
+      botId: args.bot_id,
+      cardType: args.card_type || 'memo',
+      limit: args.limit,
+      outputRoot: args.output_root,
+      writeFiles: args.write_files !== false
+    });
   }
   if (name === 'run_history_pipeline') {
     return runHistoryPipeline({

@@ -16,6 +16,7 @@ import { commitGrowthDecision } from './growth-commit-service.js';
 import { getGrowthDraftArtifact, listGrowthDraftArtifacts } from './growth-draft-store.js';
 import { exportGrowthDraftToObsidianStaging } from './obsidian-export-service.js';
 import { buildPortableWarmBundleContractPacket } from './portable-warm-bundle-contract.js';
+import { exportPortableWarmBundle } from './portable-warm-bundle-builder.js';
 import { getNextPendingTranslationWorkerPacket, getTranslationTaskWorkerPacket } from './memory-translation-task-service.js';
 import {
   loadRuntimeApiConfig,
@@ -354,6 +355,26 @@ export async function listRuntimeApiProfilesForTool() {
 
 export function getPortableWarmBundleContractForTool() {
   return buildPortableWarmBundleContractPacket();
+}
+
+export async function exportPortableWarmBundleForTool({
+  ownerId = '',
+  realmId = '',
+  botId = '',
+  cardType = 'memo',
+  limit = 200,
+  outputRoot = '',
+  writeFiles = true
+} = {}) {
+  return exportPortableWarmBundle({
+    ownerId,
+    realmId,
+    botId,
+    cardType,
+    limit,
+    outputRoot,
+    writeFiles
+  });
 }
 
 async function resolveApiSelection({ mode = 'local_programmatic', apiProfileName = '' } = {}) {

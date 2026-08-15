@@ -83,6 +83,9 @@ node server/mcp-server.js
   - 不翻全库，直接取旧兼容紧凑上下文
 - `get_portable_warm_bundle_contract`
   - 读取公开 Driftstone portable Warm bundle 合同和 projection 边界
+- `export_portable_warm_bundle`
+  - 把当前 scope 的 growth drafts / reviewed packet 导出为本地 portable Warm bundle
+  - 只写本地 JSON/JSONL 文件；不写 Notion、Home、Hippocove 或旧 roots/vines
 
 ### 一键快检
 
@@ -125,7 +128,7 @@ node server/mcp-server.js
 6. 重复 2-5，直到没有待处理任务
 7. `list_reviewed_clusters`
 8. 如有需要，AI 做语义合并
-9. 生成 portable Warm bundle / Markdown / Notion-ready projection
+9. `export_portable_warm_bundle`
 10. 只有维护旧兼容实验台时，才调用 `finalize_reviewed_entries`
 
 这条路的好处是：
@@ -179,7 +182,7 @@ scope 下面会留下：
 - 如果任务是写 Memo，必须从内位视角落笔：我在里面，不在外面观察或解释
 - 不要自己发明新的落盘路径
 - reviewed 写回通过 `submit_translation_entries`
-- portable 产物通过公开 bundle / projection export
+- portable 产物通过 `export_portable_warm_bundle` 或后续同合同 projection export
 - `finalize_reviewed_entries` 只在维护旧 roots/vines 兼容层时使用
 - 如果当前 task 不适合安全提炼，用 `fail_translation_task`
 

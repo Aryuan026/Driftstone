@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "mcp": "node mcp-server.js",
-    "test:contracts": "node --test tests/portable-warm-bundle-contract.test.js",
+    "test:contracts": "node --test tests/portable-warm-bundle-contract.test.js tests/portable-warm-bundle-builder.test.js",
     "test:mcp": "node --test tests/mcp-server-modules.test.js",
     "materialize:sql-roots": "node scripts/materialize-sql-roots.js",
     "materialize:sql-vines": "node scripts/materialize-sql-vines.js"

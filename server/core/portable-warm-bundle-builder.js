@@ -1,0 +1,614 @@
+import { createHash } from 'crypto';
+import { mkdir, writeFile } from 'fs/promises';
+import { join, resolve } from 'path';
+import { BUNDLE_SCHEMA, validatePortableWarmBundle } from './portable-warm-bundle-contract.js';
+import { getGrowthDraftArtifact, listGrowthDraftArtifacts } from './growth-draft-store.js';
+import { PROJECT_ROOT, safeScopeSegment } from './path-config.js';
+import { loadLatestRuntimeReviewedPacket } from './runtime-reviewed-store.js';
+
+function safeText(value, fallback = '') {
+  const text = String(value || '').trim();
+  return text || fallback;
+}
+
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`;
+  if (isPlainObject(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+function sha256(value) {
+  return `sha256:${createHash('sha256').update(String(value || '')).digest('hex')}`;
+}
+
+function shortHash(value, length = 16) {
+  return createHash('sha256').update(String(value || '')).digest('hex').slice(0, length);
+}
+
+function uniqueStrings(values = [], limit = 128) {
+  const seen = new Set();
+  const out = [];
+  for (const value of Array.isArray(values) ? values : []) {
+    const text = safeText(value);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function textLength(value = '') {
+  return String(value || '').length;
+}
+
+function digestObject(value) {
+  return sha256(stableJson(value));
+}
+
+function pickFirstText(values = [], fallback = '') {
+  for (const value of values) {
+    const text = safeText(value);
+    if (text) return text;
+  }
+  return fallback;
+}
+
+function inferCandidateTitle(artifact = {}) {
+  const draft = artifact?.draft || {};
+  return pickFirstText([
+    draft?.frontmatter?.title,
+    draft?.card_entry?.title,
+    artifact?.title,
+    draft?.target_card_id,
+    artifact?.artifact_id
+  ], 'Untitled portable Warm card');
+}
+
+function inferLivingFragment(artifact = {}) {
+  const draft = artifact?.draft || {};
+  return pickFirstText([
+    draft?.body?.snapshot,
+    draft?.snapshot,
+    draft?.card_entry?.summary_for_growth,
+    draft?.frontmatter?.inject_short,
+    artifact?.summary_for_growth
+  ]);
+}
+
+function inferFutureUseHint(artifact = {}) {
+  const draft = artifact?.draft || {};
+  const followUp = Array.isArray(draft?.body?.follow_up)
+    ? draft.body.follow_up
+    : (Array.isArray(draft?.follow_up) ? draft.follow_up : []);
+  return pickFirstText([
+    draft?.next_hint,
+    followUp[0],
+    draft?.reason
+  ]);
+}
+
+function inferFrontendDeliveryTier(artifact = {}) {
+  const draft = artifact?.draft || {};
+  return pickFirstText([
+    draft?.card_entry?.frontend_delivery_tier,
+    draft?.frontmatter?.frontend_delivery_tier,
+    artifact?.frontend_delivery_tier
+  ], 'guarded_candidate');
+}
+
+function inferArchiveBucket(artifact = {}) {
+  const draft = artifact?.draft || {};
+  return pickFirstText([
+    draft?.card_entry?.archive_bucket,
+    draft?.frontmatter?.archive_bucket,
+    artifact?.archive_bucket
+  ], 'stable');
+}
+
+function renderPortableCardMarkdown({ title = '', livingFragment = '', feelingAsFact = '', futureUseHint = '', markdown = '' } = {}) {
+  const existing = safeText(markdown);
+  if (existing) return existing;
+  const lines = [`# ${safeText(title, 'Portable Warm Card')}`, ''];
+  if (livingFragment) lines.push(livingFragment, '');
+  if (feelingAsFact) lines.push('## Feeling as fact', '', feelingAsFact, '');
+  if (futureUseHint) lines.push('## Future use', '', futureUseHint, '');
+  return lines.join('\n').trim();
+}
+
+function collectSnippetLists(container = {}) {
+  const lists = [];
+  if (Array.isArray(container?.source_scene_snippets)) lists.push(container.source_scene_snippets);
+  if (Array.isArray(container?.source_snippets)) lists.push(container.source_snippets);
+  return lists.flat();
+}
+
+function collectGrowthSourceSnippets(artifact = {}) {
+  const task = artifact?.task || {};
+  const draft = artifact?.draft || {};
+  const containers = [
+    draft?.source_review?.primary_evidence,
+    draft?.source_review?.related_evidence,
+    task?.evidence?.primary,
+    task?.evidence?.related,
+    task,
+    draft
+  ];
+  const snippets = [];
+  for (const container of containers) {
+    snippets.push(...collectSnippetLists(container));
+  }
+  return snippets.filter((item) => isPlainObject(item));
+}
+
+function normalizeSnippet(snippet = {}) {
+  const sourceWindow = pickFirstText([
+    snippet.source_window_title,
+    snippet.source_window,
+    snippet.source_window_id
+  ]);
+  const sourceFile = pickFirstText([
+    snippet.file,
+    snippet.source_file,
+    snippet.source_ref
+  ]);
+  const turnRange = pickFirstText([
+    snippet.source_msg_range,
+    snippet.turn_range,
+    snippet.message_range
+  ]);
+  const excerptText = pickFirstText([
+    snippet.excerpt_text,
+    snippet.source_quote,
+    snippet.quote_text,
+    snippet.excerpt_hint
+  ]);
+  return {
+    source_bundle_id: safeText(snippet.source_bundle_id || snippet.bundle_id),
+    source_file: sourceFile,
+    source_window: sourceWindow,
+    turn_range: turnRange,
+    message_ids: Array.isArray(snippet.message_ids) ? uniqueStrings(snippet.message_ids, 64) : [],
+    source_time: pickFirstText([snippet.source_time, snippet.time, snippet.date]),
+    speaker: pickFirstText([snippet.speaker, snippet.role], 'unknown'),
+    excerpt_text: excerptText,
+    raw: snippet
+  };
+}
+
+function isReliableSnippet(snippet = {}) {
+  return Boolean(
+    safeText(snippet.excerpt_text)
+    && safeText(snippet.turn_range)
+    && (safeText(snippet.source_window) || safeText(snippet.source_file))
+  );
+}
+
+function registerSourceSpan(state, snippet = {}) {
+  const sourceIdSeed = stableJson({
+    source_bundle_id: snippet.source_bundle_id,
+    source_file: snippet.source_file,
+    source_window: snippet.source_window
+  });
+  const sourceOccurrenceId = `occ_${shortHash(stableJson({
+    sourceIdSeed,
+    turn_range: snippet.turn_range
+  }))}`;
+  if (!state.sourceOccurrenceMap.has(sourceOccurrenceId)) {
+    const occurrence = {
+      source_occurrence_id: sourceOccurrenceId,
+      source_id: `source_${shortHash(sourceIdSeed)}`,
+      source_kind: 'growth_source_snippet',
+      source_file: safeText(snippet.source_file),
+      source_window: safeText(snippet.source_window),
+      turn_range: safeText(snippet.turn_range),
+      message_ids: Array.isArray(snippet.message_ids) ? snippet.message_ids : [],
+      source_time: safeText(snippet.source_time),
+      digest: digestObject({
+        source_bundle_id: snippet.source_bundle_id,
+        source_file: snippet.source_file,
+        source_window: snippet.source_window,
+        turn_range: snippet.turn_range
+      })
+    };
+    state.sourceOccurrenceMap.set(sourceOccurrenceId, occurrence);
+  }
+
+  const sourceSpanId = `span_${shortHash(stableJson({
+    source_occurrence_id: sourceOccurrenceId,
+    speaker: snippet.speaker,
+    turn_range: snippet.turn_range,
+    excerpt_text: snippet.excerpt_text
+  }))}`;
+  if (!state.sourceSpanMap.has(sourceSpanId)) {
+    state.sourceSpanMap.set(sourceSpanId, {
+      source_span_id: sourceSpanId,
+      source_occurrence_id: sourceOccurrenceId,
+      turn_range: safeText(snippet.turn_range),
+      message_ids: Array.isArray(snippet.message_ids) ? snippet.message_ids : [],
+      speaker: safeText(snippet.speaker, 'unknown'),
+      excerpt_text: safeText(snippet.excerpt_text),
+      excerpt_digest: sha256(snippet.excerpt_text),
+      bounds: {
+        start: 0,
+        end: textLength(snippet.excerpt_text),
+        unit: 'utf16_code_units'
+      }
+    });
+  }
+  return { sourceOccurrenceId, sourceSpanId };
+}
+
+function buildHoldEntry({ sourceKind = '', sourceId = '', title = '', reason = '', row = {} } = {}) {
+  const ledgerSeed = stableJson({ sourceKind, sourceId, title, reason });
+  return {
+    ledger_id: `hold_${shortHash(ledgerSeed)}`,
+    state: 'hold',
+    reason: safeText(reason, 'requires_review'),
+    source_kind: safeText(sourceKind),
+    source_id: safeText(sourceId),
+    title: safeText(title),
+    row_digest: digestObject(row),
+    review_note: 'Not emitted as a portable Warm card until source span evidence is bounded.'
+  };
+}
+
+function buildRejectedEntry({ sourceKind = '', sourceId = '', reason = '', row = {} } = {}) {
+  const ledgerSeed = stableJson({ sourceKind, sourceId, reason });
+  return {
+    ledger_id: `reject_${shortHash(ledgerSeed)}`,
+    state: 'rejected',
+    reason: safeText(reason, 'invalid_candidate'),
+    source_kind: safeText(sourceKind),
+    source_id: safeText(sourceId),
+    row_digest: digestObject(row)
+  };
+}
+
+function addGrowthDraftArtifact(state, artifact = {}) {
+  const artifactId = safeText(artifact?.artifact_id || artifact?.draft?.card_entry?.card_id || artifact?.json_file);
+  const title = inferCandidateTitle(artifact);
+  const livingFragment = inferLivingFragment(artifact);
+  if (!title || !livingFragment) {
+    state.rejected_ledger.push(buildRejectedEntry({
+      sourceKind: 'growth_draft',
+      sourceId: artifactId,
+      reason: 'missing_title_or_living_fragment',
+      row: artifact
+    }));
+    return;
+  }
+
+  const decision = safeText(artifact?.draft?.decision).toLowerCase();
+  if (decision === 'skip' || decision === 'hold') {
+    state.hold_ledger.push(buildHoldEntry({
+      sourceKind: 'growth_draft',
+      sourceId: artifactId,
+      title,
+      reason: `growth_decision_${decision}`,
+      row: artifact
+    }));
+    return;
+  }
+
+  const snippets = collectGrowthSourceSnippets(artifact).map((item) => normalizeSnippet(item));
+  const reliableSnippets = snippets.filter((item) => isReliableSnippet(item));
+  if (!reliableSnippets.length) {
+    state.hold_ledger.push(buildHoldEntry({
+      sourceKind: 'growth_draft',
+      sourceId: artifactId,
+      title,
+      reason: 'missing_bounded_source_span',
+      row: artifact
+    }));
+    return;
+  }
+
+  const sourceOccurrenceIds = [];
+  const sourceSpanIds = [];
+  for (const snippet of reliableSnippets) {
+    const registered = registerSourceSpan(state, snippet);
+    sourceOccurrenceIds.push(registered.sourceOccurrenceId);
+    sourceSpanIds.push(registered.sourceSpanId);
+  }
+
+  const draft = artifact?.draft || {};
+  const feelingAsFact = pickFirstText([
+    draft?.card_entry?.feeling_as_fact,
+    draft?.feeling_as_fact,
+    draft?.body?.feeling_as_fact,
+    draft?.body?.context
+  ]);
+  const futureUseHint = inferFutureUseHint(artifact);
+  const candidateId = `warm_${shortHash(stableJson({
+    source: 'growth_draft',
+    artifact_id: artifactId,
+    title,
+    livingFragment
+  }))}`;
+  state.warm_cards.push({
+    candidate_id: candidateId,
+    title,
+    archive_bucket: inferArchiveBucket(artifact),
+    frontend_delivery_tier: inferFrontendDeliveryTier(artifact),
+    portable_warm_card: {
+      body_markdown: renderPortableCardMarkdown({
+        title,
+        livingFragment,
+        feelingAsFact,
+        futureUseHint,
+        markdown: artifact?.markdown || draft?.markdown
+      }),
+      living_fragment: livingFragment,
+      feeling_as_fact: feelingAsFact,
+      future_use_hint: futureUseHint,
+      voice_fingerprint_refs: uniqueStrings(draft?.card_entry?.voice_fingerprint_refs || draft?.frontmatter?.voice_fingerprint || [], 32),
+      persona_refs: uniqueStrings(draft?.card_entry?.persona_refs || [], 32)
+    },
+    source_refs: {
+      source_occurrence_ids: uniqueStrings(sourceOccurrenceIds, 256),
+      source_span_ids: uniqueStrings(sourceSpanIds, 256)
+    },
+    privacy: {
+      local_only: true,
+      projection_requires_user_action: true
+    },
+    quality: {
+      source_bound: true,
+      source_complete: true,
+      source_span_count: uniqueStrings(sourceSpanIds, 256).length,
+      source_incomplete: snippets.length !== reliableSnippets.length
+    },
+    home_import_policy: {
+      direct_write_allowed: false,
+      state: 'review_only',
+      reason: 'Public Driftstone emits portable candidates only; Home canonical write is out of scope.'
+    }
+  });
+}
+
+function reviewedEntryTitle(entry = {}) {
+  return pickFirstText([
+    entry?.canonical_name,
+    entry?.slot_path,
+    entry?.secondary_slot,
+    entry?.anchor_type
+  ], 'Reviewed candidate');
+}
+
+function collectReviewedRows(packet = {}) {
+  if (Array.isArray(packet?.finalized_entries) && packet.finalized_entries.length) {
+    return packet.finalized_entries.map((entry, index) => ({
+      source_id: `finalized_entries[${index}]`,
+      entry
+    }));
+  }
+  return (Array.isArray(packet?.items) ? packet.items : []).map((item, index) => ({
+    source_id: safeText(item?.item_id, `items[${index}]`),
+    entry: item?.entry || {}
+  }));
+}
+
+function addReviewedPacketRows(state, packet = {}) {
+  for (const row of collectReviewedRows(packet)) {
+    const title = reviewedEntryTitle(row.entry);
+    state.hold_ledger.push(buildHoldEntry({
+      sourceKind: 'reviewed_entry',
+      sourceId: row.source_id,
+      title,
+      reason: 'reviewed_entry_missing_bounded_source_span',
+      row
+    }));
+  }
+}
+
+function buildManifest({ scope = {}, generatedAt = '', bundleId = '', state }) {
+  const sourceOccurrences = Array.from(state.sourceOccurrenceMap.values());
+  const sourceSpans = Array.from(state.sourceSpanMap.values());
+  const sourceManifest = {
+    source_count: sourceOccurrences.length,
+    source_occurrence_count: sourceOccurrences.length,
+    source_span_count: sourceSpans.length,
+    source_digest: digestObject({ source_occurrences: sourceOccurrences, source_spans: sourceSpans })
+  };
+  const conservation = {
+    input_growth_draft_rows: state.input_growth_draft_rows,
+    input_reviewed_rows: state.input_reviewed_rows,
+    input_rows: state.input_growth_draft_rows + state.input_reviewed_rows,
+    accepted_rows: state.warm_cards.length,
+    rejected_rows: state.rejected_ledger.length,
+    hold_rows: state.hold_ledger.length,
+    source_occurrence_count: sourceOccurrences.length,
+    source_span_count: sourceSpans.length
+  };
+  const manifest = {
+    bundle_id: bundleId,
+    created_at: generatedAt,
+    generator: 'driftstone_portable_warm_bundle_builder',
+    scope: {
+      owner_id: safeText(scope?.owner_id || scope?.ownerId),
+      realm_id: safeText(scope?.realm_id || scope?.realmId, 'default'),
+      bot_id: safeText(scope?.bot_id || scope?.botId)
+    },
+    candidate_count: state.warm_cards.length,
+    source_span_count: sourceSpans.length,
+    manifest_digest: ''
+  };
+  return { manifest, sourceManifest, conservation, sourceOccurrences, sourceSpans };
+}
+
+export function buildPortableWarmBundle({
+  scope = {},
+  growthDraftArtifacts = [],
+  reviewedPacket = null,
+  generatedAt = new Date().toISOString(),
+  bundleId = ''
+} = {}) {
+  const state = {
+    warm_cards: [],
+    rejected_ledger: [],
+    hold_ledger: [],
+    sourceOccurrenceMap: new Map(),
+    sourceSpanMap: new Map(),
+    input_growth_draft_rows: Array.isArray(growthDraftArtifacts) ? growthDraftArtifacts.length : 0,
+    input_reviewed_rows: Array.isArray(reviewedPacket?.finalized_entries)
+      ? reviewedPacket.finalized_entries.length
+      : (Array.isArray(reviewedPacket?.items) ? reviewedPacket.items.length : 0)
+  };
+
+  for (const artifact of Array.isArray(growthDraftArtifacts) ? growthDraftArtifacts : []) {
+    addGrowthDraftArtifact(state, artifact);
+  }
+  if (reviewedPacket) addReviewedPacketRows(state, reviewedPacket);
+
+  const resolvedBundleId = safeText(bundleId) || `bundle_${safeScopeSegment(scope?.owner_id || scope?.ownerId, 'owner')}_${safeScopeSegment(scope?.realm_id || scope?.realmId, 'default')}_${shortHash(stableJson({
+    generatedAt,
+    warm_cards: state.warm_cards.map((card) => card.candidate_id),
+    hold: state.hold_ledger.map((item) => item.ledger_id),
+    rejected: state.rejected_ledger.map((item) => item.ledger_id)
+  }))}`;
+  const {
+    manifest,
+    sourceManifest,
+    conservation,
+    sourceOccurrences,
+    sourceSpans
+  } = buildManifest({
+    scope,
+    generatedAt,
+    bundleId: resolvedBundleId,
+    state
+  });
+  const bundleWithoutDigest = {
+    schema: BUNDLE_SCHEMA,
+    manifest,
+    source_manifest: sourceManifest,
+    persona_authority: {
+      authority: 'optional_user_supplied_or_runtime_digest',
+      persona_digest: '',
+      language_fingerprint_digest: ''
+    },
+    warm_cards: state.warm_cards,
+    source_occurrences: sourceOccurrences,
+    source_spans: sourceSpans,
+    rejected_ledger: state.rejected_ledger,
+    hold_ledger: state.hold_ledger,
+    projection_roundtrip: {
+      notion: {
+        candidate_id_map: []
+      }
+    },
+    conservation
+  };
+  const manifestDigest = digestObject({
+    ...bundleWithoutDigest,
+    manifest: {
+      ...manifest,
+      manifest_digest: ''
+    }
+  });
+  return {
+    ...bundleWithoutDigest,
+    manifest: {
+      ...manifest,
+      manifest_digest: manifestDigest
+    }
+  };
+}
+
+function toJsonl(rows = []) {
+  return `${rows.map((row) => JSON.stringify(row)).join('\n')}${rows.length ? '\n' : ''}`;
+}
+
+async function writePortableWarmBundleFiles({ bundle = {}, outputRoot = '' } = {}) {
+  const root = resolve(outputRoot || join(PROJECT_ROOT, 'output', 'portable_warm_bundles'));
+  const scope = bundle?.manifest?.scope || {};
+  const dir = join(
+    root,
+    `${safeScopeSegment(scope.owner_id, 'owner')}__${safeScopeSegment(scope.realm_id, 'default')}`,
+    safeScopeSegment(bundle?.manifest?.bundle_id, 'bundle')
+  );
+  await mkdir(dir, { recursive: true });
+  const files = {
+    bundle_json: join(dir, 'portable_warm_bundle.json'),
+    manifest_json: join(dir, 'manifest.json'),
+    warm_cards_jsonl: join(dir, 'warm_cards.jsonl'),
+    source_occurrences_jsonl: join(dir, 'source_occurrences.jsonl'),
+    source_spans_jsonl: join(dir, 'source_spans.jsonl'),
+    rejected_ledger_jsonl: join(dir, 'rejected_ledger.jsonl'),
+    hold_ledger_jsonl: join(dir, 'hold_ledger.jsonl')
+  };
+  await writeFile(files.bundle_json, `${JSON.stringify(bundle, null, 2)}\n`, 'utf8');
+  await writeFile(files.manifest_json, `${JSON.stringify(bundle.manifest, null, 2)}\n`, 'utf8');
+  await writeFile(files.warm_cards_jsonl, toJsonl(bundle.warm_cards), 'utf8');
+  await writeFile(files.source_occurrences_jsonl, toJsonl(bundle.source_occurrences), 'utf8');
+  await writeFile(files.source_spans_jsonl, toJsonl(bundle.source_spans), 'utf8');
+  await writeFile(files.rejected_ledger_jsonl, toJsonl(bundle.rejected_ledger), 'utf8');
+  await writeFile(files.hold_ledger_jsonl, toJsonl(bundle.hold_ledger), 'utf8');
+  return { dir, files };
+}
+
+export async function exportPortableWarmBundle({
+  ownerId = '',
+  realmId = '',
+  botId = '',
+  cardType = 'memo',
+  limit = 200,
+  outputRoot = '',
+  writeFiles = true
+} = {}) {
+  const scope = {
+    owner_id: safeText(ownerId),
+    realm_id: safeText(realmId, 'default'),
+    bot_id: safeText(botId)
+  };
+  const catalog = await listGrowthDraftArtifacts({
+    ownerId: scope.owner_id,
+    realmId: scope.realm_id,
+    cardType,
+    limit
+  });
+  const growthDraftArtifacts = [];
+  for (const row of Array.isArray(catalog?.drafts) ? catalog.drafts : []) {
+    const artifact = await getGrowthDraftArtifact({
+      ownerId: scope.owner_id,
+      realmId: scope.realm_id,
+      cardType: row.card_type || cardType,
+      artifactId: row.artifact_id
+    });
+    if (artifact?.ok) growthDraftArtifacts.push(artifact);
+  }
+  let reviewedPacket = null;
+  try {
+    reviewedPacket = (await loadLatestRuntimeReviewedPacket({
+      ownerId: scope.owner_id,
+      realmId: scope.realm_id
+    }))?.packet || null;
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  const bundle = buildPortableWarmBundle({
+    scope,
+    growthDraftArtifacts,
+    reviewedPacket
+  });
+  const validation = validatePortableWarmBundle(bundle);
+  const written = writeFiles
+    ? await writePortableWarmBundleFiles({ bundle, outputRoot })
+    : { dir: '', files: {} };
+  return {
+    ok: validation.ok,
+    schema: 'driftstone_portable_warm_bundle_export_v0',
+    bundle,
+    validation,
+    output: written,
+    counts: validation.counts,
+    conservation: bundle.conservation
+  };
+}
