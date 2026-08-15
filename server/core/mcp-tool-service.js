@@ -431,6 +431,94 @@ function buildScope({ ownerId = '', realmId = '', botId = '' } = {}) {
   };
 }
 
+function buildExplicitScope({ ownerId = '', realmId = '', botId = '' } = {}) {
+  return {
+    owner_id: safeText(ownerId),
+    realm_id: safeText(realmId),
+    bot_id: safeText(botId)
+  };
+}
+
+function assertExactTaskScope({ taskScope = {}, explicitScope = {}, taskFile = '' } = {}) {
+  for (const key of ['owner_id', 'realm_id', 'bot_id']) {
+    const requested = safeText(explicitScope?.[key]);
+    const actual = safeText(taskScope?.[key]);
+    if (requested && actual && requested !== actual) {
+      throw new Error(`task_file scope mismatch for ${safeText(taskFile, 'task')}: ${key} must be ${actual}`);
+    }
+  }
+}
+
+function buildBodyFreeHomeSummary(payload = {}) {
+  const source =
+    payload?.home_summary && typeof payload.home_summary === 'object' ? payload.home_summary
+    : payload?.home?.home_summary && typeof payload.home.home_summary === 'object' ? payload.home.home_summary
+    : {};
+  return {
+    home_state: safeText(source.home_state),
+    next_work_type: safeText(source.next_work_type),
+    read_preview_type: safeText(source.read_preview_type),
+    roots: Number(source.roots || 0),
+    vine_edges: Number(source.vine_edges || 0),
+    leaf_total: Number(source.leaf_total || 0),
+    current_bot_leaf_exists: Boolean(source.current_bot_leaf_exists),
+    translation_pending: Number(source.translation_pending || 0),
+    translation_submitted: Number(source.translation_submitted || 0),
+    translation_applied: Number(source.translation_applied || 0),
+    translation_failed: Number(source.translation_failed || 0),
+    translation_total: Number(source.translation_total || 0),
+    translation_completed: Number(source.translation_completed || 0),
+    translation_progress_ratio: Number(source.translation_progress_ratio || 0)
+  };
+}
+
+function buildBodyFreeReviewedSummary(summary = {}) {
+  return {
+    append_count: Number(summary?.append_count || 0),
+    item_count: Number(summary?.item_count || 0),
+    cluster_count: Number(summary?.cluster_count || 0),
+    ambiguous_cluster_count: Number(summary?.ambiguous_cluster_count || 0),
+    merged_entry_count: Number(summary?.merged_entry_count || 0)
+  };
+}
+
+function buildBodyFreeTranslationStatusSummary(summary = {}) {
+  return {
+    pending: Number(summary?.pending || 0),
+    submitted: Number(summary?.submitted || 0),
+    applied: Number(summary?.applied || 0),
+    failed: Number(summary?.failed || 0)
+  };
+}
+
+function buildPublicTranslationLifecycleProjection(payload = {}, {
+  nextTask = null,
+  statusSummary = {}
+} = {}) {
+  const projected = {
+    ok: Boolean(payload?.ok),
+    schema: safeText(payload?.schema),
+    scope: payload?.scope || {},
+    home_summary: buildBodyFreeHomeSummary(payload),
+    next_task: nextTask || null,
+    status_summary: buildBodyFreeTranslationStatusSummary(statusSummary || {})
+  };
+  if (safeText(payload?.error)) projected.error = safeText(payload.error);
+  if (safeText(payload?.task_file)) projected.task_file = safeText(payload.task_file);
+  if (safeText(payload?.packet_file)) projected.packet_file = safeText(payload.packet_file);
+  if (safeText(payload?.batch_id)) projected.batch_id = safeText(payload.batch_id);
+  if (safeText(payload?.parse_mode)) projected.parse_mode = safeText(payload.parse_mode);
+  if (Number.isFinite(Number(payload?.parsed_entries))) projected.parsed_entries = Number(payload.parsed_entries);
+  if (payload?.replay && typeof payload.replay === 'object') projected.replay = payload.replay;
+  if (payload?.reviewed && typeof payload.reviewed === 'object') {
+    projected.reviewed = {
+      packet_file: safeText(payload.reviewed.packet_file),
+      summary: buildBodyFreeReviewedSummary(payload.reviewed.summary || {})
+    };
+  }
+  return projected;
+}
+
 async function maybeReadLatestPacket(dir) {
   try {
     const pointer = await readJson(`${dir}/latest.json`);
@@ -484,15 +572,15 @@ export async function inspectPipelineScope({
     } : null,
     tasks: tasks ? {
       packet_dir: tasks.packet_dir,
-      status_summary: tasks.packet?.status_summary || {},
+      status_summary: buildBodyFreeTranslationStatusSummary(tasks.packet?.status_summary || {}),
       summary: tasks.packet?.summary || {}
     } : null,
     reviewed: reviewed ? {
       packet_dir: reviewed.packet_dir,
-      summary: reviewed.packet?.summary || {},
+      summary: buildBodyFreeReviewedSummary(reviewed.packet?.summary || {}),
       finalized_at: safeText(reviewed.packet?.finalized_at)
     } : null,
-    home: home?.ok ? home.home_summary || {} : {}
+    home: buildBodyFreeHomeSummary(home?.ok ? home : {})
   };
 }
 
@@ -561,7 +649,7 @@ export async function prepareHistorySource({
     translation: translation.translation || {},
     prepare: prepare.summary || {},
     next_task: next?.next_task || null,
-    status_summary: next?.status_summary || {}
+    status_summary: buildBodyFreeTranslationStatusSummary(next?.status_summary || {})
   };
 }
 
@@ -572,13 +660,23 @@ export async function pullTranslationTaskForTool({
   taskFile = ''
 } = {}) {
   if (safeText(taskFile)) {
-    return getTranslationTaskWorkerPacket(safeText(taskFile));
+    const worker = await getTranslationTaskWorkerPacket(safeText(taskFile));
+    assertExactTaskScope({
+      taskScope: worker?.scope || {},
+      explicitScope: buildExplicitScope({ ownerId, realmId, botId }),
+      taskFile
+    });
+    return worker;
   }
-  return getNextPendingTranslationWorkerPacket({
+  const next = await getNextPendingTranslationWorkerPacket({
     owner_id: safeText(ownerId),
     realm_id: safeText(realmId),
     bot_id: safeText(botId, 'assistant')
   });
+  return {
+    ...next,
+    status_summary: buildBodyFreeTranslationStatusSummary(next?.status_summary || {})
+  };
 }
 
 export async function submitTranslationEntriesForTool({
@@ -590,25 +688,26 @@ export async function submitTranslationEntriesForTool({
   botId = '',
   sourceLabel = 'mcp_translation_submit'
 } = {}) {
-  const scope = buildScope({ ownerId, realmId, botId });
   const appended = await appendRuntimeReviewedEntries({
     task_file: safeText(taskFile),
     entries: Array.isArray(entries) ? entries : undefined,
     raw_output: safeText(rawOutput),
-    scope,
+    scope: safeText(taskFile)
+      ? buildExplicitScope({ ownerId, realmId, botId })
+      : buildScope({ ownerId, realmId, botId }),
     source: {
       label: safeText(sourceLabel, 'mcp_translation_submit')
     }
   });
+  const scope = appended?.scope || buildScope({ ownerId, realmId, botId });
   const next = await getNextPendingTranslationWorkerPacket({
     owner_id: scope.owner_id,
     realm_id: scope.realm_id
   });
-  return {
-    ...appended,
-    next_task: next?.next_task || null,
-    status_summary: next?.status_summary || {}
-  };
+  return buildPublicTranslationLifecycleProjection(appended, {
+    nextTask: next?.next_task || null,
+    statusSummary: next?.status_summary || {}
+  });
 }
 
 export async function failTranslationTaskForTool({
@@ -620,25 +719,26 @@ export async function failTranslationTaskForTool({
   botId = '',
   sourceLabel = 'mcp_translation_fail'
 } = {}) {
-  const scope = buildScope({ ownerId, realmId, botId });
   const failed = await failAiTranslationTask({
     task_file: safeText(taskFile),
     error: safeText(error, 'Translator worker failed before submission.'),
     raw_output: safeText(rawOutput),
-    scope,
+    scope: safeText(taskFile)
+      ? buildExplicitScope({ ownerId, realmId, botId })
+      : buildScope({ ownerId, realmId, botId }),
     source: {
       label: safeText(sourceLabel, 'mcp_translation_fail')
     }
   });
+  const scope = failed?.scope || buildScope({ ownerId, realmId, botId });
   const next = await getNextPendingTranslationWorkerPacket({
     owner_id: scope.owner_id,
     realm_id: scope.realm_id
   });
-  return {
-    ...failed,
-    next_task: next?.next_task || null,
-    status_summary: next?.status_summary || {}
-  };
+  return buildPublicTranslationLifecycleProjection(failed, {
+    nextTask: next?.next_task || null,
+    statusSummary: next?.status_summary || {}
+  });
 }
 
 export async function listReviewedClustersForTool({

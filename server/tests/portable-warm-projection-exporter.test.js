@@ -72,7 +72,8 @@ test('projection exporter writes local markdown, obsidian, and notion-ready file
     assert.equal(result.counts.source_spans, 1);
 
     const entry = await readFile(result.output.files.chat_human_entry_md, 'utf8');
-    assert.match(entry, /reversible local projection/);
+    assert.match(entry, /review-backflow anchors/);
+    assert.match(entry, /Patch validation\/apply is not implemented/);
     assert.match(entry, /not canonical truth/i);
 
     const warmReview = await readFile(result.output.files.warm_cards_md, 'utf8');

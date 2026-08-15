@@ -24,7 +24,9 @@ Markdown / Obsidian / Notion / human web UI
 Projection rule:
 
 ```text
-Projections are reversible views of the bundle. They are not canonical truth.
+Projections are local views of the bundle with review-backflow anchors. They are
+not canonical truth, and this public build does not yet apply projection review
+patches back to the bundle.
 ```
 
 Out of public scope:
@@ -52,9 +54,9 @@ upstream; Studio import waits for an explicit reviewed public checkpoint.
 ## Operating Rules
 
 - Work in the clean carrier worktree:
-  `/Users/mac/Documents/Codex/worktrees/driftstone-agent-migration-toolchain-20260815`
+  `<clean-public-driftstone-worktree>`
 - Do not edit the dirty main checkout:
-  `/Users/mac/Documents/Codex/0-github/202604-Driftstone`
+  `<legacy-dirty-driftstone-checkout>`
 - Do not commit raw history, private corpora, API keys, runtime cache, Notion
   credentials, or generated private memory.
 - External API validation is allowed only as a runtime secret. Keys must be
@@ -359,7 +361,7 @@ Notion is a projection and review surface. It is not canonical truth.
 
 Notion planning requirements:
 
-- stable candidate id to notion page id roundtrip
+- stable candidate id to notion page id identity map
 - projection sync hash
 - local review patch import by candidate id + base digest
 - source occurrences/spans visible as bounded evidence only
@@ -369,7 +371,9 @@ Notion planning requirements:
 Acceptance:
 
 - Bundle can regenerate projection deterministically.
-- Review patch can be validated locally before applying to bundle projection.
+- Review patch validation/apply is not implemented in this public build; until
+  it lands, projection exports are one-way local files with candidate_id/sync
+  hash anchors only.
 - No Notion write occurs during ordinary export.
 
 Checkpoint:
@@ -464,5 +468,6 @@ P1:
 - `path-config` creates runtime directories on import, which is awkward for pure
   inspect/validate tools.
 - No root `LICENSE` or `NOTICE` file is present in the inspected public worktree.
+  Release remains HOLD until owner chooses and adds licensing files.
 - UI and legacy workbench remain large monoliths, but should wait until agent
   workflow stabilizes.

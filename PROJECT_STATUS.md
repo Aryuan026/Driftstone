@@ -5,6 +5,7 @@ Last updated: 2026-08-15
 ## Release Position
 
 - Stage: Open alpha / experimental workbench
+- Release gate: HOLD until owner chooses and adds root `LICENSE` / `NOTICE`
 - Intended publish folder: public Driftstone repo
 - Intended publish style: repo + GitHub Pages + local backend + MCP
 - Public product boundary: portable Warm bundle + source occurrence/span/digest + manifest + rejected/HOLD ledger

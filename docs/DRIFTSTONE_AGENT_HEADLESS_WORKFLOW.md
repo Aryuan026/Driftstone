@@ -5,7 +5,8 @@ opening the human UI.
 
 Older docs may still use `HIPPOCOVE_*` filenames for compatibility. Public
 product language should say Driftstone. The public endpoint is a portable Warm
-bundle and reversible local projections, not a Cold tree writer.
+bundle and local projections with review-backflow anchors, not a Cold tree
+writer.
 
 ## Boundary
 
@@ -156,7 +157,7 @@ Projection safety:
 
 - Notion-ready JSONL is not a Notion write.
 - `candidate_id`, `notion_sync_hash`, and empty `notion_page_id` support a
-  future explicit roundtrip.
+  future explicit review-backflow.
 - Output is limited to the repository `output/` directory or the system temp
   directory.
 - Obvious private absolute paths and secret-like API keys are blocked before
@@ -198,8 +199,10 @@ systems unless the human explicitly asks for that action now.
 An agent run is acceptable when:
 
 - The scope can be inspected and resumed.
-- Every processed task ends as submitted or explicitly failed.
+- Every processed task ends as `applied` or explicitly failed; `submitted`
+  without reviewed output is recoverable work, not a final state.
 - The portable bundle validates.
 - Rejected and HOLD rows remain visible.
-- Projection files, if generated, are local and reversible.
+- Projection files, if generated, are local views with candidate_id/sync hash
+  anchors; projection patch apply is not implemented in this public build.
 - No private system write or external projection write happened silently.

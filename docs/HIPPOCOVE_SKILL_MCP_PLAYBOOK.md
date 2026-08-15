@@ -3,8 +3,9 @@
 > Legacy note: this file keeps older workbench observations and compatibility
 > notes under the old `HIPPOCOVE_*` filename. New agents should start from
 > [`DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md`](./DRIFTSTONE_AGENT_HEADLESS_WORKFLOW.md).
-> Public Driftstone's endpoint is `portable_warm_bundle` plus reversible local
-> projections, not roots/vines, Home, Hippocove, Notion, or privacy UI writes.
+> Public Driftstone's endpoint is `portable_warm_bundle` plus local projections
+> with review-backflow anchors, not roots/vines, Home, Hippocove, Notion, or
+> privacy UI writes.
 
 这份旧记录是写给两种人看的：
 

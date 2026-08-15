@@ -17,11 +17,13 @@ portable_warm_bundle
 + rejected / HOLD ledger
 ```
 
-Markdown、Obsidian、Notion 都只是这套包的可逆投影；它们方便人类看、方便 Chat 端读，但不是第二真相。公开 Driftstone 也不写 Home、Hippocove cold tree、root、vine、case graph 或任何私有生产记忆。
+Markdown、Obsidian、Notion 都只是这套包的本地投影；它们带 candidate_id / sync hash 等回流锚点，方便人类看、方便 Chat 端读，但当前公开版还没有实现“投影修改后本地校验并回写 bundle”的 patch apply。它们不是第二真相。公开 Driftstone 也不写 Home、Hippocove cold tree、root、vine、case graph 或任何私有生产记忆。
 
 ## 这是一个什么阶段的项目
 
-这是一个**可以公开、可以继续改、也欢迎别人带走再调**的 alpha 工位。
+这是一个**可以公开审阅、可以继续改**的 alpha 工位。
+
+发布提醒：当前仓根还没有 `LICENSE` / `NOTICE`，所以正式 release 仍处于 HOLD。别人能阅读和试跑，不等于已经获得明确再分发/改作授权；许可证需要 owner 另行决定。
 
 意思很简单：
 - 主链已经跑通了

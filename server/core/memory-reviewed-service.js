@@ -1,6 +1,12 @@
-import { loadTranslationTaskByFile, updateTranslationTaskStatus } from './translation-task-store.js';
+import { createHash } from 'crypto';
+import { loadCanonicalTranslationTaskByFile, updateTranslationTaskStatus } from './translation-task-store.js';
 import { normalizeCompact, pickEarlierDate, pickLaterDate, sqlGrowthUniqueStrings } from './growth-helpers.js';
-import { ensureRuntimeReviewedPacket, loadLatestRuntimeReviewedPacket, saveRuntimeReviewedPacket } from './runtime-reviewed-store.js';
+import {
+  ensureRuntimeReviewedPacket,
+  loadLatestRuntimeReviewedPacket,
+  loadRuntimeReviewedPacketByFile,
+  saveRuntimeReviewedPacket
+} from './runtime-reviewed-store.js';
 import { parseAiTranslationTaskSubmission } from './memory-translation-ai-service.js';
 import { writeMemoryEnvelope } from './memory-write-service.js';
 import { buildMemoryScope } from './scope-contract.js';
@@ -9,6 +15,22 @@ import { getMemoryHomePacket } from './memory-home-service.js';
 function safeText(value, fallback = '') {
   const text = String(value || '').trim();
   return text || fallback;
+}
+
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`;
+  if (isPlainObject(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+function sha256(value) {
+  return `sha256:${createHash('sha256').update(String(value || '')).digest('hex')}`;
 }
 
 function uniqueStrings(values, limit = 64) {
@@ -34,6 +56,25 @@ function buildEntrySignature(entry = {}) {
         .flatMap((item) => Array.isArray(item?.summaries) ? item.summaries : [])
     ).map((item) => normalizeCompact(item)).join('|')
   ].join('::');
+}
+
+function buildSubmissionDigest({ entries = [], rawOutput = '', hasDirectEntries = false } = {}) {
+  return sha256(stableJson({
+    entries,
+    raw_output: safeText(rawOutput),
+    has_direct_entries: Boolean(hasDirectEntries)
+  }));
+}
+
+function reviewedComparableItems(items = []) {
+  return (Array.isArray(items) ? items : []).map((item) => ({
+    signature: safeText(item?.signature),
+    entry: item?.entry || {}
+  }));
+}
+
+function sameReviewedItems(left = [], right = []) {
+  return stableJson(reviewedComparableItems(left)) === stableJson(reviewedComparableItems(right));
 }
 
 function buildClusterId(rootKey) {
@@ -203,7 +244,7 @@ function coerceAiMergeMap(aiMerges = []) {
 
 export async function appendRuntimeReviewedEntries(body = {}) {
   const parsed = await parseAiTranslationTaskSubmission(body, {
-    markSubmitted: true,
+    markSubmitted: false,
     markFailure: true
   });
   if (!parsed?.ok) return parsed;
@@ -215,18 +256,7 @@ export async function appendRuntimeReviewedEntries(body = {}) {
     mode: 'bot'
   });
 
-  const packetState = await ensureRuntimeReviewedPacket({
-    ownerId: scope.owner_id,
-    realmId: scope.realm_id,
-    scope,
-    label: safeText(body?.source?.label || `${scope.realm_id}__reviewed`)
-  });
-
-  const packet = packetState.packet || {};
   const taskFile = safeText(parsed.task_file);
-  packet.items = (Array.isArray(packet.items) ? packet.items : []).filter((item) => safeText(item.task_file) !== taskFile);
-  packet.tasks = (Array.isArray(packet.tasks) ? packet.tasks : []).filter((item) => safeText(item.task_file) !== taskFile);
-
   const items = parsed.entries.map((entry, index) => {
     const normalized = normalizeReviewedEntry(entry);
     const rootKey = buildRootKey(normalized);
@@ -240,6 +270,191 @@ export async function appendRuntimeReviewedEntries(body = {}) {
       entry: normalized
     };
   });
+  const submissionDigest = buildSubmissionDigest({
+    entries: parsed.entries,
+    rawOutput: body?.raw_output || '',
+    hasDirectEntries: Array.isArray(body?.entries)
+  });
+  const existingTaskDoc = taskFile ? await loadCanonicalTranslationTaskByFile(taskFile).catch(() => null) : null;
+  const historicalReviewedPacketFile = safeText(existingTaskDoc?.writeback?.reviewed_packet_file);
+  if (taskFile && safeText(existingTaskDoc?.status) === 'applied' && historicalReviewedPacketFile) {
+    const historicalPacket = await loadRuntimeReviewedPacketByFile(historicalReviewedPacketFile).catch(() => null);
+    const historicalItems = (Array.isArray(historicalPacket?.items) ? historicalPacket.items : [])
+      .filter((item) => safeText(item.task_file) === taskFile);
+    const historicalTaskRow = (Array.isArray(historicalPacket?.tasks) ? historicalPacket.tasks : [])
+      .find((item) => safeText(item.task_file) === taskFile);
+    const previousSubmissionDigest = safeText(
+      historicalTaskRow?.submission_digest
+      || existingTaskDoc?.submit?.submission_digest
+      || existingTaskDoc?.writeback?.reviewed_submission_digest
+    );
+    if (!historicalItems.length) {
+      return {
+        ok: false,
+        schema: 'hippocove_runtime_reviewed_append_v0.1',
+        scope,
+        error: 'task_file replay cannot be verified against its reviewed packet.',
+        task_file: taskFile,
+        parsed_entries: items.length,
+        replay: {
+          status: 'conflict',
+          duplicate_write: false,
+          previous_submission_digest: previousSubmissionDigest,
+          submission_digest: submissionDigest
+        },
+        reviewed: {
+          packet_file: historicalReviewedPacketFile,
+          summary: historicalPacket?.summary || {}
+        }
+      };
+    }
+    const sameItems = sameReviewedItems(historicalItems, items);
+    const sameSubmission = !previousSubmissionDigest || previousSubmissionDigest === submissionDigest;
+    if (sameItems && sameSubmission) {
+      const home = await getMemoryHomePacket({
+        ownerId: scope.owner_id,
+        realmId: scope.realm_id,
+        botId: scope.bot_id,
+        mode: 'bot'
+      });
+      return {
+        ok: true,
+        schema: 'hippocove_runtime_reviewed_append_v0.1',
+        scope,
+        reviewed: {
+          packet_file: historicalReviewedPacketFile,
+          summary: historicalPacket?.summary || summarizeReviewedPacket(historicalPacket)
+        },
+        parsed_entries: items.length,
+        task_file: taskFile,
+        replay: {
+          status: 'observed_existing',
+          duplicate_write: false
+        },
+        home: home?.ok ? home : {},
+        home_summary: home?.ok && home?.home_summary ? home.home_summary : {}
+      };
+    }
+    return {
+      ok: false,
+      schema: 'hippocove_runtime_reviewed_append_v0.1',
+      scope,
+      error: 'task_file submission conflict: existing reviewed entries differ from this submission.',
+      task_file: taskFile,
+      parsed_entries: items.length,
+      replay: {
+        status: 'conflict',
+        duplicate_write: false,
+        existing_item_count: historicalItems.length,
+        previous_submission_digest: previousSubmissionDigest,
+        submission_digest: submissionDigest
+      },
+      reviewed: {
+        packet_file: historicalReviewedPacketFile,
+        summary: historicalPacket?.summary || summarizeReviewedPacket(historicalPacket)
+      }
+    };
+  }
+
+  const packetState = await ensureRuntimeReviewedPacket({
+    ownerId: scope.owner_id,
+    realmId: scope.realm_id,
+    scope,
+    label: safeText(body?.source?.label || `${scope.realm_id}__reviewed`)
+  });
+
+  const packet = packetState.packet || {};
+  const existingItems = taskFile
+    ? (Array.isArray(packet.items) ? packet.items : []).filter((item) => safeText(item.task_file) === taskFile)
+    : [];
+  const existingTaskRow = taskFile
+    ? (Array.isArray(packet.tasks) ? packet.tasks : []).find((item) => safeText(item.task_file) === taskFile)
+    : null;
+  const previousSubmissionDigest = safeText(
+    existingTaskRow?.submission_digest
+    || existingTaskDoc?.submit?.submission_digest
+    || existingTaskDoc?.writeback?.reviewed_submission_digest
+  );
+
+  if (taskFile && existingItems.length) {
+    const sameItems = sameReviewedItems(existingItems, items);
+    const sameSubmission = !previousSubmissionDigest || previousSubmissionDigest === submissionDigest;
+    if (sameItems && sameSubmission) {
+      if (existingTaskDoc && safeText(existingTaskDoc.status) !== 'applied') {
+        const updatedAt = new Date().toISOString();
+        await updateTranslationTaskStatus(taskFile, (task) => ({
+          ...task,
+          status: 'applied',
+          lifecycle: {
+            ...(task.lifecycle || {}),
+            submitted_at: task?.lifecycle?.submitted_at || updatedAt,
+            applied_at: task?.lifecycle?.applied_at || updatedAt
+          },
+          submit: {
+            ...(task.submit || {}),
+            parse_mode: parsed.parse_mode,
+            parsed_entries: items.length,
+            source_label: safeText(body?.source?.label || task?.submit?.source_label || parsed.batch_id || ''),
+            submission_digest: submissionDigest
+          },
+          writeback: {
+            ...(task.writeback || {}),
+            ok: true,
+            reviewed_packet_file: packetState.packetFile,
+            reviewed_item_count: items.length,
+            reviewed_submission_digest: submissionDigest
+          }
+        }));
+      }
+      const home = await getMemoryHomePacket({
+        ownerId: scope.owner_id,
+        realmId: scope.realm_id,
+        botId: scope.bot_id,
+        mode: 'bot'
+      });
+      return {
+        ok: true,
+        schema: 'hippocove_runtime_reviewed_append_v0.1',
+        scope,
+        reviewed: {
+          packet_file: packetState.packetFile,
+          summary: packet.summary || summarizeReviewedPacket(packet)
+        },
+        parsed_entries: items.length,
+        task_file: taskFile,
+        replay: {
+          status: 'observed_existing',
+          duplicate_write: false
+        },
+        home: home?.ok ? home : {},
+        home_summary: home?.ok && home?.home_summary ? home.home_summary : {}
+      };
+    }
+    return {
+      ok: false,
+      schema: 'hippocove_runtime_reviewed_append_v0.1',
+      scope,
+      error: 'task_file submission conflict: existing reviewed entries differ from this submission.',
+      task_file: taskFile,
+      parsed_entries: items.length,
+      replay: {
+        status: 'conflict',
+        duplicate_write: false,
+        existing_item_count: existingItems.length,
+        previous_submission_digest: previousSubmissionDigest,
+        submission_digest: submissionDigest
+      },
+      reviewed: {
+        packet_file: packetState.packetFile,
+        summary: packet.summary || summarizeReviewedPacket(packet)
+      }
+    };
+  }
+
+  if (taskFile) {
+    packet.items = (Array.isArray(packet.items) ? packet.items : []).filter((item) => safeText(item.task_file) !== taskFile);
+    packet.tasks = (Array.isArray(packet.tasks) ? packet.tasks : []).filter((item) => safeText(item.task_file) !== taskFile);
+  }
 
   packet.items.push(...items);
   packet.tasks.push({
@@ -247,12 +462,40 @@ export async function appendRuntimeReviewedEntries(body = {}) {
     batch_id: safeText(parsed.batch_id || body?.source?.label || ''),
     packet_file: safeText(parsed.packet_file),
     parsed_entries: items.length,
+    submission_digest: submissionDigest,
     updated_at: new Date().toISOString()
   });
   packet.updated_at = new Date().toISOString();
   packet.summary = summarizeReviewedPacket(packet);
 
   await saveRuntimeReviewedPacket(packetState.packetFile, packet);
+
+  if (taskFile) {
+    const updatedAt = new Date().toISOString();
+    await updateTranslationTaskStatus(taskFile, (task) => ({
+      ...task,
+      status: 'applied',
+      lifecycle: {
+        ...(task.lifecycle || {}),
+        submitted_at: task?.lifecycle?.submitted_at || updatedAt,
+        applied_at: updatedAt
+      },
+      submit: {
+        ...(task.submit || {}),
+        parse_mode: parsed.parse_mode,
+        parsed_entries: items.length,
+        source_label: safeText(body?.source?.label || task?.submit?.source_label || parsed.batch_id || ''),
+        submission_digest: submissionDigest
+      },
+      writeback: {
+        ...(task.writeback || {}),
+        ok: true,
+        reviewed_packet_file: packetState.packetFile,
+        reviewed_item_count: items.length,
+        reviewed_submission_digest: submissionDigest
+      }
+    }));
+  }
 
   const home = await getMemoryHomePacket({
     ownerId: scope.owner_id,
@@ -384,7 +627,7 @@ export async function finalizeRuntimeReviewedEntries(body = {}) {
 
   const taskFiles = Array.from(new Set((Array.isArray(packet.tasks) ? packet.tasks : []).map((item) => safeText(item.task_file)).filter(Boolean)));
   for (const taskFile of taskFiles) {
-    const current = await loadTranslationTaskByFile(taskFile).catch(() => null);
+    const current = await loadCanonicalTranslationTaskByFile(taskFile).catch(() => null);
     if (!current || safeText(current.status) === 'failed') continue;
     await updateTranslationTaskStatus(taskFile, (task) => ({
       ...task,
@@ -394,6 +637,7 @@ export async function finalizeRuntimeReviewedEntries(body = {}) {
         applied_at: new Date().toISOString()
       },
       writeback: {
+        ...(task.writeback || {}),
         ok: Boolean(writeback?.ok),
         created_roots: Number(writeback?.summary?.created_roots || 0),
         updated_roots: Number(writeback?.summary?.updated_roots || 0),

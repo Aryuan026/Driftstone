@@ -293,7 +293,8 @@ function renderBundleIndex({ bundle = {}, files = {}, warmRows = [], sourceSpanR
   return [
     '# Driftstone Portable Warm Projection',
     '',
-    'This folder is a reversible local projection of `portable_warm_bundle.json`.',
+    'This folder is a local projection of `portable_warm_bundle.json` with review-backflow anchors.',
+    'Patch validation/apply is not implemented in this public build, so projection edits are not canonical bundle changes.',
     'It is not canonical truth and it does not mean anything was written to Notion, Home, Hippocove, or a cold tree.',
     '',
     '## Bundle',

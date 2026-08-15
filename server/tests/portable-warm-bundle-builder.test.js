@@ -105,6 +105,54 @@ test('builder holds growth drafts without bounded source spans', () => {
   assert.equal(bundle.conservation.hold_rows, 1);
 });
 
+test('builder holds mixed source quality instead of publishing contradictory completeness', () => {
+  const mixedArtifact = buildGrowthDraftArtifact({
+    draft: {
+      decision: 'new',
+      frontmatter: {
+        title: 'Mixed source card'
+      },
+      body: {
+        snapshot: 'This card mixes one bounded source and one incomplete source.'
+      },
+      source_review: {
+        primary_evidence: {
+          source_scene_snippets: [
+            {
+              source_bundle_id: 'bundle_001',
+              file: 'synthetic-source.json',
+              source_window_title: 'Synthetic window',
+              source_msg_range: '12-13',
+              speaker: 'assistant',
+              excerpt_text: 'This exact source quote is bounded.'
+            },
+            {
+              source_bundle_id: 'bundle_001',
+              file: 'synthetic-source.json',
+              source_window_title: 'Synthetic window',
+              speaker: 'assistant',
+              excerpt_text: 'This source quote has no turn range.'
+            }
+          ]
+        }
+      }
+    }
+  });
+  const bundle = buildPortableWarmBundle({
+    scope: {
+      owner_id: 'owner',
+      realm_id: 'realm'
+    },
+    generatedAt: '2026-08-15T00:00:00.000Z',
+    growthDraftArtifacts: [mixedArtifact]
+  });
+  const validation = validatePortableWarmBundle(bundle);
+  assert.equal(validation.ok, true);
+  assert.equal(bundle.warm_cards.length, 0);
+  assert.equal(bundle.hold_ledger.length, 1);
+  assert.equal(bundle.hold_ledger[0].reason, 'mixed_source_quality_requires_review');
+});
+
 test('builder keeps reviewed entries as HOLD until source spans are recoverable', () => {
   const bundle = buildPortableWarmBundle({
     scope: {

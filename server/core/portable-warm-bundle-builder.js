@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { join, resolve } from 'path';
-import { BUNDLE_SCHEMA, validatePortableWarmBundle } from './portable-warm-bundle-contract.js';
+import { BUNDLE_SCHEMA, buildPortableWarmLedgerId, validatePortableWarmBundle } from './portable-warm-bundle-contract.js';
 import { getGrowthDraftArtifact, listGrowthDraftArtifacts } from './growth-draft-store.js';
 import { PROJECT_ROOT, safeScopeSegment } from './path-config.js';
 import { loadLatestRuntimeReviewedPacket } from './runtime-reviewed-store.js';
@@ -209,15 +209,12 @@ function registerSourceSpan(state, snippet = {}) {
       source_window: safeText(snippet.source_window),
       turn_range: safeText(snippet.turn_range),
       message_ids: Array.isArray(snippet.message_ids) ? snippet.message_ids : [],
-      source_time: safeText(snippet.source_time),
-      digest: digestObject({
-        source_bundle_id: snippet.source_bundle_id,
-        source_file: snippet.source_file,
-        source_window: snippet.source_window,
-        turn_range: snippet.turn_range
-      })
+      source_time: safeText(snippet.source_time)
     };
-    state.sourceOccurrenceMap.set(sourceOccurrenceId, occurrence);
+    state.sourceOccurrenceMap.set(sourceOccurrenceId, {
+      ...occurrence,
+      digest: digestObject(occurrence)
+    });
   }
 
   const sourceSpanId = `span_${shortHash(stableJson({
@@ -246,9 +243,14 @@ function registerSourceSpan(state, snippet = {}) {
 }
 
 function buildHoldEntry({ sourceKind = '', sourceId = '', title = '', reason = '', row = {} } = {}) {
-  const ledgerSeed = stableJson({ sourceKind, sourceId, title, reason });
   return {
-    ledger_id: `hold_${shortHash(ledgerSeed)}`,
+    ledger_id: buildPortableWarmLedgerId({
+      state: 'hold',
+      sourceKind,
+      sourceId,
+      title,
+      reason
+    }),
     state: 'hold',
     reason: safeText(reason, 'requires_review'),
     source_kind: safeText(sourceKind),
@@ -260,9 +262,13 @@ function buildHoldEntry({ sourceKind = '', sourceId = '', title = '', reason = '
 }
 
 function buildRejectedEntry({ sourceKind = '', sourceId = '', reason = '', row = {} } = {}) {
-  const ledgerSeed = stableJson({ sourceKind, sourceId, reason });
   return {
-    ledger_id: `reject_${shortHash(ledgerSeed)}`,
+    ledger_id: buildPortableWarmLedgerId({
+      state: 'rejected',
+      sourceKind,
+      sourceId,
+      reason
+    }),
     state: 'rejected',
     reason: safeText(reason, 'invalid_candidate'),
     source_kind: safeText(sourceKind),
@@ -305,6 +311,16 @@ function addGrowthDraftArtifact(state, artifact = {}) {
       sourceId: artifactId,
       title,
       reason: 'missing_bounded_source_span',
+      row: artifact
+    }));
+    return;
+  }
+  if (snippets.length !== reliableSnippets.length) {
+    state.hold_ledger.push(buildHoldEntry({
+      sourceKind: 'growth_draft',
+      sourceId: artifactId,
+      title,
+      reason: 'mixed_source_quality_requires_review',
       row: artifact
     }));
     return;
@@ -363,7 +379,7 @@ function addGrowthDraftArtifact(state, artifact = {}) {
       source_bound: true,
       source_complete: true,
       source_span_count: uniqueStrings(sourceSpanIds, 256).length,
-      source_incomplete: snippets.length !== reliableSnippets.length
+      source_incomplete: false
     },
     home_import_policy: {
       direct_write_allowed: false,

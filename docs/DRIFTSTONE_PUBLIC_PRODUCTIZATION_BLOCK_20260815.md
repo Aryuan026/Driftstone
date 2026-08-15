@@ -20,8 +20,9 @@ Canonical truth for the public product is:
 portable_warm_bundle JSON/JSONL + manifest + rejected/HOLD ledger
 ```
 
-Markdown, Obsidian, Notion, and human web views are reversible projections, not a
-second source of truth.
+Markdown, Obsidian, Notion, and human web views are local projections with
+review-backflow anchors, not a second source of truth. This public build does
+not yet apply projection edits back to the bundle.
 
 ## Files Read
 
@@ -80,7 +81,7 @@ No license file was found under the public worktree root at max depth 3.
 | Agent can validate portable bundle | Added in this block as focused core validator | Existing generators do not yet emit this bundle shape. |
 | Source readback | Present in rows/snippets/Obsidian traces | Needs a public occurrence/span/digest bundle writer and conservation ledger. |
 | Privacy and local default | Mostly present as local backend | `path-config` imports create local directories; pure inspect/export should avoid incidental writes. |
-| Notion review backflow | Not implemented | Need candidate_id/page_id/sync_hash review patch roundtrip before any provider write. |
+| Notion review backflow | Not implemented | Current exports carry candidate_id/page_id/sync_hash anchors only; local patch validate/apply must land before any provider write. |
 
 ## Frozen Public Artifact Contract
 
@@ -143,7 +144,7 @@ authority.
 
 ## Notion Projection Proposal
 
-Notion remains a reversible projection. Suggested databases:
+Notion remains a local projection, not canonical truth. Suggested databases:
 
 - `Driftstone Bundle Index`
 - `Portable Warm Cards`
@@ -167,7 +168,8 @@ review state
 review note
 ```
 
-The core validates a review patch locally before changing the bundle projection.
+Future core work must validate a review patch locally before changing the bundle
+projection; this public build does not yet implement patch apply.
 Notion never becomes canonical truth and never grants Home/Hippocove write
 authority.
 
