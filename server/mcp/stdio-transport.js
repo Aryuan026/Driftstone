@@ -30,7 +30,7 @@ async function handleMessage(message) {
         tools: {}
       },
       serverInfo: {
-        name: 'hippocove-mcp',
+        name: 'driftstone-mcp',
         version: '0.1.0'
       }
     });

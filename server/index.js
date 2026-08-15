@@ -94,5 +94,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`hippocove backend listening on http://${HOST}:${PORT}`);
+  console.log(`driftstone backend listening on http://${HOST}:${PORT}`);
 });
