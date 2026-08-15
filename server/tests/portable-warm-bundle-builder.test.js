@@ -104,10 +104,53 @@ test('builder keeps candidate_id stable across title and body edits', () => {
   assert.notEqual(first.manifest.manifest_digest, second.manifest.manifest_digest);
 });
 
+test('builder keeps candidate_id stable across per-run task ids when source lineage matches', () => {
+  const firstArtifact = buildGrowthDraftArtifact({
+    artifact_id: 'memo_synthetic_run_001',
+    task: {
+      task_id: 'run_specific_task_one',
+      card_type: 'memo',
+      family_id: 'synthetic-family'
+    }
+  });
+  const secondArtifact = buildGrowthDraftArtifact({
+    artifact_id: 'memo_synthetic_run_002',
+    task: {
+      task_id: 'run_specific_task_two',
+      card_type: 'memo',
+      family_id: 'synthetic-family'
+    }
+  });
+  delete firstArtifact.logical_candidate_id;
+  delete secondArtifact.logical_candidate_id;
+
+  const first = buildPortableWarmBundle({
+    scope: {
+      owner_id: 'owner',
+      realm_id: 'realm'
+    },
+    generatedAt: '2026-08-15T00:00:00.000Z',
+    growthDraftArtifacts: [firstArtifact]
+  });
+  const second = buildPortableWarmBundle({
+    scope: {
+      owner_id: 'owner',
+      realm_id: 'realm'
+    },
+    generatedAt: '2026-08-15T00:00:00.000Z',
+    growthDraftArtifacts: [secondArtifact]
+  });
+
+  assert.equal(validatePortableWarmBundle(first).ok, true);
+  assert.equal(validatePortableWarmBundle(second).ok, true);
+  assert.equal(first.warm_cards[0].candidate_id, second.warm_cards[0].candidate_id);
+});
+
 test('builder rejects growth drafts without stable candidate identity', () => {
   const artifact = buildGrowthDraftArtifact();
   delete artifact.artifact_id;
   delete artifact.logical_candidate_id;
+  artifact.draft.source_review.primary_evidence.source_scene_snippets = [];
   const bundle = buildPortableWarmBundle({
     scope: {
       owner_id: 'owner',

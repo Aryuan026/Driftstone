@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { isAbsolute, join, resolve } from 'path';
 import { BUNDLE_SCHEMA, buildPortableWarmLedgerId, validatePortableWarmBundle } from './portable-warm-bundle-contract.js';
-import { getGrowthDraftArtifact, listGrowthDraftArtifacts } from './growth-draft-store.js';
+import { buildGrowthLogicalCandidateId, getGrowthDraftArtifact, listGrowthDraftArtifacts } from './growth-draft-store.js';
 import { PROJECT_ROOT, safeScopeSegment } from './path-config.js';
 import { loadLatestRuntimeReviewedPacket } from './runtime-reviewed-store.js';
 
@@ -132,32 +132,6 @@ function inferArchiveBucket(artifact = {}) {
     draft?.frontmatter?.archive_bucket,
     artifact?.archive_bucket
   ], 'stable');
-}
-
-function inferLogicalCandidateId(artifact = {}) {
-  const draft = artifact?.draft || {};
-  const direct = safeText(
-    artifact?.logical_candidate_id
-    || draft?.logical_candidate_id
-    || draft?.card_entry?.logical_candidate_id
-    || draft?.card_entry?.candidate_id
-    || draft?.card_entry?.stable_candidate_id
-  );
-  if (direct) return direct;
-  const sourceKey = safeText(
-    draft?.target_card_id
-    || draft?.card_entry?.card_id
-    || artifact?.task?.task_id
-    || artifact?.task?.packet_id
-    || draft?.frontmatter?.source_packet_id
-    || draft?.card_entry?.source_packet_id
-  );
-  if (!sourceKey) return '';
-  return `warm_logic_${shortHash(stableJson({
-    card_type: safeText(artifact?.task?.card_type || draft?.card_entry?.card_type, 'memo'),
-    family_id: safeText(draft?.frontmatter?.family || draft?.card_entry?.family_id || artifact?.task?.family_id, 'unassigned'),
-    source_key: sourceKey
-  }), 20)}`;
 }
 
 function renderPortableCardMarkdown({ title = '', livingFragment = '', feelingAsFact = '', futureUseHint = '', markdown = '' } = {}) {
@@ -330,7 +304,12 @@ function buildRejectedEntry({ sourceKind = '', sourceId = '', reason = '', row =
 
 function addGrowthDraftArtifact(state, artifact = {}) {
   const artifactId = safeText(artifact?.artifact_id || artifact?.json_file);
-  const logicalCandidateId = inferLogicalCandidateId(artifact);
+  const logicalCandidateId = buildGrowthLogicalCandidateId({
+    cardType: safeText(artifact?.task?.card_type || artifact?.draft?.card_entry?.card_type, 'memo'),
+    familyId: safeText(artifact?.draft?.frontmatter?.family || artifact?.draft?.card_entry?.family_id || artifact?.task?.family_id, 'unassigned'),
+    task: artifact?.task || {},
+    draft: artifact?.draft || {}
+  });
   if (!logicalCandidateId) {
     state.rejected_ledger.push(buildRejectedEntry({
       sourceKind: 'growth_draft',

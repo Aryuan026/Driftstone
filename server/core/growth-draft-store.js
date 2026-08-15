@@ -57,7 +57,75 @@ function candidateSuffix(index = 1) {
   return index <= 1 ? '' : `_${String(index).padStart(3, '0')}`;
 }
 
-function buildLogicalCandidateId({
+function sourceSnippetLineageSeed(snippet = {}) {
+  if (!isPlainObject(snippet)) return null;
+  const sourceFile = safeText(snippet.file || snippet.source_file || snippet.source_ref);
+  const seed = {
+    source_bundle_id: safeText(snippet.source_bundle_id || snippet.bundle_id),
+    source_window_id: safeText(snippet.source_window_id),
+    source_window_title: safeText(snippet.source_window_title || snippet.source_window),
+    source_msg_range: safeText(snippet.source_msg_range || snippet.turn_range || snippet.message_range),
+    message_ids: Array.isArray(snippet.message_ids)
+      ? snippet.message_ids.map((item) => safeText(item)).filter(Boolean).sort()
+      : [],
+    source_file_digest: sourceFile ? `sha256:${createHash('sha256').update(sourceFile).digest('hex')}` : '',
+    source_ref_digest: safeText(snippet.source_ref) ? `sha256:${createHash('sha256').update(String(snippet.source_ref)).digest('hex')}` : '',
+    topic_id: safeText(snippet.topic_id || snippet.topic_ids)
+  };
+  return Object.values(seed).some((value) => Array.isArray(value) ? value.length : safeText(value)) ? seed : null;
+}
+
+function collectSourceSnippetLineageSeeds(draft = {}) {
+  const containers = [
+    draft?.source_review?.primary_evidence,
+    draft?.source_review?.related_evidence,
+    draft?.evidence?.primary,
+    draft?.evidence?.related,
+    draft
+  ];
+  const seeds = [];
+  for (const container of containers) {
+    const lists = [
+      container?.source_scene_snippets,
+      container?.source_snippets
+    ];
+    for (const list of lists) {
+      if (!Array.isArray(list)) continue;
+      for (const snippet of list) {
+        const seed = sourceSnippetLineageSeed(snippet);
+        if (seed) seeds.push(stableJson(seed));
+      }
+    }
+  }
+  return Array.from(new Set(seeds)).sort();
+}
+
+function collectFrontmatterLineageSeeds(draft = {}) {
+  const frontmatter = draft?.frontmatter || {};
+  const cardEntry = draft?.card_entry || {};
+  const rows = [];
+  const sourcePacketId = safeText(frontmatter.source_packet_id || cardEntry.source_packet_id);
+  if (sourcePacketId) rows.push(stableJson({ source_packet_id: sourcePacketId }));
+  const sourceRefs = [
+    ...(Array.isArray(frontmatter.source_refs) ? frontmatter.source_refs : []),
+    ...(Array.isArray(cardEntry.source_refs) ? cardEntry.source_refs : [])
+  ].map((item) => safeText(item)).filter(Boolean).sort();
+  if (sourceRefs.length) {
+    rows.push(stableJson({
+      source_refs_digest: `sha256:${createHash('sha256').update(stableJson(sourceRefs)).digest('hex')}`
+    }));
+  }
+  const sourceRanges = [
+    ...(Array.isArray(frontmatter.source_windows) ? frontmatter.source_windows : []),
+    ...(Array.isArray(frontmatter.source_msg_ranges) ? frontmatter.source_msg_ranges : [])
+  ].map((item) => safeText(item)).filter(Boolean).sort();
+  if (sourceRanges.length) {
+    rows.push(stableJson({ source_ranges: sourceRanges }));
+  }
+  return rows;
+}
+
+export function buildGrowthLogicalCandidateId({
   cardType = 'memo',
   familyId = '',
   task = {},
@@ -70,19 +138,25 @@ function buildLogicalCandidateId({
     || draft?.card_entry?.stable_candidate_id
   );
   if (existing) return existing;
+  const explicitPacketId = safeText(task?.packet_id);
   const sourceKey = safeText(
     draft?.target_card_id
     || draft?.card_entry?.card_id
-    || task?.task_id
-    || task?.packet_id
+    || explicitPacketId
     || draft?.frontmatter?.source_packet_id
     || draft?.card_entry?.source_packet_id
   );
-  if (!sourceKey) return '';
+  const sourceLineage = sourceKey
+    ? [stableJson({ source_key: sourceKey })]
+    : [
+        ...collectSourceSnippetLineageSeeds(draft),
+        ...collectFrontmatterLineageSeeds(draft)
+      ];
+  if (!sourceLineage.length) return '';
   return `warm_logic_${shortHash(stableJson({
     card_type: cardType,
     family_id: familyId,
-    source_key: sourceKey
+    source_lineage: sourceLineage
   }), 20)}`;
 }
 
@@ -223,7 +297,7 @@ export async function saveGrowthDraftArtifact({
     taskId: task?.task_id || '',
     generatedAt: resolvedGeneratedAt
   });
-  const logicalCandidateId = buildLogicalCandidateId({
+  const logicalCandidateId = buildGrowthLogicalCandidateId({
     cardType,
     familyId,
     task,

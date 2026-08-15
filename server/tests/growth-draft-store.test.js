@@ -57,18 +57,21 @@ test('growth draft saves use distinct revision ids but stable logical candidate 
     realmId,
     cardType: 'memo',
     familyId: 'synthetic-family',
-    task: {
-      task_id: 'task_same_logical_candidate'
-    },
     generatedAt
   };
 
   const first = await saveGrowthDraftArtifact({
     ...common,
+    task: {
+      task_id: 'run_specific_task_one'
+    },
     draft: buildDraft('First revision body.')
   });
   const second = await saveGrowthDraftArtifact({
     ...common,
+    task: {
+      task_id: 'run_specific_task_two'
+    },
     draft: buildDraft('Second revision body.')
   });
 
