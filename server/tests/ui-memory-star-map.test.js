@@ -55,10 +55,10 @@ test('memory star map render keeps visual affinity boundary visible', () => {
     workspace: { charName: 'Demo' }
   });
 
-  assert.equal(statusEl.textContent, 'Live map');
+  assert.equal(statusEl.textContent, '运行中');
   assert.match(statusEl.className, /live/);
-  assert.match(visualEl.innerHTML, /Memory Star Map/);
-  assert.match(visualEl.innerHTML, /visual affinity, not canonical edges/);
+  assert.match(visualEl.innerHTML, /记忆星图/);
+  assert.match(visualEl.innerHTML, /不代表真实关系边/);
   assert.doesNotMatch(visualEl.innerHTML, /front-growth-link canonical/);
   assert.doesNotMatch(visualEl.innerHTML, /canonical relationship line/);
 });
@@ -71,9 +71,9 @@ test('synthetic demo renders explicit demo lines and no private local path shape
   renderMemoryStarMap({ visualEl, statusEl, snapshot });
 
   assert.equal(snapshot.demo.synthetic, true);
-  assert.equal(statusEl.textContent, 'Demo map');
+  assert.equal(statusEl.textContent, '演示星图');
   assert.match(visualEl.innerHTML, /front-growth-link canonical/);
-  assert.match(visualEl.innerHTML, /Synthetic showcase memory field/);
+  assert.match(visualEl.innerHTML, /合成演示的星盘/);
   assert.doesNotMatch(JSON.stringify(snapshot), /\/Users\//);
   assert.doesNotMatch(JSON.stringify(snapshot), /sk-[A-Za-z0-9]/);
 });
@@ -89,10 +89,10 @@ test('memory run dock renders human workflow state without adding pipeline truth
       detail: 'Card growth is following durable runtime state.',
       progress: 43,
       steps: [
-        { label: 'Choose history', state: 'done' },
-        { label: 'Organize', state: 'done' },
-        { label: 'Review', state: 'current' },
-        { label: 'Export', state: 'pending' }
+        { label: '选历史', state: 'done' },
+        { label: '整理', state: 'done' },
+        { label: '复核', state: 'current' },
+        { label: '导出', state: 'pending' }
       ],
       metrics: [
         { label: 'Warm cards', value: '5' },
@@ -104,7 +104,7 @@ test('memory run dock renders human workflow state without adding pipeline truth
   assert.equal(dockEl.dataset.tone, 'live');
   assert.match(dockEl.innerHTML, /Growing Warm cards/);
   assert.match(dockEl.innerHTML, /width: 43%;/);
-  assert.match(dockEl.innerHTML, /Choose history/);
+  assert.match(dockEl.innerHTML, /选历史/);
   assert.match(dockEl.innerHTML, /Warm cards/);
   assert.doesNotMatch(dockEl.innerHTML, /source span ledger packet/);
 });

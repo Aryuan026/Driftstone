@@ -40,7 +40,7 @@ function collectMapCards(snapshot = {}) {
   const allCards = [];
 
   drafts.forEach((item) => {
-    const title = safeText(item?.title, 'Untitled Warm draft');
+    const title = safeText(item?.title, '未命名温记忆草稿');
     const cardType = normalizeCardType(item?.card_type);
     const key = `draft::${safeText(item?.artifact_id, `${title}:${cardType}`)}`;
     if (seen.has(key)) return;
@@ -56,7 +56,7 @@ function collectMapCards(snapshot = {}) {
   });
 
   staged.forEach((item) => {
-    const title = safeText(item?.title, 'Untitled Warm card');
+    const title = safeText(item?.title, '未命名温记忆卡');
     const cardType = normalizeCardType(item?.card_type);
     const key = `staged::${safeText(item?.file_path, `${title}:${cardType}`)}`;
     if (seen.has(key)) return;
@@ -80,10 +80,10 @@ export function buildMemoryStarMapModel(snapshot = {}) {
   const cards = collectMapCards(snapshot);
   const root = { x: 480, y: 238, r: 5.4 };
   const anchors = {
-    memo: { x: 278, y: 154, radius: 136, label: 'Warm cards' },
-    family: { x: 318, y: 332, radius: 110, label: 'Persona cues' },
-    fact: { x: 684, y: 156, radius: 112, label: 'Evidence facts' },
-    case: { x: 720, y: 324, radius: 104, label: 'Review trails' }
+    memo: { x: 278, y: 154, radius: 136, label: '温记忆卡' },
+    family: { x: 318, y: 332, radius: 110, label: '人格线索' },
+    fact: { x: 684, y: 156, radius: 112, label: '证据事实' },
+    case: { x: 720, y: 324, radius: 104, label: '复核轨迹' }
   };
 
   const grouped = new Map();
@@ -183,19 +183,19 @@ export function renderMemoryStarMap({
 
   const graph = buildMemoryStarMapModel(snapshot);
   const activeScope = snapshot?.active_scope || null;
-  let label = 'Ready';
+  let label = '待开始';
   let tone = 'stable';
   if (errorText) {
-    label = 'Disconnected';
+    label = '未连接';
     tone = 'stable';
   } else if (snapshot?.demo?.synthetic) {
-    label = 'Demo map';
+    label = '演示星图';
     tone = 'live';
   } else if (graph.total) {
-    label = 'Live map';
+    label = '运行中';
     tone = 'live';
   } else if (activeScope) {
-    label = 'Scope linked';
+    label = '已连接范围';
     tone = 'stable';
   }
   statusEl.textContent = label;
@@ -223,18 +223,18 @@ export function renderMemoryStarMap({
       <title>${escapeHtml(item.title)}</title>
     </circle>
   `).join('');
-  const memoryName = snapshot?.demo?.synthetic ? 'Synthetic showcase' : safeText(workspace.charName, 'Portable Warm');
+  const memoryName = snapshot?.demo?.synthetic ? '合成演示' : safeText(workspace.charName, '便携温记忆');
   const helperText = errorText
     ? escapeHtml(errorText)
     : snapshot?.demo?.synthetic
-      ? 'Synthetic stars are safe demo artifacts. Bright constellation lines show explicit demo relations; dashed proximity remains visual affinity.'
+      ? '这些星点来自虚构素材。实线表示演示关系；虚线和距离只表示视觉亲近感。'
       : graph.total
-      ? 'Stars are durable Warm-card projections. Nearby nebulae show visual affinity, not canonical edges.'
-      : 'Choose history, run extraction, then watch Warm cards appear as durable stars.';
+      ? '星点是温记忆投影；附近的云雾只表示视觉亲近感，不代表真实关系边。'
+      : '选择历史、运行提取后，温记忆卡会在这里变成可追溯的星点。';
 
   visualEl.innerHTML = `
     <div class="front-growth-shell">
-      <svg class="front-growth-map" viewBox="0 0 960 480" role="img" aria-label="Memory Star Map">
+      <svg class="front-growth-map" viewBox="0 0 960 480" role="img" aria-label="记忆星图">
         <defs>
           <radialGradient id="memoryMapGlow" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stop-color="rgba(255,255,255,0.2)"></stop>
@@ -251,13 +251,13 @@ export function renderMemoryStarMap({
         ${stars}
       </svg>
       <div class="front-growth-overlay">
-        <p class="front-growth-eyebrow">Memory Star Map</p>
-        <div class="front-growth-caption">${escapeHtml(memoryName)} memory field</div>
+        <p class="front-growth-eyebrow">记忆星图</p>
+        <div class="front-growth-caption">${escapeHtml(memoryName)}的星盘</div>
         <div class="front-growth-counts">
-          <span>${graph.counts.committed} committed</span>
-          <span>${graph.counts.draft} forming</span>
-          <span>${graph.counts.fact} evidence</span>
-          <span>${graph.counts.case} review</span>
+          <span>${graph.counts.committed} 已成卡</span>
+          <span>${graph.counts.draft} 生长中</span>
+          <span>${graph.counts.fact} 证据</span>
+          <span>${graph.counts.case} 复核</span>
         </div>
         <div class="front-growth-hint">${helperText}</div>
       </div>
@@ -273,19 +273,19 @@ export function renderMemoryRunDock({ dockEl, run = {} } = {}) {
   const steps = Array.isArray(run.steps) && run.steps.length
     ? run.steps
     : [
-        { label: 'Choose history', state: 'current' },
-        { label: 'Organize', state: 'pending' },
-        { label: 'Review', state: 'pending' },
-        { label: 'Export', state: 'pending' }
+        { label: '选历史', state: 'current' },
+        { label: '整理', state: 'pending' },
+        { label: '复核', state: 'pending' },
+        { label: '导出', state: 'pending' }
       ];
   const metrics = Array.isArray(run.metrics) ? run.metrics.slice(0, 4) : [];
 
   dockEl.dataset.tone = tone;
   dockEl.innerHTML = `
     <div class="memory-run-copy">
-      <p class="memory-run-kicker">${escapeHtml(run.phaseLabel || 'Ready')}</p>
-      <h3>${escapeHtml(run.headline || 'Choose a history source to begin.')}</h3>
-      <p>${escapeHtml(run.detail || 'Driftstone will keep source evidence attached while it prepares portable Warm memory.')}</p>
+      <p class="memory-run-kicker">${escapeHtml(run.phaseLabel || '待开始')}</p>
+      <h3>${escapeHtml(run.headline || '先选择一份历史素材。')}</h3>
+      <p>${escapeHtml(run.detail || '先接住原文，再整理可审的温记忆和来源证据。')}</p>
     </div>
     <div class="memory-run-meter">
       <div class="memory-run-progress" aria-hidden="true">
@@ -298,7 +298,7 @@ export function renderMemoryRunDock({ dockEl, run = {} } = {}) {
         <span data-state="${escapeHtml(step.state || 'pending')}">${escapeHtml(step.label || '')}</span>
       `).join('')}
     </div>
-    <a class="memory-run-details" href="${escapeHtml(run.detailsHref || '#workflowControls')}">${escapeHtml(run.detailsLabel || 'Details')}</a>
+    <a class="memory-run-details" href="${escapeHtml(run.detailsHref || '#workflowControls')}">${escapeHtml(run.detailsLabel || '查看步骤')}</a>
     ${metrics.length ? `
       <div class="memory-run-metrics">
         ${metrics.map((item) => `

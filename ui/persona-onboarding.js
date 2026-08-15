@@ -73,7 +73,7 @@ export function buildPersonaOnboardingState(workspace = {}) {
   if (!personaReady) {
     missing.push({
       key: 'persona_soul',
-      label: 'Persona / Soul',
+      label: '人格 / Soul',
       detail: '还没有可作为人格连续性权威的说明。'
     });
   }
@@ -93,7 +93,7 @@ export function buildPersonaOnboardingState(workspace = {}) {
 
   const summary = [
     summarizeRole(charName, userName),
-    personaReady ? `Persona / Soul：${prettyChars(personaCard.length)}` : '',
+    personaReady ? `人格 / Soul：${prettyChars(personaCard.length)}` : '',
     fingerprintReady ? `语言指纹：${countMeaningfulLines(languageFingerprint)} 行` : '',
     !personaReady && fingerprintCandidatePool ? '已经有语言指纹候选池，可继续整理成正式指纹。' : '',
     !personaReady && personaCacheTotal > 0 ? `已有 ${personaCacheTotal} 条历史信号，可先生成可审草稿。` : ''
@@ -110,14 +110,14 @@ export function buildPersonaOnboardingState(workspace = {}) {
     sourcePrepareAllowed: true,
     warmGrowthPersonaReady: status === 'ready',
     impact: status === 'ready'
-      ? 'Warm-card growth can use this workspace as voice authority.'
-      : 'Source preparation can continue. Voice/persona-dependent Warm-card growth must stay guarded until this authority is ready.'
+      ? '温记忆生长可以把这份工作台作为声线权威。'
+      : 'source 准备可以继续；依赖人格/声线的温记忆生长需要等权威补齐后再放行。'
   };
 }
 
 function renderMissingList(missing = []) {
   if (!missing.length) {
-    return '<li>角色/关系、Persona/Soul、语言指纹都已接上。</li>';
+    return '<li>角色/关系、人格 / Soul、语言指纹都已接上。</li>';
   }
   return missing.map((item) => `
     <li>
@@ -156,31 +156,31 @@ export function renderPersonaOnboarding({
   if (!panelEl) return state;
 
   const statusLabel = state.status === 'ready'
-    ? 'Ready'
+    ? '已就绪'
     : state.status === 'partial'
-      ? 'Partially ready'
-      : 'Not set yet';
+      ? '还差一点'
+      : '尚未设置';
   const summaryHtml = state.summary.map((line) => `<p>${escapeHtml(line)}</p>`).join('');
 
   panelEl.dataset.personaState = state.status;
   panelEl.innerHTML = `
     <div class="persona-onboarding-main">
       <div class="persona-onboarding-copy">
-        <p class="eyebrow">Before Warm growth</p>
+        <p class="eyebrow">生长前检查</p>
         <h2>你已经有一份想保留的人设 / 说话方式吗？</h2>
         <p class="persona-onboarding-lead">
-          Driftstone 会先读取唯一的 persona workspace。这里不保存第二份人设，只帮你判断现在适合继续哪一步。
+          Driftstone 会先读取唯一的人格工作台。这里不保存第二份人设，只帮你判断现在适合继续哪一步。
         </p>
       </div>
       <span class="status-pill ${state.tone === 'ready' ? 'ready' : 'stable'}">${escapeHtml(statusLabel)}</span>
     </div>
     <div class="persona-onboarding-grid">
-      <div class="persona-onboarding-summary" aria-label="Body-safe persona workspace summary">
+      <div class="persona-onboarding-summary" aria-label="安全的人格工作台摘要">
         ${summaryHtml}
-        <p class="persona-onboarding-safe-note">Body-safe summary only: this card shows roles, counts, and readiness; it does not display persona body, source text, API keys, or private file paths.</p>
+        <p class="persona-onboarding-safe-note">这里只显示角色、计数和就绪状态；不会展示人设正文、原文、API key 或私密文件路径。</p>
       </div>
       <div class="persona-onboarding-missing">
-        <strong>Still needed</strong>
+        <strong>还缺什么</strong>
         <ul>${renderMissingList(state.missing)}</ul>
       </div>
     </div>

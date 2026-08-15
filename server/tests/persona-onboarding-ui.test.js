@@ -85,7 +85,7 @@ test('persona onboarding render is body-safe and keeps synthetic/private text ou
   assert.equal(panelEl.dataset.personaState, 'ready');
   assert.match(panelEl.innerHTML, /被整理的 AI\/角色：Starling/);
   assert.match(panelEl.innerHTML, /与它对话的人：Aster/);
-  assert.match(panelEl.innerHTML, /Body-safe summary only/);
+  assert.match(panelEl.innerHTML, /不会展示人设正文/);
   assert.doesNotMatch(panelEl.innerHTML, /PRIVATE_BODY/);
   assert.doesNotMatch(panelEl.innerHTML, /sk-DO-NOT-SHOW/);
   assert.doesNotMatch(panelEl.innerHTML, /\/Users\/example/);

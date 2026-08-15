@@ -192,13 +192,13 @@ function describeSourceError(error, file) {
 
   if (error?.code === 'SOURCE_TOO_LARGE') {
     reason = '这个文件太大，不适合直接丢进 Driftstone 前台。';
-    action = '请先用 Advanced / Legacy 的 conversation exporter 做按月或按窗口拆包，再把生成的 Driftstone source package 带回这里；PawTrail 也可以作为在线拆包入口。';
+    action = '请先用高级工作台的对话拆包工具按月或按窗口拆包，再把生成的 Driftstone source package 带回这里；PawTrail 也可以作为在线拆包入口。';
   } else if (error?.code === 'CHATGPT_EXPORT') {
     reason = '检测到这是 ChatGPT 原始 conversations.json。';
-    action = '请先打开 Advanced / Legacy，在 conversation exporter 页面做按月或按窗口拆包；之后再把导出的 Driftstone source package 上传到这里。';
+    action = '请先打开高级工作台，在对话拆包页面按月或按窗口拆包；之后再把导出的 Driftstone source package 上传到这里。';
   } else if (error?.code === 'INVALID_JSON') {
     reason = '这个 JSON 没有读完整，或格式已经损坏。';
-    action = '请重新下载/导出文件；如果是 ChatGPT 原始导出，请先用 Advanced / Legacy conversation exporter 读取。';
+    action = '请重新下载/导出文件；如果是 ChatGPT 原始导出，请先用高级工作台的对话拆包工具读取。';
   } else if (error?.code === 'PAYLOAD_TOO_LARGE' || /request body too large/i.test(raw)) {
     reason = '这批素材太大，启动解析时没法一次送进本地后端。';
     action = '请减少本次上传文件数量，或先按月/窗口拆成更小的 source package 后分批处理。';
@@ -665,13 +665,13 @@ function renderPersonaBridgePanel() {
   }
   if (workspace.source === 'remote' && parts.length) {
     els.personaBridgeSummary.textContent = `当前桌面：${parts.join(' · ')}`;
-    els.personaBridgeMeta.textContent = 'Persona/Soul workspace 已接入；这里默认读取共享桌面的最新内容。';
+    els.personaBridgeMeta.textContent = '人格 / Soul 工作台已接入；这里默认读取共享桌面的最新内容。';
   } else if (workspace.source === 'local_fallback' && parts.length) {
     els.personaBridgeSummary.textContent = `本地有 persona 草稿，但共享 workspace 还没跟上。先打开一次 persona workspace，让它把最新内容同步过来。`;
-    els.personaBridgeMeta.textContent = 'Persona/Soul workspace can guide Warm-card voice when needed.';
+    els.personaBridgeMeta.textContent = '人格 / Soul 工作台会在需要时帮助温记忆保留声线。';
   } else {
-    els.personaBridgeSummary.textContent = '还没读到共享 persona workspace；你可以先准备 source history，之后再补 Soul 与 language fingerprint。';
-    els.personaBridgeMeta.textContent = 'Persona/Soul workspace can guide Warm-card voice when needed.';
+    els.personaBridgeSummary.textContent = '还没读到共享人格工作台；你可以先准备历史素材，之后再补 Soul 与语言指纹。';
+    els.personaBridgeMeta.textContent = '人格 / Soul 工作台会在需要时帮助温记忆保留声线。';
   }
 }
 
@@ -1735,47 +1735,47 @@ function buildGenerationRuntimeView(snapshot = state.growthDashboardSnapshot || 
   let detailText = safeText(runtimeState?.generationLabel ?? runtimeState?.label, state.generationLabel);
   let statusLabel = generatedBundle ? '可下载' : '未开始';
   let statusTone = generatedBundle ? 'ready' : 'stable';
-  let buttonLabel = generatedBundle ? 'Regenerate' : 'Generate Warm cards';
+  let buttonLabel = generatedBundle ? '重新生成' : '生成温记忆卡';
 
   if (queueActive) {
     meterText = `${queueCompleted}/${queueTotal}`;
     if (running) {
       detailText = `正在写第 ${currentIndex}/${queueTotal} 张 · ${currentItemLabel || '当前材料'}`;
-      statusLabel = 'Forming';
+      statusLabel = '生长中';
       statusTone = 'live';
-      buttonLabel = 'Forming';
+      buttonLabel = '生长中';
     } else if (phase === 'failed') {
       detailText = `卡在第 ${currentIndex || Math.min(queueCompleted + 1, queueTotal)}/${queueTotal} 张 · ${clipInlineText(errorText || currentItemLabel || '这一张没接住', 72)}`;
       statusLabel = '待继续';
       statusTone = 'error';
-      buttonLabel = 'Resume';
+      buttonLabel = '继续生成';
     } else if (paused || phase === 'paused') {
       detailText = `停在第 ${currentIndex || Math.min(queueCompleted + 1, queueTotal)}/${queueTotal} 张前 · ${currentItemLabel || '可以从断点继续'}`;
       statusLabel = '已暂停';
       statusTone = 'stable';
-      buttonLabel = 'Resume';
+      buttonLabel = '继续生成';
     } else if (queueCompleted >= queueTotal) {
       detailText = stagedTotal
         ? `这轮 ${queueTotal} 张已经顺序写完 · 已落库 ${stagedTotal} 张`
         : `这轮 ${queueTotal} 张已经顺序写完 · 当前产物仍以草稿为主`;
       statusLabel = '已完成';
       statusTone = 'ready';
-      buttonLabel = 'Regenerate';
+      buttonLabel = '重新生成';
     } else if (queueCompleted > 0) {
       detailText = `已经写到第 ${queueCompleted}/${queueTotal} 张 · ${currentItemLabel || safeText(runtimeState?.label, '可以继续往后推')}`;
       statusLabel = '待继续';
       statusTone = 'stable';
-      buttonLabel = 'Resume';
+      buttonLabel = '继续生成';
     } else {
       detailText = `已排好 ${queueTotal} 张生长队列`;
       statusLabel = '待开始';
       statusTone = 'stable';
-      buttonLabel = 'Generate Warm cards';
+      buttonLabel = '生成温记忆卡';
     }
   } else if (running) {
-    statusLabel = 'Generating';
+    statusLabel = '生成中';
     statusTone = 'live';
-    buttonLabel = 'Generating';
+    buttonLabel = '生成中';
   }
 
   return {
@@ -1825,29 +1825,29 @@ function renderGenerationPanel() {
   state.generatedBundle = runtimeView.generatedBundle;
 
   els.generateMemoryBtn.disabled = runtimeView.running || !canGenerate;
-  els.generateMemoryBtn.textContent = canGenerate ? runtimeView.buttonLabel : 'Generate Warm cards';
+  els.generateMemoryBtn.textContent = canGenerate ? runtimeView.buttonLabel : '生成温记忆卡';
   els.downloadBundleBtn.disabled = !(runtimeView.generatedBundle || canDownloadGrowthBundle) || runtimeView.running;
   els.generationProgressFill.style.width = `${runtimeView.progress}%`;
   els.generationProgressText.textContent = runtimeView.meterText;
   els.generationProgressDetail.textContent = runtimeView.detailText;
   if (els.compactBridgeMeta) {
     els.compactBridgeMeta.textContent = canDownloadGrowthBundle
-      ? 'This step can compact similar cards, then export a readable Markdown/Obsidian projection.'
-      : 'After Warm cards are generated, Driftstone can export readable projections from the same local truth.';
+      ? '这一步可以合并相近卡片，再导出可读的 Markdown / Obsidian 投影。'
+      : '温记忆卡生成后，Driftstone 可以从同一份本地主真相导出可读投影。';
   }
   if (els.compactBridgeSummary) {
     if (runtimeView.running) {
-      els.compactBridgeSummary.textContent = `This run is still forming; ${Math.max(availableMemoTotal, runtimeView.queueTotal || 0)} candidate cards are visible in the map/projection layer.`;
+      els.compactBridgeSummary.textContent = `这一轮还在生长；${Math.max(availableMemoTotal, runtimeView.queueTotal || 0)} 张候选卡已经能在星图 / 投影层看到。`;
     } else if (canDownloadGrowthBundle) {
-      els.compactBridgeSummary.textContent = `This run has ${availableMemoTotal} cards available for projection export.`;
+      els.compactBridgeSummary.textContent = `这一轮有 ${availableMemoTotal} 张卡可以导出投影。`;
     } else {
-      els.compactBridgeSummary.textContent = 'Projection files are for reading and review; the portable Warm bundle remains canonical.';
+      els.compactBridgeSummary.textContent = '投影文件用于阅读和复核；便携温记忆包仍是机器主真相。';
     }
   }
 
   if (!canGenerate) {
-    els.generationProgressDetail.textContent = 'Source preparation can continue; voice/persona-dependent Warm growth waits for role, Persona/Soul, and language fingerprint authority.';
-    setGenerationStatus('Needs persona authority', 'stable');
+    els.generationProgressDetail.textContent = 'source 准备可以继续；依赖人格/声线的温记忆生长，需要等角色、人格 / Soul 与语言指纹补齐后再放行。';
+    setGenerationStatus('待补人格权威', 'stable');
     return;
   }
 
@@ -1865,23 +1865,23 @@ function buildMemoryRunDockView() {
       : 0;
     return {
       tone: 'ready',
-      phaseLabel: 'Demo / Synthetic data',
-      headline: `${committed} fictional Warm cards are ready to browse.`,
-      detail: 'This showcase uses only fictional sources and artifacts. It proves the UI shape without API calls or private history.',
+      phaseLabel: '合成演示',
+      headline: `${committed} 张虚构温记忆卡可以浏览。`,
+      detail: '这组演示只使用虚构来源和产物，用来检查 UI 形态，不会调用 API，也不会写入真实历史。',
       progress: 100,
       steps: [
-        { label: 'Choose history', state: 'done' },
-        { label: 'Organize', state: 'done' },
-        { label: 'Review', state: holds ? 'current' : 'done' },
-        { label: 'Export', state: 'done' }
+        { label: '选历史', state: 'done' },
+        { label: '整理', state: 'done' },
+        { label: '复核', state: holds ? 'current' : 'done' },
+        { label: '导出', state: 'done' }
       ],
       metrics: [
-        { label: 'demo cards', value: String(committed) },
-        { label: 'forming', value: String(forming) },
-        { label: 'review', value: String(holds) },
-        { label: 'real lines', value: String(edges) }
+        { label: '演示卡', value: String(committed) },
+        { label: '生长中', value: String(forming) },
+        { label: '待复核', value: String(holds) },
+        { label: '关系线', value: String(edges) }
       ],
-      detailsLabel: 'Use your history'
+      detailsLabel: '使用自己的历史'
     };
   }
 
@@ -1899,113 +1899,113 @@ function buildMemoryRunDockView() {
   const reviewReady = cardTotal > 0;
   const exportReady = Boolean(generation.generatedBundle || canExport);
   const steps = [
-    { label: 'Choose history', state: hasSource ? 'done' : 'current' },
-    { label: 'Organize', state: hasPreparedMemory ? 'done' : hasSource ? 'current' : 'pending' },
-    { label: 'Review', state: reviewReady ? 'done' : hasPreparedMemory ? 'current' : 'pending' },
-    { label: 'Export', state: exportReady ? 'done' : reviewReady ? 'current' : 'pending' }
+    { label: '选历史', state: hasSource ? 'done' : 'current' },
+    { label: '整理', state: hasPreparedMemory ? 'done' : hasSource ? 'current' : 'pending' },
+    { label: '复核', state: reviewReady ? 'done' : hasPreparedMemory ? 'current' : 'pending' },
+    { label: '导出', state: exportReady ? 'done' : reviewReady ? 'current' : 'pending' }
   ];
   const metrics = [
-    { label: 'source rows', value: String(parse.overview.rootCount || 0) },
-    { label: 'Warm cards', value: String(cardTotal || 0) },
-    { label: 'tasks', value: String(parse.taskBoard.total || generation.queueTotal || 0) }
+    { label: '来源行', value: String(parse.overview.rootCount || 0) },
+    { label: '温记忆卡', value: String(cardTotal || 0) },
+    { label: '任务', value: String(parse.taskBoard.total || generation.queueTotal || 0) }
   ];
 
   if (state.parseError) {
     return {
       tone: 'error',
-      phaseLabel: 'Action needed',
-      headline: 'Source organization paused.',
+      phaseLabel: '需要处理',
+      headline: '来源整理暂停了。',
       detail: state.parseError,
       progress: Math.max(8, parse.percent),
       steps,
       metrics,
-      detailsLabel: 'Open details'
+      detailsLabel: '查看细节'
     };
   }
   if (state.growthDashboardError) {
     return {
       tone: 'stable',
-      phaseLabel: 'Map waiting',
-      headline: 'The runtime dashboard is reconnecting.',
+      phaseLabel: '星图等待中',
+      headline: '运行看板正在重新连接。',
       detail: state.growthDashboardError,
       progress: hasPreparedMemory ? 58 : Math.max(0, parse.percent),
       steps,
       metrics,
-      detailsLabel: 'Open details'
+      detailsLabel: '查看细节'
     };
   }
   if (generation.running) {
     return {
       tone: 'live',
-      phaseLabel: 'Growing Warm cards',
+      phaseLabel: '温记忆生长中',
       headline: generation.queueActive
-        ? `Organizing ${generation.currentIndex || generation.queueCompleted}/${generation.queueTotal} cards.`
-        : 'Warm-card generation is running.',
+        ? `正在整理第 ${generation.currentIndex || generation.queueCompleted}/${generation.queueTotal} 张卡。`
+        : '温记忆卡正在生长。',
       detail: generation.detailText,
       progress: Math.max(58, Math.min(98, 58 + Math.round(generation.progress * 0.4))),
       steps,
       metrics,
-      detailsLabel: 'Open details'
+      detailsLabel: '查看细节'
     };
   }
   if (exportReady) {
     return {
       tone: 'ready',
-      phaseLabel: 'Ready to take with you',
-      headline: `${cardTotal} Warm-card artifacts are ready for projection.`,
-      detail: 'Validate the portable Warm bundle, then export Notion-ready, Markdown/Obsidian, spreadsheet, or JSON/JSONL projections.',
+      phaseLabel: '可以带走',
+      headline: `${cardTotal} 张温记忆产物可以导出投影。`,
+      detail: '先验证便携温记忆包，再导出 Notion 表格、Markdown / Obsidian、表格检查或 JSON/JSONL 投影。',
       progress: 100,
       steps,
       metrics,
-      detailsLabel: 'Export details'
+      detailsLabel: '导出细节'
     };
   }
   if (hasPreparedMemory) {
     return {
       tone: 'ready',
-      phaseLabel: 'Ready for card growth',
-      headline: `${parse.overview.rootCount} reviewed rows are organized.`,
-      detail: 'Next, grow portable Warm cards from the reviewed source-backed material.',
+      phaseLabel: '可以生长卡片',
+      headline: `${parse.overview.rootCount} 行 reviewed 素材已经整理好。`,
+      detail: '下一步可以从这些带来源证据的素材里生长便携温记忆卡。',
       progress: 58,
       steps,
       metrics,
-      detailsLabel: 'Open details'
+      detailsLabel: '查看细节'
     };
   }
   if (state.parseRunning || parse.percent > 0) {
     return {
       tone: state.parsePaused ? 'stable' : 'live',
-      phaseLabel: state.parsePaused ? 'Paused safely' : 'Organizing history',
+      phaseLabel: state.parsePaused ? '已安全暂停' : '正在整理历史',
       headline: parse.label,
       detail: parse.detail,
       progress: Math.max(8, Math.min(56, Math.round(parse.percent * 0.56))),
       steps,
       metrics,
-      detailsLabel: 'Open details'
+      detailsLabel: '查看细节'
     };
   }
   if (hasSource) {
     return {
       tone: 'stable',
-      phaseLabel: 'Source selected',
-      headline: 'History is ready to organize.',
-      detail: 'Start the local run when the model connection and optional Persona/Soul inputs are ready.',
+      phaseLabel: '已选择来源',
+      headline: '历史素材已经可以整理。',
+      detail: '模型连接和可选的人格 / Soul 输入准备好后，就可以开始本地运行。',
       progress: 8,
       steps,
       metrics,
-      detailsLabel: 'Open details'
+      detailsLabel: '查看细节'
     };
   }
 
   return {
     tone: 'stable',
-    phaseLabel: 'Ready',
-    headline: 'Choose a history source to begin.',
-    detail: 'Driftstone will keep source evidence attached while it prepares portable Warm memory.',
+    phaseLabel: '待开始',
+    headline: '先选择一份历史素材。',
+    detail: '先接住原文，再整理可审的温记忆和来源证据。',
     progress: 0,
     steps,
     metrics,
-    detailsLabel: 'Open details'
+    detailsLabel: '查看步骤'
   };
 }
 
@@ -2293,7 +2293,7 @@ async function refreshGrowthDashboard() {
     syncGenerationRuntimeFromSnapshot(state.growthDashboardSnapshot || {});
     state.growthDashboardError = '';
   } catch (error) {
-    state.growthDashboardError = safeText(error?.message, 'Memory Star Map is waiting for the runtime dashboard');
+    state.growthDashboardError = safeText(error?.message, '记忆星图正在等待运行看板。');
   }
   renderGenerationPanel();
   renderGrowthWatchPanel();
@@ -2787,7 +2787,7 @@ async function generateMemoryBundle() {
   const workspace = getPersonaWorkspaceView();
   const personaOnboarding = buildPersonaOnboardingState(workspace);
   if (!personaOnboarding.warmGrowthPersonaReady) {
-    state.generationLabel = 'Please sync role, Persona/Soul, and language fingerprint authority first';
+    state.generationLabel = '请先同步角色、人格 / Soul 与语言指纹权威';
     renderGenerationPanel();
     return;
   }
