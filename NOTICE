@@ -1,0 +1,17 @@
+Driftstone
+Copyright 2026 Aryuan026
+
+This product was shaped through human/AI pair development:
+
+- Product direction, review, tuning, and owner decisions: Aryuan026
+- Implementation collaboration: Codex in the OpenAI desktop agent environment
+- Earlier Obsidian memory-card, Persona memo, and language-fingerprint design
+  work: Claude Code / Anthropic-assisted collaboration
+
+Dependency/provenance note for this public checkpoint:
+
+- The root desktop shell declares Electron and electron-builder as development
+  dependencies.
+- The backend package declares no third-party runtime dependencies.
+- No vendored third-party source or binary dependency artifacts are included in
+  this repository checkpoint.

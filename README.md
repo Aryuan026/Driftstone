@@ -137,11 +137,10 @@ Still pending:
 - final human UI polish
 - provider-backed Notion write and patch-apply loop
 - production release decision
-- owner-selected open-source license
 
 ## License
 
-No open-source license has been granted yet. The owner must choose the final license before a formal public release. Until then, treat this repository as reviewable source code, not as a granted redistribution or derivative-work license.
+Driftstone is licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
 
 ## Provenance
 
@@ -151,4 +150,4 @@ Driftstone was shaped through human/AI pair development.
 - Implementation collaboration: Codex in the OpenAI desktop agent environment
 - Earlier Obsidian memory-card, Persona memo, and language-fingerprint design work: Claude Code / Anthropic-assisted collaboration
 
-Please preserve this provenance if you study the project or adapt it after a final license is chosen.
+Please preserve this provenance if you study or adapt the project.
