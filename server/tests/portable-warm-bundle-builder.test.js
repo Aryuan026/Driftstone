@@ -33,8 +33,10 @@ function buildGrowthDraftArtifact(overrides = {}) {
             {
               source_bundle_id: 'bundle_001',
               file: 'synthetic-source.json',
+              source_window_id: 'window_001',
               source_window_title: 'Synthetic window',
               source_msg_range: '12-13',
+              message_ids: ['msg_012', 'msg_013'],
               speaker: 'assistant',
               excerpt_text: 'This is the exact bounded synthetic source quote.'
             }
@@ -121,6 +123,8 @@ test('builder keeps candidate_id stable across per-run task ids when source line
       family_id: 'synthetic-family'
     }
   });
+  firstArtifact.draft.source_review.primary_evidence.source_scene_snippets[0].file = '/Users/alice/Downloads/history.json';
+  secondArtifact.draft.source_review.primary_evidence.source_scene_snippets[0].file = '/data/imports/history.json';
   delete firstArtifact.logical_candidate_id;
   delete secondArtifact.logical_candidate_id;
 
@@ -144,6 +148,50 @@ test('builder keeps candidate_id stable across per-run task ids when source line
   assert.equal(validatePortableWarmBundle(first).ok, true);
   assert.equal(validatePortableWarmBundle(second).ok, true);
   assert.equal(first.warm_cards[0].candidate_id, second.warm_cards[0].candidate_id);
+});
+
+test('builder changes candidate_id when source coordinates change', () => {
+  const firstArtifact = buildGrowthDraftArtifact({
+    artifact_id: 'memo_synthetic_lineage_001',
+    task: {
+      task_id: 'run_specific_task_one',
+      card_type: 'memo',
+      family_id: 'synthetic-family'
+    }
+  });
+  const secondArtifact = buildGrowthDraftArtifact({
+    artifact_id: 'memo_synthetic_lineage_002',
+    task: {
+      task_id: 'run_specific_task_two',
+      card_type: 'memo',
+      family_id: 'synthetic-family'
+    }
+  });
+  delete firstArtifact.logical_candidate_id;
+  delete secondArtifact.logical_candidate_id;
+  secondArtifact.draft.source_review.primary_evidence.source_scene_snippets[0].message_ids = ['msg_014'];
+  secondArtifact.draft.source_review.primary_evidence.source_scene_snippets[0].source_msg_range = '14-14';
+
+  const first = buildPortableWarmBundle({
+    scope: {
+      owner_id: 'owner',
+      realm_id: 'realm'
+    },
+    generatedAt: '2026-08-15T00:00:00.000Z',
+    growthDraftArtifacts: [firstArtifact]
+  });
+  const second = buildPortableWarmBundle({
+    scope: {
+      owner_id: 'owner',
+      realm_id: 'realm'
+    },
+    generatedAt: '2026-08-15T00:00:00.000Z',
+    growthDraftArtifacts: [secondArtifact]
+  });
+
+  assert.equal(validatePortableWarmBundle(first).ok, true);
+  assert.equal(validatePortableWarmBundle(second).ok, true);
+  assert.notEqual(first.warm_cards[0].candidate_id, second.warm_cards[0].candidate_id);
 });
 
 test('builder rejects growth drafts without stable candidate identity', () => {

@@ -14,7 +14,7 @@ const {
 const { buildPortableWarmBundle } = await import('../core/portable-warm-bundle-builder.js');
 const { validatePortableWarmBundle } = await import('../core/portable-warm-bundle-contract.js');
 
-function buildDraft(snapshot) {
+function buildDraft(snapshot, snippetOverrides = {}) {
   return {
     decision: 'new',
     frontmatter: {
@@ -33,10 +33,13 @@ function buildDraft(snapshot) {
           {
             source_bundle_id: 'bundle_001',
             file: '/Users/alice/private/history.jsonl',
+            source_window_id: 'window_001',
             source_window_title: 'Synthetic window',
             source_msg_range: '1-2',
+            message_ids: ['msg_001', 'msg_002'],
             speaker: 'assistant',
-            excerpt_text: 'This is a bounded quote for the same logical warm card.'
+            excerpt_text: 'This is a bounded quote for the same logical warm card.',
+            ...snippetOverrides
           }
         ]
       }
@@ -65,14 +68,18 @@ test('growth draft saves use distinct revision ids but stable logical candidate 
     task: {
       task_id: 'run_specific_task_one'
     },
-    draft: buildDraft('First revision body.')
+    draft: buildDraft('First revision body.', {
+      file: '/Users/alice/private/history.jsonl'
+    })
   });
   const second = await saveGrowthDraftArtifact({
     ...common,
     task: {
       task_id: 'run_specific_task_two'
     },
-    draft: buildDraft('Second revision body.')
+    draft: buildDraft('Second revision body.', {
+      file: '/data/imports/history.jsonl'
+    })
   });
 
   assert.notEqual(first.artifact_id, second.artifact_id);

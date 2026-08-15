@@ -38,6 +38,10 @@ function shortHash(value, length = 16) {
   return createHash('sha256').update(String(value || '')).digest('hex').slice(0, length);
 }
 
+function sha256Text(value = '') {
+  return `sha256:${createHash('sha256').update(String(value || '')).digest('hex')}`;
+}
+
 function nowStamp(generatedAt = '') {
   const date = generatedAt ? new Date(generatedAt) : new Date();
   const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
@@ -60,18 +64,32 @@ function candidateSuffix(index = 1) {
 function sourceSnippetLineageSeed(snippet = {}) {
   if (!isPlainObject(snippet)) return null;
   const sourceFile = safeText(snippet.file || snippet.source_file || snippet.source_ref);
+  const sourceRef = safeText(snippet.source_ref);
+  const messageIds = Array.isArray(snippet.message_ids)
+    ? snippet.message_ids.map((item) => safeText(item)).filter(Boolean).sort()
+    : [];
   const seed = {
     source_bundle_id: safeText(snippet.source_bundle_id || snippet.bundle_id),
     source_window_id: safeText(snippet.source_window_id),
     source_window_title: safeText(snippet.source_window_title || snippet.source_window),
     source_msg_range: safeText(snippet.source_msg_range || snippet.turn_range || snippet.message_range),
-    message_ids: Array.isArray(snippet.message_ids)
-      ? snippet.message_ids.map((item) => safeText(item)).filter(Boolean).sort()
-      : [],
-    source_file_digest: sourceFile ? `sha256:${createHash('sha256').update(sourceFile).digest('hex')}` : '',
-    source_ref_digest: safeText(snippet.source_ref) ? `sha256:${createHash('sha256').update(String(snippet.source_ref)).digest('hex')}` : '',
+    message_ids: messageIds,
     topic_id: safeText(snippet.topic_id || snippet.topic_ids)
   };
+  const hasStableSourceIdentity = Boolean(
+    seed.source_bundle_id
+    || seed.source_window_id
+    || seed.source_window_title
+    || seed.source_msg_range
+    || seed.message_ids.length
+    || seed.topic_id
+  );
+  if (!hasStableSourceIdentity && sourceFile) {
+    seed.source_file_digest = sha256Text(sourceFile);
+  }
+  if (!hasStableSourceIdentity && sourceRef) {
+    seed.source_ref_digest = sha256Text(sourceRef);
+  }
   return Object.values(seed).some((value) => Array.isArray(value) ? value.length : safeText(value)) ? seed : null;
 }
 
