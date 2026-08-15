@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { TOOLS } from '../mcp/tool-catalog.js';
+import { listMcpTools, TOOLS } from '../mcp/tool-catalog.js';
 import { callTool } from '../mcp/tool-dispatch.js';
 
-const EXPECTED_TOOL_NAMES = [
+const EXPECTED_ALL_TOOL_NAMES = [
   'list_api_profiles',
   'get_portable_warm_bundle_contract',
   'export_portable_warm_bundle',
@@ -37,8 +37,26 @@ const EXPECTED_TOOL_NAMES = [
   'get_memory_context'
 ];
 
-test('MCP tool catalog preserves current public tool names and order', () => {
-  assert.deepEqual(TOOLS.map((tool) => tool.name), EXPECTED_TOOL_NAMES);
+const LEGACY_TOOL_NAMES = [
+  'run_history_pipeline',
+  'finalize_reviewed_entries',
+  'get_memory_context'
+];
+
+const EXPECTED_PUBLIC_TOOL_NAMES = EXPECTED_ALL_TOOL_NAMES.filter((name) => !LEGACY_TOOL_NAMES.includes(name));
+
+test('MCP tool catalog preserves callable tool names and order', () => {
+  assert.deepEqual(TOOLS.map((tool) => tool.name), EXPECTED_ALL_TOOL_NAMES);
+});
+
+test('MCP tools/list hides legacy routes unless explicitly requested', () => {
+  const publicTools = listMcpTools();
+  const allTools = listMcpTools({ includeLegacy: true });
+
+  assert.deepEqual(publicTools.map((tool) => tool.name), EXPECTED_PUBLIC_TOOL_NAMES);
+  assert.deepEqual(allTools.map((tool) => tool.name), EXPECTED_ALL_TOOL_NAMES);
+  assert.equal(publicTools.some((tool) => LEGACY_TOOL_NAMES.includes(tool.name)), false);
+  assert.equal(allTools.some((tool) => Object.prototype.hasOwnProperty.call(tool, 'legacy')), false);
 });
 
 test('MCP dispatch can call the portable warm bundle contract tool', async () => {

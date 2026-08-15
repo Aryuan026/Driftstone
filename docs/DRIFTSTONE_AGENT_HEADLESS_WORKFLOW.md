@@ -77,7 +77,9 @@ same state machine instead of inventing another path.
 | `validate` | Check the bundle contract, ledgers and source completeness. | `get_portable_warm_bundle_contract`, `inspect_portable_warm_bundle` |
 
 Legacy compatibility tools remain callable but should not be presented as the
-normal public endpoint:
+normal public endpoint. The MCP `tools/list` response now hides them by default;
+maintenance clients can pass `include_legacy_tools: true` when they explicitly
+need old diagnostics.
 
 | legacy tool | current role |
 | --- | --- |
@@ -201,4 +203,3 @@ An agent run is acceptable when:
 - Rejected and HOLD rows remain visible.
 - Projection files, if generated, are local and reversible.
 - No private system write or external projection write happened silently.
-

@@ -334,6 +334,7 @@ export const TOOLS = [
   },
   {
     name: 'run_history_pipeline',
+    legacy: true,
     description: 'LEGACY/COMPAT：把历史记录文件送进旧流水线，完成入包、分片、提炼、reviewed 去重，并落到旧 roots/vines 兼容层；公开 Driftstone 真相应使用 portable_warm_bundle。',
     inputSchema: {
       type: 'object',
@@ -454,6 +455,7 @@ export const TOOLS = [
   },
   {
     name: 'finalize_reviewed_entries',
+    legacy: true,
     description: 'LEGACY/COMPAT：把 reviewed cluster materialize 到旧 roots/vines 兼容层；这不是公开 Driftstone portable_warm_bundle 出口。',
     inputSchema: {
       type: 'object',
@@ -486,6 +488,7 @@ export const TOOLS = [
   },
   {
     name: 'get_memory_context',
+    legacy: true,
     description: '读取旧本地 memory context packet，方便兼容流程取上下文；不要把它当作 Home/Hippocove 冷树真相。',
     inputSchema: {
       type: 'object',
@@ -501,3 +504,14 @@ export const TOOLS = [
     }
   }
 ];
+
+function asMcpTool(tool) {
+  const { legacy, ...publicTool } = tool;
+  return publicTool;
+}
+
+export function listMcpTools({ includeLegacy = false } = {}) {
+  return TOOLS
+    .filter((tool) => includeLegacy || !tool.legacy)
+    .map(asMcpTool);
+}

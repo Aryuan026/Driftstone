@@ -1,4 +1,4 @@
-import { TOOLS } from './tool-catalog.js';
+import { listMcpTools } from './tool-catalog.js';
 import { callTool } from './tool-dispatch.js';
 
 function asTextContent(value) {
@@ -42,7 +42,11 @@ async function handleMessage(message) {
   }
 
   if (method === 'tools/list') {
-    sendResponse(id, { tools: TOOLS });
+    sendResponse(id, {
+      tools: listMcpTools({
+        includeLegacy: Boolean(params?.include_legacy_tools || params?.includeLegacyTools)
+      })
+    });
     return;
   }
 
