@@ -101,3 +101,21 @@ test('MCP dispatch keeps unknown tool calls explicit', async () => {
     /Unknown tool: missing_tool/
   );
 });
+
+test('MCP dispatch rejects hidden legacy tools on the public surface', async () => {
+  for (const name of LEGACY_TOOL_NAMES) {
+    await assert.rejects(
+      () => callTool(name, {}),
+      /legacy\/compat-only/
+    );
+  }
+});
+
+test('MCP dispatch allows legacy tools only when server compatibility is explicit', async () => {
+  await assert.doesNotReject(() => callTool('get_memory_context', {
+    owner_id: 'synthetic-owner',
+    realm_id: 'synthetic-realm'
+  }, {
+    includeLegacy: true
+  }));
+});

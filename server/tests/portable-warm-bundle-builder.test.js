@@ -65,6 +65,61 @@ test('builder emits a valid bundle from source-bounded growth drafts', () => {
   assert.equal(bundle.warm_cards[0].home_import_policy.direct_write_allowed, false);
 });
 
+test('builder keeps candidate_id stable across title and body edits', () => {
+  const first = buildPortableWarmBundle({
+    scope: {
+      owner_id: 'owner',
+      realm_id: 'realm'
+    },
+    generatedAt: '2026-08-15T00:00:00.000Z',
+    growthDraftArtifacts: [buildGrowthDraftArtifact()]
+  });
+  const second = buildPortableWarmBundle({
+    scope: {
+      owner_id: 'owner',
+      realm_id: 'realm'
+    },
+    generatedAt: '2026-08-15T00:00:00.000Z',
+    growthDraftArtifacts: [
+      buildGrowthDraftArtifact({
+        draft: {
+          ...buildGrowthDraftArtifact().draft,
+          frontmatter: {
+            title: 'Synthetic warm memory, edited title'
+          },
+          body: {
+            ...buildGrowthDraftArtifact().draft.body,
+            snapshot: 'The same synthetic artifact has an edited living fragment.'
+          }
+        }
+      })
+    ]
+  });
+
+  assert.equal(validatePortableWarmBundle(first).ok, true);
+  assert.equal(validatePortableWarmBundle(second).ok, true);
+  assert.equal(first.warm_cards[0].candidate_id, second.warm_cards[0].candidate_id);
+  assert.notEqual(first.manifest.manifest_digest, second.manifest.manifest_digest);
+});
+
+test('builder rejects growth drafts without stable candidate identity', () => {
+  const artifact = buildGrowthDraftArtifact();
+  delete artifact.artifact_id;
+  const bundle = buildPortableWarmBundle({
+    scope: {
+      owner_id: 'owner',
+      realm_id: 'realm'
+    },
+    generatedAt: '2026-08-15T00:00:00.000Z',
+    growthDraftArtifacts: [artifact]
+  });
+  const validation = validatePortableWarmBundle(bundle);
+  assert.equal(validation.ok, true);
+  assert.equal(bundle.warm_cards.length, 0);
+  assert.equal(bundle.rejected_ledger.length, 1);
+  assert.equal(bundle.rejected_ledger[0].reason, 'missing_stable_candidate_identity');
+});
+
 test('builder holds growth drafts without bounded source spans', () => {
   const bundle = buildPortableWarmBundle({
     scope: {

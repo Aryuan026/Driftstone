@@ -550,7 +550,8 @@ export async function getGrowthDashboardSnapshot({
           }),
           tasks: await safeLoad(loadLatestTranslationTaskPacket, {
             ownerId: activeScope.owner_id,
-            realmId: activeScope.realm_id
+            realmId: activeScope.realm_id,
+            botId: activeScope.bot_id
           }),
           reviewed: await safeLoad(loadLatestRuntimeReviewedPacket, {
             ownerId: activeScope.owner_id,

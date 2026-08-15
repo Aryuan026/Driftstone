@@ -279,6 +279,15 @@ function buildRejectedEntry({ sourceKind = '', sourceId = '', reason = '', row =
 
 function addGrowthDraftArtifact(state, artifact = {}) {
   const artifactId = safeText(artifact?.artifact_id || artifact?.draft?.card_entry?.card_id || artifact?.json_file);
+  if (!artifactId) {
+    state.rejected_ledger.push(buildRejectedEntry({
+      sourceKind: 'growth_draft',
+      sourceId: `missing_identity_${shortHash(stableJson(artifact))}`,
+      reason: 'missing_stable_candidate_identity',
+      row: artifact
+    }));
+    return;
+  }
   const title = inferCandidateTitle(artifact);
   const livingFragment = inferLivingFragment(artifact);
   if (!title || !livingFragment) {
@@ -344,9 +353,7 @@ function addGrowthDraftArtifact(state, artifact = {}) {
   const futureUseHint = inferFutureUseHint(artifact);
   const candidateId = `warm_${shortHash(stableJson({
     source: 'growth_draft',
-    artifact_id: artifactId,
-    title,
-    livingFragment
+    artifact_id: artifactId
   }))}`;
   state.warm_cards.push({
     candidate_id: candidateId,

@@ -44,10 +44,24 @@ function relativeArtifactPath(outputDir = '', filePath = '') {
 function sanitizeSourceFileLabel(value = '') {
   const text = safeText(value);
   if (!text) return '';
-  if (isAbsolute(text) || text.includes('/Users/') || text.includes('/srv/') || text.includes('\\')) {
-    return basename(text) || 'local_source';
+  if (isPrivatePathLike(text)) {
+    const normalized = text.replace(/[\\/]+$/u, '');
+    const parts = normalized.split(/[\\/]+/u).filter(Boolean);
+    return parts[parts.length - 1] || 'local_source';
   }
   return text;
+}
+
+function isPrivatePathLike(text = '') {
+  return Boolean(
+    isAbsolute(text)
+    || /^[A-Za-z]:[\\/]/u.test(text)
+    || /^\\\\[^\\]+\\[^\\]+/u.test(text)
+    || text.includes('/Users/')
+    || text.includes('/home/')
+    || text.includes('/srv/')
+    || text.includes('\\')
+  );
 }
 
 function resolveOutputRoot(outputRoot = '') {
@@ -70,7 +84,7 @@ function findPrivacyPreflightHits(value, path = '$', hits = []) {
   if (typeof value === 'string') {
     if (/sk-[A-Za-z0-9_-]{20,}/.test(value)) {
       hits.push({ path, reason: 'secret_like_api_key' });
-    } else if (/\/Users\/[^\s"'`]+/.test(value) || /\/srv\/[^\s"'`]+/.test(value)) {
+    } else if (/\/(?:Users|home|srv)\/[^\s"'`]+/u.test(value) || /[A-Za-z]:[\\/][^\s"'`]+/u.test(value) || /\\\\[^\\\s"'`]+\\[^\\\s"'`]+/u.test(value)) {
       hits.push({ path, reason: 'absolute_private_path' });
     }
     return hits;

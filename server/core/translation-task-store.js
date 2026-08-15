@@ -65,11 +65,12 @@ export async function loadCanonicalTranslationTaskRecordByFile(taskFile) {
   const scope = packet?.scope || {};
   const ownerId = safeText(scope.owner_id);
   const realmId = safeText(scope.realm_id || 'default');
+  const botId = safeText(scope.bot_id);
   if (!ownerId || !realmId) throw canonicalTaskError();
 
   let scopedTaskDir = '';
   try {
-    scopedTaskDir = await realpath(getScopedTranslationTaskDir(ownerId, realmId));
+    scopedTaskDir = await realpath(getScopedTranslationTaskDir(ownerId, realmId, botId));
   } catch {
     throw canonicalTaskError();
   }
@@ -111,20 +112,37 @@ export async function loadCanonicalTranslationTaskByFile(taskFile) {
   return (await loadCanonicalTranslationTaskRecordByFile(taskFile)).task;
 }
 
-export async function loadLatestTranslationTaskPointer({ ownerId = '', realmId = '', owner_id = '', realm_id = '' } = {}) {
+export async function loadLatestTranslationTaskPointer({
+  ownerId = '',
+  realmId = '',
+  botId = '',
+  owner_id = '',
+  realm_id = '',
+  bot_id = ''
+} = {}) {
   const normalizedOwnerId = String(ownerId || owner_id || '').trim();
   const normalizedRealmId = String(realmId || realm_id || '').trim();
-  const taskDir = getScopedTranslationTaskDir(normalizedOwnerId, normalizedRealmId);
+  const normalizedBotId = String(botId || bot_id || '').trim();
+  const taskDir = getScopedTranslationTaskDir(normalizedOwnerId, normalizedRealmId, normalizedBotId);
   const latestFile = join(taskDir, 'latest.json');
   return readJson(latestFile);
 }
 
-export async function loadLatestTranslationTaskPacket({ ownerId = '', realmId = '', owner_id = '', realm_id = '' } = {}) {
+export async function loadLatestTranslationTaskPacket({
+  ownerId = '',
+  realmId = '',
+  botId = '',
+  owner_id = '',
+  realm_id = '',
+  bot_id = ''
+} = {}) {
   const normalizedOwnerId = String(ownerId || owner_id || '').trim();
   const normalizedRealmId = String(realmId || realm_id || '').trim();
+  const normalizedBotId = String(botId || bot_id || '').trim();
   const pointer = await loadLatestTranslationTaskPointer({
     ownerId: normalizedOwnerId,
-    realmId: normalizedRealmId
+    realmId: normalizedRealmId,
+    botId: normalizedBotId
   });
   const packetFile = join(pointer.latest_packet, 'packet.json');
   const packet = await loadTranslationTaskPacketByFile(packetFile);

@@ -372,7 +372,8 @@ export async function prepareAiTranslationTasks(body = {}) {
   const materialized = await materializeTranslationTasks(payload, {
     label: safeText(body?.source?.label || `${safeText(hydrated.packet_id)}__ai_tasks`),
     owner_id: scope.owner_id || hydrated?.scope?.owner_id || '',
-    realm_id: scope.realm_id || hydrated?.scope?.realm_id || 'default'
+    realm_id: scope.realm_id || hydrated?.scope?.realm_id || 'default',
+    bot_id: scope.bot_id || hydrated?.scope?.bot_id || ''
   });
 
   const taskFileByBatch = new Map(

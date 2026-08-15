@@ -184,6 +184,7 @@ export async function runRuntimeAiTranslationTask(body = {}) {
     : await getNextPendingTranslationWorkerPacket({
         owner_id: scope.owner_id,
         realm_id: scope.realm_id,
+        bot_id: scope.bot_id,
         limit: Number(body?.limit || 20)
       });
 

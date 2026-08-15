@@ -311,6 +311,7 @@ export async function appendRuntimeReviewedEntries(body = {}) {
     const sameItems = sameReviewedItems(historicalItems, items);
     const sameSubmission = !previousSubmissionDigest || previousSubmissionDigest === submissionDigest;
     if (sameItems && sameSubmission) {
+      await updateTranslationTaskStatus(taskFile, (task) => task);
       const home = await getMemoryHomePacket({
         ownerId: scope.owner_id,
         realmId: scope.realm_id,

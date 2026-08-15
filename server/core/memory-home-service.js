@@ -209,6 +209,7 @@ async function buildMemoryHomePacketFromScope({
     nextTaskPacket = await getNextPendingTranslationWorkerPacket({
       owner_id: scope.owner_id,
       realm_id: scope.realm_id,
+      bot_id: scope.bot_id,
       limit: Math.max(20, Number(rootLimit || 8))
     });
   } catch {

@@ -515,3 +515,12 @@ export function listMcpTools({ includeLegacy = false } = {}) {
     .filter((tool) => includeLegacy || !tool.legacy)
     .map(asMcpTool);
 }
+
+export function getMcpToolPolicy(name) {
+  const tool = TOOLS.find((item) => item.name === name);
+  if (!tool) return null;
+  return {
+    name: tool.name,
+    legacy: Boolean(tool.legacy)
+  };
+}

@@ -119,8 +119,10 @@ export function getScopedTranslationDir(ownerId = '', realmId = '') {
   return join(getScopedTruthDir(ownerId, realmId), 'translation_packets');
 }
 
-export function getScopedTranslationTaskDir(ownerId = '', realmId = '') {
-  return join(getScopedTruthDir(ownerId, realmId), 'translation_tasks');
+export function getScopedTranslationTaskDir(ownerId = '', realmId = '', botId = '') {
+  const taskRoot = join(getScopedTruthDir(ownerId, realmId), 'translation_tasks');
+  const scopedBot = safeScopeSegment(botId, '');
+  return scopedBot ? join(taskRoot, 'bots', scopedBot) : taskRoot;
 }
 
 export function getScopedReviewedDir(ownerId = '', realmId = '') {

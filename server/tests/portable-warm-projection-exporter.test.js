@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -7,7 +7,7 @@ import test from 'node:test';
 import { buildPortableWarmBundle } from '../core/portable-warm-bundle-builder.js';
 import { exportPortableWarmProjection } from '../core/portable-warm-projection-exporter.js';
 
-function buildGrowthDraftArtifact() {
+function buildGrowthDraftArtifact({ sourceFile = '/tmp/projection-source.json' } = {}) {
   return {
     artifact_id: 'memo_projection_001',
     generated_at: '2026-08-15T00:00:00.000Z',
@@ -31,7 +31,7 @@ function buildGrowthDraftArtifact() {
           source_scene_snippets: [
             {
               source_bundle_id: 'bundle_projection',
-              file: '/tmp/projection-source.json',
+              file: sourceFile,
               source_window_title: 'Projection source window',
               source_msg_range: '4-5',
               speaker: 'assistant',
@@ -181,5 +181,68 @@ test('projection exporter blocks obvious private paths in projected text', async
     assert.equal(JSON.stringify(result).includes('/Users/example/private.txt'), false);
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('projection exporter sanitizes source_file paths across host operating systems', async () => {
+  const cases = [
+    {
+      sourceFile: 'C:\\Users\\Alice\\private\\history.json',
+      expectedLabel: 'history.json',
+      forbidden: ['C:\\Users\\Alice', 'private\\history.json']
+    },
+    {
+      sourceFile: '\\\\server\\share\\private\\history.json',
+      expectedLabel: 'history.json',
+      forbidden: ['\\\\server\\share', 'private\\history.json']
+    },
+    {
+      sourceFile: '/Users/alice/private/history.json',
+      expectedLabel: 'history.json',
+      forbidden: ['/Users/alice/private']
+    },
+    {
+      sourceFile: '/home/alice/private/history.json',
+      expectedLabel: 'history.json',
+      forbidden: ['/home/alice/private']
+    }
+  ];
+
+  for (const item of cases) {
+    const dir = await mkdtemp(join(tmpdir(), 'driftstone-projection-path-'));
+    try {
+      const bundle = buildPortableWarmBundle({
+        scope: {
+          owner_id: 'owner',
+          realm_id: 'realm'
+        },
+        generatedAt: '2026-08-15T00:00:00.000Z',
+        growthDraftArtifacts: [buildGrowthDraftArtifact({ sourceFile: item.sourceFile })]
+      });
+      const bundlePath = join(dir, 'portable_warm_bundle.json');
+      const outputRoot = join(dir, 'projection-output');
+      await writeFile(bundlePath, `${JSON.stringify(bundle, null, 2)}\n`, 'utf8');
+
+      const result = await exportPortableWarmProjection({
+        bundlePath,
+        outputRoot
+      });
+
+      assert.equal(result.ok, true);
+      const text = await readFile(result.output.files.notion_source_spans_jsonl, 'utf8');
+      const rows = text.trim().split('\n').map(JSON.parse);
+      assert.equal(rows[0].source_file, item.expectedLabel);
+      const sourceSpanDir = join(result.output.dir, 'obsidian', 'Source Spans');
+      const sourceSpanFiles = await readdir(sourceSpanDir);
+      const sourceSpanMarkdown = (await Promise.all(
+        sourceSpanFiles.map((file) => readFile(join(sourceSpanDir, file), 'utf8'))
+      )).join('\n');
+      const allProjectedText = JSON.stringify(result) + text + sourceSpanMarkdown;
+      for (const forbidden of item.forbidden) {
+        assert.equal(allProjectedText.includes(forbidden), false);
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   }
 });

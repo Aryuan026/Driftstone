@@ -222,7 +222,8 @@ test('headless task_file authority, replay, conflict, and resume stay exact', as
   }));
   const recovered = await pullTranslationTaskForTool({
     ownerId: 'owner-recover',
-    realmId: 'realm-recover'
+    realmId: 'realm-recover',
+    botId: 'bot-recover'
   });
   assert.equal(recovered.next_task.task_file, secondPrepared.next_task.task_file);
   assert.equal(recovered.next_task.status, 'submitted');
@@ -326,6 +327,122 @@ test('public task_file rejects unregistered and symlinked canonical-looking file
     () => pullTranslationTaskForTool({ taskFile: symlinkFile }),
     /canonical translation task/
   );
+});
+
+test('headless queue without task_file is partitioned by bot_id', async () => {
+  const ownerId = 'owner-two-bots';
+  const realmId = 'realm-two-bots';
+  const inputA = join(dataRoot, 'two-bots-a.txt');
+  const inputB = join(dataRoot, 'two-bots-b.txt');
+  await writeFile(inputA, 'user: bot A synthetic line\n', 'utf8');
+  await writeFile(inputB, 'user: bot B synthetic line\n', 'utf8');
+
+  const preparedA = await prepareHistorySource({
+    filePaths: [inputA],
+    ownerId,
+    realmId,
+    botId: 'bot-A',
+    targetChars: 1200,
+    maxSlices: 1,
+    entryLimit: 2
+  });
+  const preparedB = await prepareHistorySource({
+    filePaths: [inputB],
+    ownerId,
+    realmId,
+    botId: 'bot-B',
+    targetChars: 1200,
+    maxSlices: 1,
+    entryLimit: 2
+  });
+
+  const pulledA = await pullTranslationTaskForTool({
+    ownerId,
+    realmId,
+    botId: 'bot-A'
+  });
+  assert.equal(pulledA.next_task.task_file, preparedA.next_task.task_file);
+  assert.equal(pulledA.next_task.scope.bot_id, 'bot-A');
+  assert.notEqual(pulledA.next_task.task_file, preparedB.next_task.task_file);
+
+  const pulledB = await pullTranslationTaskForTool({
+    ownerId,
+    realmId,
+    botId: 'bot-B'
+  });
+  assert.equal(pulledB.next_task.task_file, preparedB.next_task.task_file);
+  assert.equal(pulledB.next_task.scope.bot_id, 'bot-B');
+
+  const submitA = await submitTranslationEntriesForTool({
+    taskFile: preparedA.next_task.task_file,
+    entries: [buildEntry(preparedA.next_task.slices[0].slice_id, 'BOT_A')]
+  });
+  assert.equal(submitA.ok, true);
+  assert.equal(submitA.next_task, null);
+
+  const stillPulledB = await pullTranslationTaskForTool({
+    ownerId,
+    realmId,
+    botId: 'bot-B'
+  });
+  assert.equal(stillPulledB.next_task.task_file, preparedB.next_task.task_file);
+});
+
+test('same-task replay repairs stale task packet row after interrupted applied write', async () => {
+  const inputFile = join(dataRoot, 'stale-packet-row-source.txt');
+  await writeFile(inputFile, 'user: stale packet row synthetic line\n', 'utf8');
+  const scope = {
+    ownerId: 'owner-stale-row',
+    realmId: 'realm-stale-row',
+    botId: 'bot-stale-row'
+  };
+  const prepared = await prepareHistorySource({
+    filePaths: [inputFile],
+    ...scope,
+    targetChars: 1200,
+    maxSlices: 1,
+    entryLimit: 2
+  });
+  const taskFile = prepared.next_task.task_file;
+  const sliceId = prepared.next_task.slices[0].slice_id;
+  const submitted = await submitTranslationEntriesForTool({
+    taskFile,
+    entries: [buildEntry(sliceId, 'STALE_ROW')]
+  });
+  assert.equal(submitted.ok, true);
+
+  const taskDoc = await loadTranslationTaskByFile(taskFile);
+  const packet = JSON.parse(await readFile(taskDoc.task_packet_file, 'utf8'));
+  packet.tasks = packet.tasks.map((row) => row.file === taskFile
+    ? {
+        ...row,
+        status: 'pending',
+        applied_at: ''
+      }
+    : row);
+  packet.status_summary = {
+    pending: 1,
+    submitted: 0,
+    applied: 0,
+    failed: 0
+  };
+  await writeFile(taskDoc.task_packet_file, `${JSON.stringify(packet, null, 2)}\n`, 'utf8');
+
+  const replay = await submitTranslationEntriesForTool({
+    taskFile,
+    entries: [buildEntry(sliceId, 'STALE_ROW')]
+  });
+  assert.equal(replay.ok, true);
+  assert.equal(replay.replay.status, 'observed_existing');
+
+  const repairedPacket = JSON.parse(await readFile(taskDoc.task_packet_file, 'utf8'));
+  const repairedRow = repairedPacket.tasks.find((row) => row.file === taskFile);
+  assert.equal(repairedRow.status, 'applied');
+  assert.equal(repairedPacket.status_summary.pending, 0);
+  assert.equal(repairedPacket.status_summary.applied, 1);
+
+  const pulled = await pullTranslationTaskForTool(scope);
+  assert.equal(pulled.next_task, null);
 });
 
 test('public lifecycle projections do not leak legacy root or leaf bodies', async () => {

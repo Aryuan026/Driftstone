@@ -1,6 +1,10 @@
 import { listMcpTools } from './tool-catalog.js';
 import { callTool } from './tool-dispatch.js';
 
+function legacyToolsEnabled() {
+  return /^(1|true|yes)$/i.test(String(process.env.DRIFTSTONE_MCP_ENABLE_LEGACY_TOOLS || '').trim());
+}
+
 function asTextContent(value) {
   if (typeof value === 'string') return value;
   return JSON.stringify(value, null, 2);
@@ -42,17 +46,19 @@ async function handleMessage(message) {
   }
 
   if (method === 'tools/list') {
+    const includeLegacy = legacyToolsEnabled()
+      && Boolean(params?.include_legacy_tools || params?.includeLegacyTools);
     sendResponse(id, {
-      tools: listMcpTools({
-        includeLegacy: Boolean(params?.include_legacy_tools || params?.includeLegacyTools)
-      })
+      tools: listMcpTools({ includeLegacy })
     });
     return;
   }
 
   if (method === 'tools/call') {
     try {
-      const result = await callTool(params?.name, params?.arguments || {});
+      const result = await callTool(params?.name, params?.arguments || {}, {
+        includeLegacy: legacyToolsEnabled()
+      });
       sendResponse(id, {
         content: [
           {

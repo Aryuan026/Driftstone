@@ -544,7 +544,7 @@ export async function inspectPipelineScope({
   const [ingest, translation, tasks, reviewed, home] = await Promise.all([
     maybeReadLatestPacket(getScopedIngressDir(scope.owner_id, scope.realm_id)),
     maybeReadLatestPacket(getScopedTranslationDir(scope.owner_id, scope.realm_id)),
-    maybeReadLatestPacket(getScopedTranslationTaskDir(scope.owner_id, scope.realm_id)),
+    maybeReadLatestPacket(getScopedTranslationTaskDir(scope.owner_id, scope.realm_id, scope.bot_id)),
     maybeReadLatestPacket(getScopedReviewedDir(scope.owner_id, scope.realm_id)),
     getMemoryHomePacket({
       ownerId: scope.owner_id,
@@ -634,7 +634,8 @@ export async function prepareHistorySource({
 
   const next = await getNextPendingTranslationWorkerPacket({
     owner_id: scope.owner_id,
-    realm_id: scope.realm_id
+    realm_id: scope.realm_id,
+    bot_id: scope.bot_id
   });
 
   return {
@@ -702,7 +703,8 @@ export async function submitTranslationEntriesForTool({
   const scope = appended?.scope || buildScope({ ownerId, realmId, botId });
   const next = await getNextPendingTranslationWorkerPacket({
     owner_id: scope.owner_id,
-    realm_id: scope.realm_id
+    realm_id: scope.realm_id,
+    bot_id: scope.bot_id
   });
   return buildPublicTranslationLifecycleProjection(appended, {
     nextTask: next?.next_task || null,
@@ -733,7 +735,8 @@ export async function failTranslationTaskForTool({
   const scope = failed?.scope || buildScope({ ownerId, realmId, botId });
   const next = await getNextPendingTranslationWorkerPacket({
     owner_id: scope.owner_id,
-    realm_id: scope.realm_id
+    realm_id: scope.realm_id,
+    bot_id: scope.bot_id
   });
   return buildPublicTranslationLifecycleProjection(failed, {
     nextTask: next?.next_task || null,

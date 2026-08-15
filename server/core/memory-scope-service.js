@@ -193,7 +193,7 @@ export async function getMemoryScopePacket({ ownerId = '', realmId = '', botId =
     null
   );
   const taskPacket = await safeLoad(
-    () => loadLatestTranslationTaskPacket({ ownerId: normalizedOwnerId, realmId: normalizedRealmId }),
+    () => loadLatestTranslationTaskPacket({ ownerId: normalizedOwnerId, realmId: normalizedRealmId, botId: normalizedBotId }),
     null
   );
   const leafIndex = await safeLoad(

@@ -6,7 +6,8 @@ function buildEmptyTranslationTaskStatus(options = {}) {
     schema: 'hippocove_translation_task_packet_status_v0.1',
     scope: {
       owner_id: String(options.ownerId || options.owner_id || ''),
-      realm_id: String(options.realmId || options.realm_id || '')
+      realm_id: String(options.realmId || options.realm_id || ''),
+      bot_id: String(options.botId || options.bot_id || '')
     },
     latest: {
       generated_at: '',
@@ -96,8 +97,10 @@ export async function getLatestTranslationTaskPacketStatus(options = {}) {
     const loaded = await loadLatestTranslationTaskPacket({
       ownerId: options.ownerId,
       realmId: options.realmId,
+      botId: options.botId,
       owner_id: options.owner_id,
-      realm_id: options.realm_id
+      realm_id: options.realm_id,
+      bot_id: options.bot_id
     });
     pointer = loaded.pointer;
     packetFile = loaded.packetFile;

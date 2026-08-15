@@ -30,8 +30,14 @@ import {
   upsertCardRegistryEntryForTool,
   submitTranslationEntriesForTool
 } from '../core/mcp-tool-service.js';
+import { getMcpToolPolicy } from './tool-catalog.js';
 
-export async function callTool(name, args = {}) {
+export async function callTool(name, args = {}, { includeLegacy = false } = {}) {
+  const toolPolicy = getMcpToolPolicy(name);
+  if (!toolPolicy) throw new Error(`Unknown tool: ${name}`);
+  if (toolPolicy.legacy && !includeLegacy) {
+    throw new Error(`Tool is legacy/compat-only and is not enabled on this public MCP surface: ${name}`);
+  }
   if (name === 'list_api_profiles') {
     return listRuntimeApiProfilesForTool();
   }
