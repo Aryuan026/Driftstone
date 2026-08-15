@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildMemoryStarMapModel, renderMemoryRunDock, renderMemoryStarMap } from '../../ui/memory-star-map.js';
+import { buildSyntheticDemoSnapshot } from '../../ui/synthetic-demo.js';
 
 test('memory star map model projects drafts and committed cards without inventing canonical edges', () => {
   const model = buildMemoryStarMapModel({
@@ -26,6 +27,16 @@ test('memory star map model projects drafts and committed cards without inventin
   assert.equal(model.stars.every((star) => star.parent.endsWith('-hub')), true);
 });
 
+test('memory star map keeps explicit relation lines separate from visual affinity', () => {
+  const model = buildMemoryStarMapModel(buildSyntheticDemoSnapshot());
+
+  assert.equal(model.total, 14);
+  assert.equal(model.counts.committed, 12);
+  assert.equal(model.counts.draft, 2);
+  assert.equal(model.explicitEdges.length, 3);
+  assert.equal(model.explicitEdges.every((edge) => edge.from && edge.to), true);
+});
+
 test('memory star map render keeps visual affinity boundary visible', () => {
   const visualEl = { innerHTML: '' };
   const statusEl = { textContent: '', className: '' };
@@ -48,7 +59,23 @@ test('memory star map render keeps visual affinity boundary visible', () => {
   assert.match(statusEl.className, /live/);
   assert.match(visualEl.innerHTML, /Memory Star Map/);
   assert.match(visualEl.innerHTML, /visual affinity, not canonical edges/);
+  assert.doesNotMatch(visualEl.innerHTML, /front-growth-link canonical/);
   assert.doesNotMatch(visualEl.innerHTML, /canonical relationship line/);
+});
+
+test('synthetic demo renders explicit demo lines and no private local path shape', () => {
+  const snapshot = buildSyntheticDemoSnapshot();
+  const visualEl = { innerHTML: '' };
+  const statusEl = { textContent: '', className: '' };
+
+  renderMemoryStarMap({ visualEl, statusEl, snapshot });
+
+  assert.equal(snapshot.demo.synthetic, true);
+  assert.equal(statusEl.textContent, 'Demo map');
+  assert.match(visualEl.innerHTML, /front-growth-link canonical/);
+  assert.match(visualEl.innerHTML, /Synthetic showcase memory field/);
+  assert.doesNotMatch(JSON.stringify(snapshot), /\/Users\//);
+  assert.doesNotMatch(JSON.stringify(snapshot), /sk-[A-Za-z0-9]/);
 });
 
 test('memory run dock renders human workflow state without adding pipeline truth', () => {

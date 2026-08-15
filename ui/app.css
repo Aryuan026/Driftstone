@@ -207,6 +207,29 @@ button.text-link {
   line-height: 1.7;
 }
 
+.memory-star-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.hero-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  width: auto;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.memory-star-actions .btn {
+  width: auto;
+}
+
 .memory-star-dock {
   position: relative;
   z-index: 1;
@@ -230,6 +253,149 @@ button.text-link {
   display: block;
   color: rgba(255, 255, 255, 0.92);
   font-size: 11.2px;
+}
+
+.persona-onboarding-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 8% 4%, rgba(250, 204, 21, 0.2), transparent 30%),
+    radial-gradient(circle at 94% 18%, rgba(17, 38, 41, 0.12), transparent 28%),
+    rgba(255, 253, 247, 0.94);
+}
+
+.persona-onboarding-panel::before {
+  position: absolute;
+  inset: 12px auto 12px 12px;
+  width: 5px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #facc15, #9fc6ad 58%, #112629);
+  content: "";
+  opacity: 0.86;
+}
+
+.persona-onboarding-panel[data-persona-state="ready"]::before {
+  background: linear-gradient(180deg, #86efac, #9fc6ad, #112629);
+}
+
+.persona-onboarding-panel[data-persona-state="none"]::before {
+  background: linear-gradient(180deg, #facc15, #e8c991, #93897b);
+}
+
+.persona-onboarding-main {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-left: 12px;
+}
+
+.persona-onboarding-copy h2 {
+  margin: 0;
+  font-size: clamp(19px, 2.8vw, 30px);
+  line-height: 1.12;
+  font-weight: 760;
+  letter-spacing: -0.035em;
+}
+
+.persona-onboarding-lead,
+.persona-onboarding-impact,
+.persona-onboarding-safe-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.persona-onboarding-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+  gap: 10px;
+  margin-top: 12px;
+  padding-left: 12px;
+}
+
+.persona-onboarding-summary,
+.persona-onboarding-missing {
+  border: 1px solid rgba(43, 39, 33, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 11px 12px;
+}
+
+.persona-onboarding-summary p {
+  margin: 0 0 5px;
+  color: #25324b;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.persona-onboarding-summary p:last-child {
+  margin-bottom: 0;
+}
+
+.persona-onboarding-missing strong {
+  display: block;
+  margin-bottom: 7px;
+  color: #25324b;
+  font-size: 11px;
+}
+
+.persona-onboarding-missing ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.persona-onboarding-missing li {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.36fr) minmax(0, 1fr);
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10.6px;
+  line-height: 1.45;
+}
+
+.persona-onboarding-missing li strong {
+  margin: 0;
+  color: var(--ink);
+  font-size: 10.8px;
+}
+
+.persona-onboarding-safe-note {
+  color: var(--muted-soft) !important;
+  font-size: 9.8px !important;
+}
+
+.persona-onboarding-impact {
+  position: relative;
+  z-index: 1;
+  padding-left: 12px;
+}
+
+.persona-onboarding-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-left: 12px;
+}
+
+.persona-onboarding-action {
+  width: auto;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  text-decoration: none;
 }
 
 .memory-run-dock {
@@ -1075,6 +1241,13 @@ input[readonly] {
   stroke: rgba(252, 211, 77, 0.24);
 }
 
+.front-growth-link.canonical {
+  stroke: rgba(254, 243, 199, 0.62);
+  stroke-width: 1.35;
+  stroke-dasharray: none;
+  filter: drop-shadow(0 0 7px rgba(252, 211, 77, 0.36));
+}
+
 .front-growth-node {
   fill: rgba(255, 255, 255, 0.88);
 }
@@ -1112,6 +1285,65 @@ input[readonly] {
   filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.42));
 }
 
+.front-growth-node.star.major {
+  filter: drop-shadow(0 0 15px rgba(252, 211, 77, 0.42));
+}
+
+.projection-showcase {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.4fr);
+  gap: 16px;
+  align-items: stretch;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(255, 253, 247, 0.68);
+  box-shadow: var(--shadow);
+}
+
+.projection-showcase .eyebrow {
+  color: var(--warm-ink);
+}
+
+.projection-showcase h2 {
+  margin: 0;
+  max-width: 420px;
+  font-size: clamp(20px, 3vw, 34px);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+}
+
+.projection-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.projection-cards > div {
+  min-height: 112px;
+  padding: 13px;
+  border: 1px solid rgba(43, 39, 33, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.projection-cards strong,
+.projection-cards span {
+  display: block;
+}
+
+.projection-cards strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.projection-cards span {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11.2px;
+  line-height: 1.55;
+}
+
 .hidden {
   display: none !important;
 }
@@ -1121,6 +1353,9 @@ input[readonly] {
   .parse-layout,
   .api-grid,
   .three-up,
+  .persona-onboarding-grid,
+  .projection-showcase,
+  .projection-cards,
   .memory-star-dock,
   .memory-run-dock {
     grid-template-columns: 1fr;
@@ -1132,6 +1367,11 @@ input[readonly] {
 
   .memory-run-dock {
     margin: -72px 10px 0;
+  }
+
+  .persona-onboarding-missing li {
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 }
 
@@ -1168,6 +1408,20 @@ input[readonly] {
   .memory-star-copy p:not(.eyebrow) {
     font-size: 12.5px;
     line-height: 1.55;
+  }
+
+  .persona-onboarding-main {
+    flex-direction: column;
+  }
+
+  .persona-onboarding-copy h2 {
+    font-size: 20px;
+    line-height: 1.12;
+  }
+
+  .persona-onboarding-actions,
+  .persona-onboarding-action {
+    width: 100%;
   }
 
   .front-growth-caption {

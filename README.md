@@ -10,6 +10,11 @@ Bring in exported conversations. Let a configured API or an MCP-capable agent he
 
 <!-- UI preview: replace this comment with the live Memory Star Map screenshot/GIF after the final UI lands. -->
 
+The local UI now includes a **Demo / Synthetic data** mode that loads a safe
+Memory Star Map without private history or API calls. It also includes a
+body-safe cold-start guide for the shared Persona/Soul and language fingerprint
+workspace, so source preparation can begin before voice authority is ready.
+
 ```text
 Conversation history
         ↓
@@ -68,7 +73,13 @@ From that same truth, Driftstone can produce local human-readable projections su
 - Notion-ready CSV / Markdown / JSON files
 - portable JSON / JSONL for downstream tools and agents
 
-<!-- Showcase outputs: after the synthetic demo lands, add links/screenshots for Notion-ready, Obsidian/Markdown, spreadsheet, and canonical portable-Warm examples here. -->
+Synthetic showcase outputs:
+
+- [Demo overview](./examples/synthetic-demo/README.md)
+- [Portable Warm preview](./examples/synthetic-demo/portable-warm/portable-warm-preview.json)
+- [Markdown / Obsidian projection](./examples/synthetic-demo/obsidian/synthetic-warm-cards.md)
+- [Notion-ready CSV](./examples/synthetic-demo/notion-ready.csv)
+- [Spreadsheet-style CSV](./examples/synthetic-demo/spreadsheet/warm-cards.csv)
 
 The bundle is designed to stay inspectable:
 
@@ -111,12 +122,17 @@ The old `Hippocove`-named launch scripts remain compatibility aliases; **Driftst
 The current human workflow is:
 
 1. Import or prepare your source history.
-2. Build Persona/Soul and language fingerprint inputs when you want them to guide extraction quality.
+2. Confirm or draft Persona/Soul and language fingerprint inputs when you want them to guide extraction quality.
 3. Run extraction and growth review.
 4. Inspect source traces, rejected/HOLD rows, and generated Warm cards.
 5. Export the portable Warm bundle and any local projections you want.
 
 If your input is a large ChatGPT `conversations.json`, the current build still uses the legacy lab's conversation exporter for preprocessing. The newer front UI is better suited to already prepared text, Markdown, or Driftstone source packages until the final UI cleanup lands.
+
+The front UI reads the existing shared persona workspace instead of creating a
+second identity store. If that workspace is empty or partial, Driftstone still
+allows source preparation, but persona/voice-dependent Warm-card growth stays
+guarded until role, Persona/Soul, and language fingerprint authority are ready.
 
 ## Agent Path
 
@@ -184,11 +200,11 @@ Usable now:
 - portable Warm bundle builder, validator, inspector, and projection exporter
 - MCP/headless workflow
 - source conservation, rejected/HOLD ledger, and identity regression tests
+- synthetic Memory Star Map demo and projection examples
 
 Still pending:
 
 - final human UI / live Memory Star Map polish
-- synthetic showcase data and human-facing output examples
 - provider-backed Notion write and patch-apply loop
 - production release decision
 

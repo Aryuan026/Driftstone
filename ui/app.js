@@ -1,6 +1,8 @@
 import { getJson, postJson } from './api-client.js';
 import { buildRuntimeMaterialsExport } from './bridges/memo-runtime-bridge.js';
 import { renderMemoryRunDock, renderMemoryStarMap } from './memory-star-map.js';
+import { buildPersonaOnboardingState, renderPersonaOnboarding } from './persona-onboarding.js';
+import { buildSyntheticDemoSnapshot } from './synthetic-demo.js';
 
 const STORAGE_KEY = 'hippocove-runtime-flow-v7';
 const RUNTIME_BUILD_LABEL = 'build 20260508b';
@@ -39,6 +41,7 @@ const LOCAL_PROGRAMMATIC_PROFILE = {
 const els = {
   runtimeStamp: document.querySelector('#runtimeStamp'),
   resetLocalWorkspaceBtn: document.querySelector('#resetLocalWorkspaceBtn'),
+  loadSyntheticDemoBtn: document.querySelector('#loadSyntheticDemoBtn'),
   apiProfileSelect: document.querySelector('#apiProfileSelect'),
   apiProfilesMeta: document.querySelector('#apiProfilesMeta'),
   apiModelDisplay: document.querySelector('#apiModelDisplay'),
@@ -58,6 +61,7 @@ const els = {
   parseProgressDetail: document.querySelector('#parseProgressDetail'),
   parseStatusBand: document.querySelector('#parseStatusBand'),
   materialNote: document.querySelector('#materialNote'),
+  personaOnboardingCard: document.querySelector('#personaOnboardingCard'),
   personaBridgeSummary: document.querySelector('#personaBridgeSummary'),
   personaBridgeMeta: document.querySelector('#personaBridgeMeta'),
   compactBridgeMeta: document.querySelector('#compactBridgeMeta'),
@@ -110,7 +114,9 @@ const state = {
   personaWorkspaceSnapshot: null,
   growthDashboardSnapshot: null,
   growthDashboardError: '',
-  growthDashboardPoller: null
+  growthDashboardPoller: null,
+  syntheticDemoActive: false,
+  syntheticDemoSnapshot: null
 };
 
 function safeText(value, fallback = '') {
@@ -636,10 +642,16 @@ function countMeaningfulLines(text) {
 }
 
 function renderPersonaBridgePanel() {
-  if (!els.personaBridgeSummary || !els.personaBridgeMeta) return;
   const workspace = getPersonaWorkspaceView();
+  const onboardingState = renderPersonaOnboarding({
+    panelEl: els.personaOnboardingCard,
+    workspace,
+    legacyHref: './legacy/index.html?tab=t8&focus=persona-style',
+    historyHref: '#workflowControls'
+  });
+  if (!els.personaBridgeSummary || !els.personaBridgeMeta) return;
   const parts = [];
-  if (workspace.charName || workspace.userName) {
+  if (onboardingState.roleReady && (workspace.charName || workspace.userName)) {
     parts.push([workspace.charName, workspace.userName].filter(Boolean).join(' / '));
   }
   if (workspace.personaCard) {
@@ -1784,9 +1796,23 @@ function buildGenerationRuntimeView(snapshot = state.growthDashboardSnapshot || 
   };
 }
 
+function getVisibleGrowthDashboardSnapshot() {
+  return state.syntheticDemoActive && state.syntheticDemoSnapshot
+    ? state.syntheticDemoSnapshot
+    : (state.growthDashboardSnapshot || {});
+}
+
+function getMemoryStarWorkspaceView() {
+  const workspace = getPersonaWorkspaceView();
+  return buildPersonaOnboardingState(workspace).roleReady
+    ? workspace
+    : { ...workspace, charName: '' };
+}
+
 function renderGenerationPanel() {
   const workspace = getPersonaWorkspaceView();
-  const canGenerate = Boolean(workspace.personaCard);
+  const personaOnboarding = buildPersonaOnboardingState(workspace);
+  const canGenerate = personaOnboarding.warmGrowthPersonaReady;
   const runtimeView = buildGenerationRuntimeView();
   const scope = getCurrentParseScope() || buildParseScope();
   const draftTotal = Number(state.growthDashboardSnapshot?.growth_drafts?.total || 0);
@@ -1820,7 +1846,8 @@ function renderGenerationPanel() {
   }
 
   if (!canGenerate) {
-    setGenerationStatus('Needs persona', 'stable');
+    els.generationProgressDetail.textContent = 'Source preparation can continue; voice/persona-dependent Warm growth waits for role, Persona/Soul, and language fingerprint authority.';
+    setGenerationStatus('Needs persona authority', 'stable');
     return;
   }
 
@@ -1828,6 +1855,36 @@ function renderGenerationPanel() {
 }
 
 function buildMemoryRunDockView() {
+  if (state.syntheticDemoActive && state.syntheticDemoSnapshot) {
+    const snapshot = state.syntheticDemoSnapshot;
+    const committed = Number(snapshot?.staging_cards?.total || 0);
+    const forming = Number(snapshot?.growth_drafts?.total || 0);
+    const holds = Number(snapshot?.review_queue?.hold_count || 0);
+    const edges = Array.isArray(snapshot?.explicit_relationships?.edges)
+      ? snapshot.explicit_relationships.edges.length
+      : 0;
+    return {
+      tone: 'ready',
+      phaseLabel: 'Demo / Synthetic data',
+      headline: `${committed} fictional Warm cards are ready to browse.`,
+      detail: 'This showcase uses only fictional sources and artifacts. It proves the UI shape without API calls or private history.',
+      progress: 100,
+      steps: [
+        { label: 'Choose history', state: 'done' },
+        { label: 'Organize', state: 'done' },
+        { label: 'Review', state: holds ? 'current' : 'done' },
+        { label: 'Export', state: 'done' }
+      ],
+      metrics: [
+        { label: 'demo cards', value: String(committed) },
+        { label: 'forming', value: String(forming) },
+        { label: 'review', value: String(holds) },
+        { label: 'real lines', value: String(edges) }
+      ],
+      detailsLabel: 'Use your history'
+    };
+  }
+
   const parse = deriveParseModel();
   const generation = buildGenerationRuntimeView();
   const snapshot = state.growthDashboardSnapshot || {};
@@ -1957,14 +2014,27 @@ function renderGrowthWatchPanel() {
   renderMemoryStarMap({
     visualEl: els.frontGrowthVisual,
     statusEl: els.frontGrowthStatusPill,
-    snapshot: state.growthDashboardSnapshot || {},
-    workspace: getPersonaWorkspaceView(),
-    errorText: state.growthDashboardError
+    snapshot: getVisibleGrowthDashboardSnapshot(),
+    workspace: getMemoryStarWorkspaceView(),
+    errorText: state.syntheticDemoActive ? '' : state.growthDashboardError
   });
   renderMemoryRunDock({
     dockEl: els.memoryRunDock,
     run: buildMemoryRunDockView()
   });
+}
+
+function loadSyntheticDemo() {
+  state.syntheticDemoActive = true;
+  state.syntheticDemoSnapshot = buildSyntheticDemoSnapshot();
+  state.growthDashboardError = '';
+  renderGrowthWatchPanel();
+}
+
+function clearSyntheticDemoView() {
+  if (!state.syntheticDemoActive && !state.syntheticDemoSnapshot) return;
+  state.syntheticDemoActive = false;
+  state.syntheticDemoSnapshot = null;
 }
 
 function syncGenerationRuntimeFromSnapshot(snapshot = {}) {
@@ -2715,9 +2785,9 @@ async function testApi() {
 async function generateMemoryBundle() {
   await hydratePersonaWorkspace();
   const workspace = getPersonaWorkspaceView();
-  const personaSeed = workspace.personaCard;
-  if (!personaSeed) {
-    state.generationLabel = 'Please sync the Persona/Soul workspace first';
+  const personaOnboarding = buildPersonaOnboardingState(workspace);
+  if (!personaOnboarding.warmGrowthPersonaReady) {
+    state.generationLabel = 'Please sync role, Persona/Soul, and language fingerprint authority first';
     renderGenerationPanel();
     return;
   }
@@ -2908,11 +2978,13 @@ function bindInputs() {
     if (!files.length) {
       state.loadedFile = null;
       state.parsePlan = null;
+      clearSyntheticDemoView();
       renderAll();
       return;
     }
 
     try {
+      clearSyntheticDemoView();
       const normalized = await normalizeConversationFiles(files);
       state.loadedFile = normalized;
       state.parsePlan = buildSmartChunkPlan(normalized);
@@ -2946,6 +3018,11 @@ function bindButtons() {
       handleVisibleLocalReset().catch((error) => {
         setApiStatus('重置失败', 'stable', safeText(error?.message, '本地工作台重置失败。'));
       });
+    });
+  }
+  if (els.loadSyntheticDemoBtn) {
+    els.loadSyntheticDemoBtn.addEventListener('click', () => {
+      loadSyntheticDemo();
     });
   }
   els.testApiBtn.addEventListener('click', () => {

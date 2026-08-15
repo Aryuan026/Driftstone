@@ -1,0 +1,6 @@
+sheet,candidate_id,title,status,count_or_note
+Warm Cards,demo-warm-harbor-lantern,Harbor lantern ritual,accepted,source spans: 1
+Warm Cards,demo-warm-atlas-room,Atlas room research habit,accepted,source spans: 1
+Warm Cards,demo-warm-library-door,Library door boundary rule,accepted,source spans: 1
+Sources,demo-span-harbor-001,Fictional harbor source,bounded,occurrences: 2
+Review,demo-hold-silver-archive,Silver archive source check,hold,needs human review

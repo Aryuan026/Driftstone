@@ -50,6 +50,7 @@ function collectMapCards(snapshot = {}) {
       title,
       card_type: cardType,
       source: 'draft',
+      importance: safeText(item?.importance, 'draft'),
       stamp: safeText(item?.generated_at)
     });
   });
@@ -65,6 +66,7 @@ function collectMapCards(snapshot = {}) {
       title,
       card_type: cardType,
       source: 'staged',
+      importance: safeText(item?.importance, 'normal'),
       stamp: safeText(item?.updated_at)
     });
   });
@@ -116,13 +118,30 @@ export function buildMemoryStarMapModel(snapshot = {}) {
         title: item.title,
         source: item.source,
         card_type: hub.card_type,
+        importance: item.importance,
         x: Math.round(anchor.x + Math.cos(angle) * radius),
         y: Math.round(anchor.y + Math.sin(angle) * radius),
-        r: item.source === 'draft' ? 3.3 : 2.55,
+        r: item.importance === 'major' ? 4.2 : item.source === 'draft' ? 3.3 : 2.55,
         parent: hub.id
       });
     });
   });
+
+  const starById = new Map(stars.map((star) => [star.id, star]));
+  const explicitEdges = (Array.isArray(snapshot?.explicit_relationships?.edges)
+    ? snapshot.explicit_relationships.edges
+    : [])
+    .map((edge) => {
+      const from = starById.get(safeText(edge?.from_id));
+      const to = starById.get(safeText(edge?.to_id));
+      if (!from || !to) return null;
+      return {
+        from,
+        to,
+        kind: safeText(edge?.kind, 'explicit_relationship')
+      };
+    })
+    .filter(Boolean);
 
   const ambientCount = Math.min(260, 64 + cards.length * 4);
   const ambient = Array.from({ length: ambientCount }).map((_, index) => {
@@ -139,6 +158,7 @@ export function buildMemoryStarMapModel(snapshot = {}) {
     root,
     hubs,
     stars,
+    explicitEdges,
     ambient,
     counts: {
       draft: cards.filter((item) => item.source === 'draft').length,
@@ -168,6 +188,9 @@ export function renderMemoryStarMap({
   if (errorText) {
     label = 'Disconnected';
     tone = 'stable';
+  } else if (snapshot?.demo?.synthetic) {
+    label = 'Demo map';
+    tone = 'live';
   } else if (graph.total) {
     label = 'Live map';
     tone = 'live';
@@ -185,20 +208,27 @@ export function renderMemoryStarMap({
     const parent = graph.hubs.find((hub) => hub.id === item.parent) || graph.root;
     return `<line class="front-growth-link affinity ${item.source === 'draft' ? 'active' : ''}" x1="${parent.x}" y1="${parent.y}" x2="${item.x}" y2="${item.y}"></line>`;
   }).join('');
+  const canonicalLinks = graph.explicitEdges.map((edge) => `
+    <line class="front-growth-link canonical" x1="${edge.from.x}" y1="${edge.from.y}" x2="${edge.to.x}" y2="${edge.to.y}">
+      <title>${escapeHtml(edge.kind)}</title>
+    </line>
+  `).join('');
   const hubs = graph.hubs.map((hub) => `
     <circle class="front-growth-node hub ${hub.card_type}" cx="${hub.x}" cy="${hub.y}" r="${hub.r}">
       <title>${escapeHtml(hub.label)}</title>
     </circle>
   `).join('');
   const stars = graph.stars.map((item) => `
-    <circle class="front-growth-node star ${item.card_type} ${item.source === 'draft' ? 'active' : 'stable'}" cx="${item.x}" cy="${item.y}" r="${item.r}">
+    <circle class="front-growth-node star ${item.card_type} ${item.source === 'draft' ? 'active' : 'stable'} ${item.importance === 'major' ? 'major' : ''}" cx="${item.x}" cy="${item.y}" r="${item.r}">
       <title>${escapeHtml(item.title)}</title>
     </circle>
   `).join('');
-  const memoryName = safeText(workspace.charName, 'Portable Warm');
+  const memoryName = snapshot?.demo?.synthetic ? 'Synthetic showcase' : safeText(workspace.charName, 'Portable Warm');
   const helperText = errorText
     ? escapeHtml(errorText)
-    : graph.total
+    : snapshot?.demo?.synthetic
+      ? 'Synthetic stars are safe demo artifacts. Bright constellation lines show explicit demo relations; dashed proximity remains visual affinity.'
+      : graph.total
       ? 'Stars are durable Warm-card projections. Nearby nebulae show visual affinity, not canonical edges.'
       : 'Choose history, run extraction, then watch Warm cards appear as durable stars.';
 
@@ -215,6 +245,7 @@ export function renderMemoryStarMap({
         ${ambient}
         <circle class="front-growth-glow" cx="${graph.root.x}" cy="${graph.root.y}" r="142"></circle>
         ${visualAffinityLinks}
+        ${canonicalLinks}
         ${hubs}
         <circle class="front-growth-node root active" cx="${graph.root.x}" cy="${graph.root.y}" r="${graph.root.r}"></circle>
         ${stars}
