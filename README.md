@@ -107,10 +107,10 @@ Markdown、Obsidian、Notion 都只是这套包的可逆投影；它们方便人
 
 如果你只是想先把它点亮，而不是先研究 `localhost` 和后端目录，最省事的办法是直接在仓根目录双击：
 
-- macOS：`00_双击启动_Hippocove.command`
-- Windows：`00_双击启动_Hippocove.cmd`
+- macOS：`00_双击启动_Driftstone.command`
+- Windows：`00_双击启动_Driftstone.cmd`
 
-这两把启动钥匙目前还沿用旧文件名，属于兼容命名；公开产品名以 Driftstone 为准。
+旧的 `00_双击启动_Hippocove.*` 还保留为兼容别名；公开产品名和推荐入口以 Driftstone 为准。
 
 它会自动：
 
@@ -120,8 +120,10 @@ Markdown、Obsidian、Notion 都只是这套包的可逆投影；它们方便人
 
 要停掉本地后端，就双击：
 
-- macOS：`00_停止_Hippocove.command`
-- Windows：`00_停止_Hippocove.cmd`
+- macOS：`00_停止_Driftstone.command`
+- Windows：`00_停止_Driftstone.cmd`
+
+旧的 `00_停止_Hippocove.*` 也还能用，只是不再作为推荐入口。
 
 更细的人话说明在：
 

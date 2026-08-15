@@ -1,6 +1,6 @@
 # Driftstone 本地打开说明
 
-> 启动脚本和文件名目前仍保留 `Hippocove` 旧兼容命名；公开产品名以 Driftstone 为准。
+> Driftstone 命名的启动脚本是公开版正门；`Hippocove` 命名脚本只作为旧兼容别名保留。
 
 这份不是给已经熟悉仓的人看的。
 
@@ -12,7 +12,9 @@
 
 直接在仓根目录双击：
 
-- `00_双击启动_Hippocove.command`
+- `00_双击启动_Driftstone.command`
+
+旧别名 `00_双击启动_Hippocove.command` 仍然可用。
 
 它会做三件事：
 
@@ -24,7 +26,9 @@
 
 直接在仓根目录双击：
 
-- `00_双击启动_Hippocove.cmd`
+- `00_双击启动_Driftstone.cmd`
+
+旧别名 `00_双击启动_Hippocove.cmd` 仍然可用。
 
 它会做同样三件事：
 
@@ -40,8 +44,10 @@
 
 双击仓根目录里的停止脚本：
 
-- macOS：`00_停止_Hippocove.command`
-- Windows：`00_停止_Hippocove.cmd`
+- macOS：`00_停止_Driftstone.command`
+- Windows：`00_停止_Driftstone.cmd`
+
+旧的 `00_停止_Hippocove.*` 文件仍然可用，只是不再作为推荐入口。
 
 它会按仓里记录的 PID 把 Driftstone 本地后端停掉。
 

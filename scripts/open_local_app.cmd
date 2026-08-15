@@ -13,21 +13,21 @@ if not exist "%TMP_DIR%" mkdir "%TMP_DIR%"
 
 where node >nul 2>nul
 if errorlevel 1 (
-  echo 这台机器还没装 Node.js，所以 Hippocove 还点不起来。
+  echo 这台机器还没装 Node.js，所以 Driftstone 还点不起来。
   echo 请先安装 Node.js 20+，再双击一次这个启动脚本。
   exit /b 1
 )
 
 where npm >nul 2>nul
 if errorlevel 1 (
-  echo 这台机器还没装 npm，所以 Hippocove 还点不起来。
+  echo 这台机器还没装 npm，所以 Driftstone 还点不起来。
   echo 请先安装 Node.js 20+，再双击一次这个启动脚本。
   exit /b 1
 )
 
 powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing '%APP_URL%' | Out-Null; exit 0 } catch { exit 1 }"
 if %errorlevel%==0 (
-  echo Hippocove 已经在跑，正在打开页面…
+  echo Driftstone 已经在跑，正在打开页面…
   start "" "%APP_URL%"
   exit /b 0
 )
@@ -56,7 +56,7 @@ if exist "%PID_FILE%" (
 )
 
 if not exist "%PID_FILE%" (
-  echo 正在启动 Hippocove 本地后端…
+  echo 正在启动 Driftstone 本地后端…
   powershell -NoProfile -Command "$p = Start-Process npm -ArgumentList 'run','start' -WorkingDirectory '%SERVER_DIR%' -WindowStyle Hidden -RedirectStandardOutput '%LOG_FILE%' -RedirectStandardError '%LOG_FILE%' -PassThru; Set-Content -Path '%PID_FILE%' -Value $p.Id"
 )
 
@@ -72,7 +72,7 @@ for /L %%N in (1,1,25) do (
 
 :ready
 if "%READY%"=="1" (
-  echo Hippocove 已就绪，正在打开前台。
+  echo Driftstone 已就绪，正在打开前台。
   echo 旧实验台地址：%APP_URL%legacy/index.html
 ) else (
   echo 后端已尝试启动，但浏览器还没等到它回应。

@@ -49,8 +49,10 @@ Driftstone 现在不是一张纯网页。
 
 现在最稳的仓内入口不是让人自己猜 `localhost:3460`，而是直接让他双击仓根目录里对应系统的启动脚本：
 
-- macOS：`00_双击启动_Hippocove.command`
-- Windows：`00_双击启动_Hippocove.cmd`
+- macOS：`00_双击启动_Driftstone.command`
+- Windows：`00_双击启动_Driftstone.cmd`
+
+旧的 `00_双击启动_Hippocove.*` 仍是兼容别名；新说明优先使用 Driftstone 命名。
 
 这把钥匙会自动：
 

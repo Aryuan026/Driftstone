@@ -15,13 +15,13 @@ open_app() {
 }
 
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
-  echo "这台机器还没装 Node.js / npm，所以 Hippocove 还点不起来。"
+  echo "这台机器还没装 Node.js / npm，所以 Driftstone 还点不起来。"
   echo "请先安装 Node.js 20+，再双击一次这个启动脚本。"
   exit 1
 fi
 
 if curl -sf "$APP_URL" >/dev/null 2>&1; then
-  echo "Hippocove 已经在跑，正在打开页面…"
+  echo "Driftstone 已经在跑，正在打开页面…"
   open_app
   exit 0
 fi
@@ -41,7 +41,7 @@ if [ -f "$PID_FILE" ]; then
 fi
 
 if [ ! -f "$PID_FILE" ]; then
-  echo "正在启动 Hippocove 本地后端…"
+  echo "正在启动 Driftstone 本地后端…"
   (
     cd "$SERVER_DIR"
     nohup npm run start >> "$LOG_FILE" 2>&1 &
@@ -51,7 +51,7 @@ fi
 
 for _ in {1..25}; do
   if curl -sf "$APP_URL" >/dev/null 2>&1; then
-    echo "Hippocove 已就绪，正在打开前台。"
+    echo "Driftstone 已就绪，正在打开前台。"
     echo "旧实验台地址：${APP_URL}legacy/index.html"
     open_app
     exit 0

@@ -7,7 +7,7 @@ set "TMP_DIR=%ROOT_DIR%\tmp\local-app"
 set "PID_FILE=%TMP_DIR%\backend.pid"
 
 if not exist "%PID_FILE%" (
-  echo 没有找到 Hippocove 本地后端的 PID 记录。
+  echo 没有找到 Driftstone 本地后端的 PID 记录。
   exit /b 0
 )
 
@@ -23,7 +23,7 @@ if errorlevel 1 (
   echo PID %PID% 已经不在运行，只清理记录。
 ) else (
   taskkill /PID %PID% /F >nul 2>nul
-  echo 已停止 Hippocove 本地后端（PID %PID%）。
+  echo 已停止 Driftstone 本地后端（PID %PID%）。
 )
 
 del "%PID_FILE%" >nul 2>nul
