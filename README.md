@@ -1,12 +1,23 @@
-# Part of the Hippocove memory ecosystem
+# Driftstone
 
 Where traces come home.
 
-Hippocove 不是一把“帮你总结聊天记录”的快刀。
+Driftstone 不是一把“帮你总结聊天记录”的快刀。
 
-它更像一张被人和 AI 一起磨出来的工作台：原始对话先落进缓存，切片、去冗余、保留溯源，再慢慢长成能放进 Obsidian 的记忆卡。
+它更像一张被人和 AI 一起磨出来的本地工作台：原始对话先落进缓存，切片、去冗余、保留溯源，再慢慢长成可审计、可携带的 Warm-card candidates。
 
 我们做它，并不是想把“聊天”压扁成几条结论。更像是在试：能不能给人格型 AI 一张够稳的桌子，让它不必每次都从头失忆，也不必为了结构把温度洗掉。
+
+公开版 Driftstone 的最终真相是：
+
+```text
+portable_warm_bundle
++ source occurrence / source span / digest
++ manifest
++ rejected / HOLD ledger
+```
+
+Markdown、Obsidian、Notion 都只是这套包的可逆投影；它们方便人类看、方便 Chat 端读，但不是第二真相。公开 Driftstone 也不写 Home、Hippocove cold tree、root、vine、case graph 或任何私有生产记忆。
 
 ## 这是一个什么阶段的项目
 
@@ -29,7 +40,7 @@ Hippocove 不是一把“帮你总结聊天记录”的快刀。
 如果人格卡和语言指纹不稳，整条链都会长出小机话。
 如果参考过的溯源线被悄悄裁掉，agent 的前台表现也许还像样，底下的记忆树却会慢慢空心。
 
-所以 Hippocove 后来定下来的方向是：
+所以 Driftstone 后来定下来的方向是：
 
 **代码负责把桌子摆好，AI 负责坐进去看和写。**
 
@@ -41,6 +52,9 @@ Hippocove 不是一把“帮你总结聊天记录”的快刀。
 - Trace / discard report / human review
 - Obsidian staging / markdown export
 - MCP 工具接入
+- JSON / JSONL / Notion-ready projection
+
+旧的 roots / vines / final writeback 入口仍保留给兼容流程和历史调试，但它们不是公开产品的新终点。后续私有运行台会单独叫 **Driftstone Studio**，它消费公开 Driftstone core，不把私有 Home/Hippocove schema、路径或数据塞回这个公开仓。
 
 ## 为什么保留旧实验台
 
@@ -94,6 +108,8 @@ Hippocove 不是一把“帮你总结聊天记录”的快刀。
 - macOS：`00_双击启动_Hippocove.command`
 - Windows：`00_双击启动_Hippocove.cmd`
 
+这两把启动钥匙目前还沿用旧文件名，属于兼容命名；公开产品名以 Driftstone 为准。
+
 它会自动：
 
 - 检查依赖
@@ -122,14 +138,14 @@ Hippocove 不是一把“帮你总结聊天记录”的快刀。
 
 ## 上传原料的边界
 
-Hippocove / Driftstone 有两层入口：
+Driftstone 有两层入口：
 
 - 旧实验台第一个页面「对话导出器」：负责吃 ChatGPT 官方导出的原始 `conversations.json`，做窗口预览、按日期筛选、按窗口拆分和按月拼接。这个入口会流式读取较大的 OpenAI JSON，也能按 `current_node` 识别 ChatGPT 的当前版本、用户编辑记录和重新生成分支；900MB 级文件仍然取决于浏览器内存，不建议对外承诺“必定稳吃”。
 - 正式前台「上传原始记录」：更适合吃已经整理过的素材，例如 `.md`、`.txt`、Driftstone 原料包 JSON，或者旧实验台 / PawTrail 导出的窗口包、月包。
 
 如果手里是 ChatGPT 官方导出的原始 `conversations.json`，先走旧实验台「对话导出器」是 Driftstone 内部最顺的路线。[PawTrail](https://aryuan026.github.io/PawTrail/) 也可以作为纯在线拆包入口，尤其适合用户只想上传 900MB 级 JSON 并快速导出窗口/月包的时候。
 
-和 PawTrail 不一样，Hippocove / Driftstone 的完整记忆生成流程需要本地 Node 后端；GitHub Pages 最多作为项目说明页，不能替代本地启动后的工作台。
+和 PawTrail 不一样，Driftstone 的完整记忆生成流程需要本地 Node 后端；GitHub Pages 最多作为项目说明页，不能替代本地启动后的工作台。
 
 前台会做几层护栏：
 

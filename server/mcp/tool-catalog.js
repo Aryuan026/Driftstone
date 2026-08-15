@@ -1,7 +1,7 @@
 export const TOOLS = [
   {
     name: 'list_api_profiles',
-    description: '列出 Hippocove 当前可用的 API 方案，并返回本地快检模式。',
+    description: '列出 Driftstone 本地运行时可用的 API 方案，并返回本地快检模式。',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -19,7 +19,7 @@ export const TOOLS = [
   },
   {
     name: 'get_growth_context',
-    description: '读取给记忆卡生长用的上下文包：人格工位状态、Persona 原料概览、memory home，以及可选的 memory context。',
+    description: '读取给记忆卡生长用的上下文包：人格工位状态、Persona 原料概览、本地记忆工作区，以及可选的兼容 context。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -272,7 +272,7 @@ export const TOOLS = [
   },
   {
     name: 'run_history_pipeline',
-    description: '把一个或多个历史记录文件送进 Hippocove 流水线，完成入包、分片、提炼、reviewed 去重和最终写回。',
+    description: 'LEGACY/COMPAT：把历史记录文件送进旧流水线，完成入包、分片、提炼、reviewed 去重，并落到旧 roots/vines 兼容层；公开 Driftstone 真相应使用 portable_warm_bundle。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -392,7 +392,7 @@ export const TOOLS = [
   },
   {
     name: 'finalize_reviewed_entries',
-    description: '把 reviewed cluster 最终写回 roots/vines；可附带 AI 合并后的 ai_merges。',
+    description: 'LEGACY/COMPAT：把 reviewed cluster materialize 到旧 roots/vines 兼容层；这不是公开 Driftstone portable_warm_bundle 出口。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -424,7 +424,7 @@ export const TOOLS = [
   },
   {
     name: 'get_memory_context',
-    description: '按 mcp 模式读取紧凑 memory context packet，方便 agent 在不重翻全库的情况下取上下文。',
+    description: '读取旧本地 memory context packet，方便兼容流程取上下文；不要把它当作 Home/Hippocove 冷树真相。',
     inputSchema: {
       type: 'object',
       properties: {

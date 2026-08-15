@@ -1,4 +1,6 @@
-# Hippocove 技术交底
+# Driftstone 技术交底
+
+> 文件名还保留旧 `HIPPOCOVE_*` 命名，方便旧链接不失效；本说明的公开产品边界以 Driftstone 为准。
 
 这份不是产品介绍，也不是功能清单。
 
@@ -20,11 +22,11 @@
 
 ## 1. 我们在尝试做什么
 
-Hippocove 不是单纯的“聊天记录导出器”。
+Driftstone 不是单纯的“聊天记录导出器”。
 
 它真正想试的是一条更长的路：
 
-`原始对话 -> 缓存与切片 -> reviewed/去冗余 -> 人格工位 -> 主卡生长 -> Obsidian Markdown`
+`原始对话 -> 缓存与切片 -> reviewed/去冗余 -> 人格工位 -> 主卡生长 -> portable Warm bundle -> Markdown / Obsidian / Notion projection`
 
 这里最重要的，不是把材料“总结一下”，而是替后面的 agent 或人格 bot 搭一张更好的工作台：
 
@@ -147,6 +149,7 @@ MCP 现在已经能直接调用这些：
 - `fail_translation_task`
 - `list_reviewed_clusters`
 - `finalize_reviewed_entries`
+  - LEGACY/COMPAT：旧 roots/vines 兼容收口；不是公开 Driftstone 新终点
 - `inspect_pipeline_scope`
 - `get_memory_context`
 
@@ -378,6 +381,6 @@ MCP 现在已经能直接调用这些：
 
 如果现在要发表，我会建议你这样对外说：
 
-> Hippocove 是一套仍在演化中的本地记忆工位。
-> 它已经跑通了原料缓存、人格工位、主卡生长、MCP 接入和 Obsidian staging 导出。
+> Driftstone 是一套仍在演化中的本地记忆工位。
+> 它已经跑通了原料缓存、人格工位、主卡生长、MCP 接入和 Obsidian staging 导出，并正在收口到 portable Warm bundle / projection export。
 > 现在最适合的使用方式，是把它当成一套可调、可接手、可继续长的 alpha 工作台，而不是已经封顶的最终产品。
