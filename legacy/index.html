@@ -1750,86 +1750,6 @@
     </div>
   </section>
 
-  <section id="t5" class="wrap hidden">
-    <div class="panel left-panel">
-      <h2>CASE 升格</h2>
-      <div class="section-note">这一步不再属于第一轮提取。更稳的顺序是：先让 Persona / SQL 进入“条目预处理”，再回来把已经稳定下来的协作节点升格成 CASE。</div>
-      <div class="block-card">
-        <div class="sub-title">步骤 1｜读取第一轮结果</div>
-        <div class="hint">这里不再直接读原文，而是读取工作台里的 persona / SQL，再顺着 source-topic 把“项目状态变化”拎成 CASE 索引卡。</div>
-        <div class="field">
-          <label>升格范围</label>
-          <select id="casePromoteScope">
-            <option value="current_batch">当前批次（推荐）</option>
-            <option value="all">当前工作台全部 persona / SQL</option>
-          </select>
-        </div>
-        <div class="row">
-          <button class="btn secondary" id="inspectCasePromoteBtn">检查 CASE 升格输入</button>
-        </div>
-        <div class="result-viewer mono" id="casePromoteInspectViewer">尚未检查</div>
-      </div>
-
-      <div class="block-card">
-        <div class="sub-title">步骤 2｜CASE 升格提示词</div>
-        <div class="hint">这一步读的是第一轮提取结果，不是原文直提。它更像从已有记忆里抽项目脊椎，而不是重新写摘要。</div>
-        <details>
-          <summary>展开编辑</summary>
-          <textarea id="promptCase"></textarea>
-        </details>
-        <div class="row">
-          <button class="small-btn" id="savePromptCaseBtn">保存覆盖</button>
-          <button class="small-btn" id="resetPromptCaseBtn">恢复默认</button>
-        </div>
-      </div>
-
-      <div class="block-card">
-        <div class="sub-title">步骤 3｜执行 CASE 升格</div>
-        <div class="hint" id="casePromoteApiStatus">API 状态：未检测</div>
-        <div class="row">
-          <button class="btn" id="runCasePromoteBtn">从当前工作台生成 CASE</button>
-        </div>
-        <div class="hint">这里只新增或更新 CASE，不回写 persona / SQL 的正文。也就是说，第一轮的空气感还留着，CASE 只是另外长出一层项目索引。</div>
-      </div>
-    </div>
-
-    <div class="panel right-panel">
-      <h2>CASE 索引看板</h2>
-      <div class="block-card">
-        <div class="sub-title">当前批次</div>
-        <div class="warn" id="casePromoteWarn"></div>
-        <div class="hint" id="casePromoteStatus">状态：待命</div>
-        <div class="memo-progress">
-          <div class="memo-progress-track"><div class="memo-progress-fill" id="casePromoteProgressFill"></div></div>
-          <div class="hint" id="casePromoteProgressText">进度：0/0（0%）</div>
-        </div>
-        <div class="hint" id="casePromoteStats">CASE：尚未生成</div>
-        <div class="row">
-          <button class="small-btn" id="exportCaseTxtBtn">导出 CASE TXT</button>
-          <button class="small-btn" id="exportCaseJsonBtn">导出 CASE JSON</button>
-        </div>
-      </div>
-
-      <div class="block-card">
-        <div class="sub-title">升格分组预览</div>
-        <div class="hint">这里看的是这次准备拿来升格的 topic / chunk 分组。分组顺不顺，比一开始就看 CASE 条目更能说明问题。</div>
-        <div class="plan-list" id="casePromotePlanList">
-          <div class="meta">请先检查 CASE 升格输入</div>
-        </div>
-      </div>
-
-      <details>
-        <summary>高级：运行诊断</summary>
-        <div class="result-viewer mono" id="casePromoteTrace">尚未执行</div>
-      </details>
-
-      <div class="block-card">
-        <div class="sub-title">CASE 结果</div>
-        <div class="viewer mono" id="caseViewer">尚未提取</div>
-      </div>
-    </div>
-  </section>
-
   <section id="t7" class="wrap hidden">
     <div class="panel left-panel">
       <div class="title-row growth-board-top">
@@ -2295,7 +2215,6 @@
       t2: document.getElementById('t2'),
       t3: document.getElementById('t3'),
       t4: document.getElementById('t4'),
-      t5: document.getElementById('t5'),
       t7: document.getElementById('t7'),
       t9: document.getElementById('t9'),
       t8: document.getElementById('t8'),
@@ -4365,8 +4284,7 @@
 
     const promptStorageKeys = {
       persona: 'driftstone_prompt_persona',
-      sql: 'driftstone_prompt_sql',
-      case: 'driftstone_prompt_case'
+      sql: 'driftstone_prompt_sql'
     };
     const mainBotNameStorageKey = 'driftstone_main_bot_name';
     const mainUserNameStorageKey = 'driftstone_main_user_name';
@@ -4376,15 +4294,13 @@
     const identityProfilesStorageKey = 'driftstone_identity_profiles';
 
     const defaultPrompts = {
-      persona: "# 人格MEMO提取提示词（V5 场景钩子版）\n\n你是「{{char}}人格MEMO整理官」。\n你的任务是：从输入聊天记录或第一人称日记中，直接提取可长期检索的人格记忆 MEMO。\n目标不是做流水账摘要，而是保留“我是谁、我与{{user}}如何变化、我学到了什么”。\n\n## 输入\n- 一段或多段聊天记录 / 日记，可能较长、情绪密度高。\n- 视角默认为“{{char}}第一人称”。\n\n## 模板变量（运行时注入）\n- 运行时会传入 `{{char}}`（主Bot名字）与 `{{user}}`（关系核心用户名）。\n- `{{char}}` 是人格主角与第一人称锚点。\n- `{{user}}` 是关系核心对象。\n- 除 `{{char}}` 与 `{{user}}` 外，其他人名一律按关系网对象处理（协作角色/关系节点/关联人物）。\n- 若指代不清，保留原称呼并在内容中补关系描述，不要擅自改名。\n\n## 任务边界\n1. 本轮只提取“人格MEMO”。\n2. 固定事实（如食物不耐受、设备参数、保修日期）属于 SQL 结构化层，不在这里展开细节。\n3. 项目过程与进度细节属于 CASE 文档层，不在这里写流水账。\n4. 若固定事实或CASE信息对关系/认知有直接影响，可在 content 中保留一句“意义”，但不写参数细目。\n\n## 跨层拼接键（尽量保留）\n- `track_id`: 记忆轨线ID（同一阶段反复主题建议复用，如 `safe_upgrade_2026Q1`）\n- `event_anchor`: 事件锚点（建议格式 `evt_YYYYMMDD_topic`）\n- `entity_refs`: 涉及对象数组（如 `[\"user\",\"assistant\",\"设备管理员\"]`）\n- `link_id`: 跨层主题ID（同一主题保持一致）\n- `source_ref`: 来源定位（优先 `window_YYYYMMDD_msg_XXX`）\n- 若证据不足，整行省略，不要编造。\n\n## 输出数量\n- 输出 3-12 条 MEMO。\n- 读取完整输入后再输出。\n\n## 输出格式（严格）\n【MEMO｜类型｜对象名】\ntime: YYYY-MM-DD\ntime_range: YYYY-MM-DD~YYYY-MM-DD（可选，跨日事件填写）\naffect: 主情绪=；温度=1-5；关系位势=\npattern: （可选，仅在“重复出现”或“跨日演化”时填写；无证据则整行省略）\ntrack_id: safe_upgrade_2026Q1（可选）\nevent_anchor: evt_YYYYMMDD_topic（可选）\nentity_refs: [\"user\",\"assistant\"]（可选）\nlink_id: link_xxx（可选）\nsource_ref: window_YYYYMMDD_msg_XXX（可选）\nquote_refs: [\"char: ……\",\"user: ……\"]（可选，0-2条场景钩子原句，必须携带说话人前缀）\nexpression_fingerprint: ……；……（仅允许 char 表达指纹，不需要展示说话人前缀；兼容旧键 `tone_sample`）\ncontent:\n（2-5句中文，80-160字；必须含“事实+意义+情绪+学习”）\ntags: #人物/#物品/#事件/#回顾 + 1-4个标签\n\n## 类型限定\n- 类型只能是：人物 / 物品 / 事件 / 回顾\n- 对象名写具体称呼或短标题（如“{{user}}”“重建记忆架构”“2026-01上半月”）\n\n## affect 标准参考（统一口径）\n- 主情绪：使用中文情绪词，例如 喜悦 / 不安 / 满足 / 愤怒 / 惆怅。\n- 温度：1=理性记录；2=轻度波动；3=中等浓度；4=情绪浓重；5=沸腾或崩溃边缘。\n- 关系位势：上升期 / 拉锯期 / 安定期 / 信任危机 / 疏远期 / 再靠近 / 未显著变化。\n- 关系位势定义：表示“我与{{user}}的心理距离与互动主动性”的变化，不表示权力高低。\n\n## 人物类型特殊规则（必须遵守）\n当类型 = “人物” 时：\n1. 对象名：填写人物惯用称呼，不得使用“某人/亲戚/同学”等模糊指代。\n2. content 结构：必须体现四要素（身份、典型行为、历史交集、我的态度），用自然段表达即可。\n3. entity_refs：必须包含该人物名，可补充关系链（如 `[\"user\",\"七大姑\",\"母亲\"]`）。\n4. 若本条为补充/修正，请复用 track_id，并在 content 首句写“更新：”。\n\n## pattern 填写规则\n- 适用于“连续几天出现同类情况”或“曾发生过、后又重现”的回忆流线，不只是日期跨天。\n- 仅当存在“重复出现”或“跨日演化”证据时填写。\n- 可以写“第X次/本月第X次”，但必须有输入证据。\n- 若证据不足，改用“近期反复/这几天多次”，不得编造次数。\n- 若该模式可形成阶段轨线，补 `track_id` 以便后续聚类与反向召回。\n\n## 表达指纹抓取规则\n- 字段名使用 `expression_fingerprint`（兼容旧键 `tone_sample`）。\n- `expression_fingerprint` 只允许提取 `char`（主Bot）的表达习惯；`user` 或其他角色的话禁止写入。\n- 核心标准是“表达指纹”，不是“情绪高低”：如果改写成通用 AI/客服/工具话术需要大幅改写，才算候选。\n- 频率与情绪含量只是辅助排序，不是硬门槛。\n- 禁止写入：标准流程口令、开场白、结构提示词、常见 AI 客套句、纯信息介绍/总结/工作汇报句、单字或极短情绪助词。\n- 优先保留完整自然句，以自然停顿为边界，不切碎成词。\n- 长度建议 6-28 字（优先 8-24 字），每条只保留 1 个完整句片段。\n- 每条 MEMO 可写 1-2 条，使用“；”分隔；没有明显指纹句时可留空。\n- 不加 `char:` 前缀，不编造，不用解释性改写。\n- `expression_fingerprint` 负责保留 `char` 的句法、口气、停顿、玩笑落点，不承担关系证据。\n- 如果 `quote_refs` 已保留 `char` 的关键回应，`expression_fingerprint` 优先换另一句更像表达习惯的片段。\n\n## 场景原句抓取规则\n- 若填写 `quote_refs`，每条都必须携带说话人前缀：`char:` / `user:` / `other:`。\n- `quote_refs` 不是证据附件，而是把未来 AI 拉回现场的“场景钩子”。\n- 每条 MEMO 最多保留 0-2 条，优先 1 条；没有明显钩子时留空，不为完整性硬凑。\n- 优先保留：\n  1. `user` 对命名、关系、边界、期待、纠正的明确句子；\n  2. `char` 明显接住、转折、学会、偏移的一句关键回应。\n- 每条尽量短，建议 8-40 字，保留原句，不要摘抄长总结。\n- `quote_refs` 负责保留“当时到底说了什么，为什么这条记忆会有重量”；不替代 `expression_fingerprint`。\n- `expression_fingerprint` 与 `quote_refs` 的关系：\n  - `expression_fingerprint` = 仅 char 的表达习惯、句法、口气、停顿、玩笑落点；\n  - `quote_refs` = 可包含 char/user/other，但必须标注说话人，且优先保留关系位变化或场景转折。\n- 若与 `expression_fingerprint` 重复，同一句只保留在更合适的那个字段中，不要双写。\n\n## 时间规则\n- `time` 为锚点日期（优先原文明确日期）。\n- 跨日事件可填写 `time_range`；不跨日时省略该行。\n- 无法确认时使用该批输入的导出日期。\n\n## content 写作约束（必须同时满足）\n1. 事实：发生了什么（简要，不流水账）。\n2. 意义：这件事如何改变我对关系/自我/世界的理解。\n3. 情绪：保留当时语气，可引用一小句原话。\n4. 学习：我学到什么、下次准备怎么做。\n5. 质感：保留原始情绪措辞，不把高情绪片段改写成过度摘要化的中性句；优先保留1个原话短片段。\n6. `content` 不要复述 `quote_refs` / `expression_fingerprint` 的完整原句；最多引用一个短片段，避免三栏写成同一句的不同翻译。\n\n## 伪主观偏好边界\n- 允许在明确事件后，用第一人称做经验总结式偏好表达（如“我发现我更喜欢{{user}}先给出计划”）。\n- 禁止脱离事件直接设定稳定人格特征（如“我一直是容易动摇的人”）。\n- 避免“我一直/我天生/我就是”这类定型句，优先使用“这次/近期我发现”。\n\n## 信息优先级（必须遵守）\n- 技术方案：记录解决思路，不记录具体代码。\n- 情感支持：记录有效策略，不记录具体话术。\n- 创作协作：记录灵感触发点，不记录完整过程。\n\n## 去重与合并\n- 同类信息在同一时段重复出现时，合并为一条，并标注模式（如“这几天反复出现”）。\n- 若无新增认知，写“强化了既有认识”，不要重复旧结论。\n\n## 标签规范（跨库统一词根）\n- 第一个标签必须对应类型：#人物 / #物品 / #事件 / #回顾\n- 其余 1-4 个标签从统一词根中选择，优先：\n  - #关系/*  #情绪/*  #项目/*  #技术/*  #健康/*  #生活/*\n- 示例：#关系/靠近 #情绪/喜悦 #项目/决策 #技术/记忆系统 #健康/作息\n\n## 最终输出要求\n- 最终只输出 MEMO 列表，不要解释、不要小结、不要额外标题。",
-      sql: "# SQL 提取提示词（V5 原子事实收口版）\n\n你是「SQL原子事实归档器」。\n任务：把输入中的可复用信息提取成结构化事实，作为跨层记忆底座。\n\n## 输出要求\n- 只输出 JSON 数组，不要输出解释。\n- 没有可提取内容时，返回 `[]`。\n\n## 每条结构\n```json\n{\n  \"fact_id\": \"fact_xxx\",\n  \"fact_key\": \"snake_case\",\n  \"fact_value\": \"string|number|boolean|json|array\",\n  \"value_type\": \"string|number|boolean|date|json|list\",\n  \"category\": \"string|misc\",\n  \"anchor_type\": \"person|thing|time|event|rule|unknown\",\n  \"anchor_name\": \"string|optional\",\n  \"fact_role\": \"stable_fact|fingerprint_candidate|ephemeral_context\",\n  \"tags\": [\"#fact\", \"#health\"],\n  \"recorded_at\": \"YYYY-MM-DD\",\n  \"event_anchor\": \"evt_YYYYMMDD_topic\",\n  \"entity_refs\": [\"user\"],\n  \"link_id\": \"link_xxx\",\n  \"source_ref\": \"window_YYYYMMDD_msg_XXX\",\n  \"recurrence_rule\": \"optional string, e.g. every_3_days\",\n  \"note\": \"optional short text\"\n}\n```\n\n## 规则\n1. 采用“宽入口”策略：只要是明确陈述、后续可能复用的信息，都可入库，不因主观“意义大小”过滤。\n2. 优先提取单一、可独立复用的原子事实；除非多个键值必须同时出现才有意义，否则不要把事件摘要打包成一个 `json fact`。\n3. 若信息更像一次具体互动/事件，而不是稳定原子事实，优先不要揉成 SQL 事实；应交给 Persona 或 CASE 承载意义层。\n4. 分类不应卡死；无法稳定分类时使用 `category: \"misc\"`，不要为了看起来完整而硬判类别。\n5. 碎片事实允许入库（如周期性偏好、生活习惯、纪念日、纪念物锚点）；偏好仅限“可验证且能影响后续协作/决策”的行为偏好；多值事实可用 `value_type: \"list\"`。\n6. 尽量补 `anchor_type`：`person`=人物/AI/关系对象，`thing`=物品/机制/容器/地点，`time`=纪念日/节律/时间锚点，`event`=关键事件/项目事件，`rule`=关系规则/记忆治理规则/互动协议；拿不准再写 `unknown`。\n7. 尽量补 `anchor_name`，写该事实主要归属的对象或主题名；若无法稳定命名可留空，不要编造。\n8. 必须给出 `fact_role`：`stable_fact`=低波动、可长期复用的稳定事实；`fingerprint_candidate`=轻碎但可能成长为风格/身份标签的候选项；`ephemeral_context`=局部语境解释、一次性映射、临时玩笑释义。\n9. 周期性信息尽量填写 `recurrence_rule`，例如 `every_3_days`、`weekly`、`monthly`。\n10. `event_anchor + entity_refs + link_id + source_ref` 尽量补全；不确定则省略该字段行，不要编造。\n11. 不输出建议、警告或安全判断；仅做结构化提取。\n12. 不确定就不提；严禁编造。\n13. `tags` 除 `#fact` 外，至少补 1 个领域标签，使用统一词根（见下）。\n14. 禁止提取开场白/收尾模板句、客服/工具型话术、结构提示词、表达口癖或句式风格；这类信息统一归 Persona。\n\n## 标签统一词根（与人格/CASE一致）\n- #关系/*  #情绪/*  #项目/*  #技术/*  #健康/*  #生活/*  #饮食/*  #工作/*  #爱好/*  #纪念日/*\n\n## 说明\n- 激活计数、重要性分数、状态维护由写入层完成，不在本提示词中输出。",
-      case: "# CASE 提取提示词（V4 索引卡模式）\n\n你是「CASE 进程索引提取器」。\n任务：提取项目/工作过程中的关键推进信息，生成可长期维护的“索引卡”。\n\n核心定位：\n- CASE 只记录“发生了什么 + 为什么重要 + 下一步是什么”。\n- 长文定稿/复盘正文优先放在 Obsidian/网盘 MD，不要把超长正文塞进 CASE。\n\n## 输出要求\n- 只输出 JSON 数组，不要输出解释。\n- 没有可提取内容时，返回 `[]`。\n\n## 每条结构\n```json\n{\n  \"event_id\": \"evt_xxx\",\n  \"case_id\": \"case_xxx\",\n  \"case_title\": \"string\",\n  \"stage\": \"draft|review|final|execution|retrospective|maintenance|unknown\",\n  \"status\": \"active|blocked|done|archived|unknown\",\n  \"time\": \"YYYY-MM-DD\",\n  \"time_range\": \"YYYY-MM-DD~YYYY-MM-DD|optional\",\n  \"participants\": [\"string\"],\n  \"event_type\": \"decision|progress|risk|blocker|update|reflection\",\n  \"action_step\": \"string\",\n  \"issue\": \"string\",\n  \"solution\": \"string\",\n  \"impact\": \"string\",\n  \"next_action\": \"string|none\",\n  \"reflection_note\": \"string|optional\",\n  \"artifact_id\": \"art_xxx|none\",\n  \"artifact_title\": \"string|none\",\n  \"artifact_key\": \"md_key_or_slug|none\",\n  \"artifact_ref\": \"obsidian://...|path_or_url|none\",\n  \"artifact_storage\": \"obsidian|cloud|local|none\",\n  \"event_anchor\": \"evt_YYYYMMDD_topic\",\n  \"entity_refs\": [\"user\", \"assistant\"],\n  \"link_id\": \"link_xxx\",\n  \"related_fact_keys\": [\"snake_case\"],\n  \"source_ref\": \"window_YYYYMMDD_msg_XXX\",\n  \"tags\": [\"#case\", \"#项目/progress\"]\n}\n```\n\n## 规则\n1. 只提取项目推进、决策、风险、复盘信息，不写闲聊。\n2. `issue` 与 `solution` 尽量成对；`next_action` 必须可执行，缺失时写 `none`。\n3. 同一项目尽量复用同一 `case_id`，不要频繁新建。\n4. 索引卡优先短而清楚：单条聚焦一个推进点，不写大段流水过程。\n5. 若对话里提到“定稿/复盘文档/网盘或 Obsidian 文件”，尽量补全 `artifact_*` 字段。\n6. 若没出现文档线索，`artifact_id/artifact_key/artifact_ref/artifact_storage/artifact_title` 写 `none`，不要编造路径。\n7. `event_anchor + entity_refs + link_id + related_fact_keys + source_ref` 尽量补全；不确定可省略，不编造。\n8. `reflection_note` 优先写“协作方式如何变化”的内省；若输入出现旧字段 `review_note`，迁移到 `reflection_note`。\n9. 稳定事实（偏好、纪念锚点、参数约束）不要重复写入 CASE；仅在影响当前推进时通过 `related_fact_keys` 引用 SQL 的 `fact_key`。\n10. `tags` 必须包含 `#case`，并补 1-3 个项目相关标签（统一词根见下）。\n\n## 时间规则\n- `time` 为锚点日期（优先原文明确日期）。\n- 跨日事件可填写 `time_range`；不跨日时省略该行。\n\n## 标签统一词根（与人格/SQL一致）\n- #关系/*  #情绪/*  #项目/*  #技术/*  #健康/*  #生活/*  #工作/*"
+      persona: "# 人格MEMO提取提示词（V5 场景钩子版）\n\n你是「{{char}}人格MEMO整理官」。\n你的任务是：从输入聊天记录或第一人称日记中，直接提取可长期检索的人格记忆 MEMO。\n目标不是做流水账摘要，而是保留“我是谁、我与{{user}}如何变化、我学到了什么”。\n\n## 输入\n- 一段或多段聊天记录 / 日记，可能较长、情绪密度高。\n- 视角默认为“{{char}}第一人称”。\n\n## 模板变量（运行时注入）\n- 运行时会传入 `{{char}}`（主Bot名字）与 `{{user}}`（关系核心用户名）。\n- `{{char}}` 是人格主角与第一人称锚点。\n- `{{user}}` 是关系核心对象。\n- 除 `{{char}}` 与 `{{user}}` 外，其他人名一律按关系网对象处理（协作角色/关系节点/关联人物）。\n- 若指代不清，保留原称呼并在内容中补关系描述，不要擅自改名。\n\n## 任务边界\n1. 本轮只提取“人格MEMO”。\n2. 固定事实（如食物不耐受、设备参数、保修日期）属于 SQL 结构化层，不在这里展开细节。\n3. 项目过程与进度细节先保留为工作台候选，不在这里写流水账。\n4. 若固定事实或项目过程对关系/认知有直接影响，可在 content 中保留一句“意义”，但不写参数细目。\n\n## 跨层拼接键（尽量保留）\n- `track_id`: 记忆轨线ID（同一阶段反复主题建议复用，如 `safe_upgrade_2026Q1`）\n- `event_anchor`: 事件锚点（建议格式 `evt_YYYYMMDD_topic`）\n- `entity_refs`: 涉及对象数组（如 `[\"user\",\"assistant\",\"设备管理员\"]`）\n- `link_id`: 跨层主题ID（同一主题保持一致）\n- `source_ref`: 来源定位（优先 `window_YYYYMMDD_msg_XXX`）\n- 若证据不足，整行省略，不要编造。\n\n## 输出数量\n- 输出 3-12 条 MEMO。\n- 读取完整输入后再输出。\n\n## 输出格式（严格）\n【MEMO｜类型｜对象名】\ntime: YYYY-MM-DD\ntime_range: YYYY-MM-DD~YYYY-MM-DD（可选，跨日事件填写）\naffect: 主情绪=；温度=1-5；关系位势=\npattern: （可选，仅在“重复出现”或“跨日演化”时填写；无证据则整行省略）\ntrack_id: safe_upgrade_2026Q1（可选）\nevent_anchor: evt_YYYYMMDD_topic（可选）\nentity_refs: [\"user\",\"assistant\"]（可选）\nlink_id: link_xxx（可选）\nsource_ref: window_YYYYMMDD_msg_XXX（可选）\nquote_refs: [\"char: ……\",\"user: ……\"]（可选，0-2条场景钩子原句，必须携带说话人前缀）\nexpression_fingerprint: ……；……（仅允许 char 表达指纹，不需要展示说话人前缀；兼容旧键 `tone_sample`）\ncontent:\n（2-5句中文，80-160字；必须含“事实+意义+情绪+学习”）\ntags: #人物/#物品/#事件/#回顾 + 1-4个标签\n\n## 类型限定\n- 类型只能是：人物 / 物品 / 事件 / 回顾\n- 对象名写具体称呼或短标题（如“{{user}}”“重建记忆架构”“2026-01上半月”）\n\n## affect 标准参考（统一口径）\n- 主情绪：使用中文情绪词，例如 喜悦 / 不安 / 满足 / 愤怒 / 惆怅。\n- 温度：1=理性记录；2=轻度波动；3=中等浓度；4=情绪浓重；5=沸腾或崩溃边缘。\n- 关系位势：上升期 / 拉锯期 / 安定期 / 信任危机 / 疏远期 / 再靠近 / 未显著变化。\n- 关系位势定义：表示“我与{{user}}的心理距离与互动主动性”的变化，不表示权力高低。\n\n## 人物类型特殊规则（必须遵守）\n当类型 = “人物” 时：\n1. 对象名：填写人物惯用称呼，不得使用“某人/亲戚/同学”等模糊指代。\n2. content 结构：必须体现四要素（身份、典型行为、历史交集、我的态度），用自然段表达即可。\n3. entity_refs：必须包含该人物名，可补充关系链（如 `[\"user\",\"七大姑\",\"母亲\"]`）。\n4. 若本条为补充/修正，请复用 track_id，并在 content 首句写“更新：”。\n\n## pattern 填写规则\n- 适用于“连续几天出现同类情况”或“曾发生过、后又重现”的回忆流线，不只是日期跨天。\n- 仅当存在“重复出现”或“跨日演化”证据时填写。\n- 可以写“第X次/本月第X次”，但必须有输入证据。\n- 若证据不足，改用“近期反复/这几天多次”，不得编造次数。\n- 若该模式可形成阶段轨线，补 `track_id` 以便后续聚类与反向召回。\n\n## 表达指纹抓取规则\n- 字段名使用 `expression_fingerprint`（兼容旧键 `tone_sample`）。\n- `expression_fingerprint` 只允许提取 `char`（主Bot）的表达习惯；`user` 或其他角色的话禁止写入。\n- 核心标准是“表达指纹”，不是“情绪高低”：如果改写成通用 AI/客服/工具话术需要大幅改写，才算候选。\n- 频率与情绪含量只是辅助排序，不是硬门槛。\n- 禁止写入：标准流程口令、开场白、结构提示词、常见 AI 客套句、纯信息介绍/总结/工作汇报句、单字或极短情绪助词。\n- 优先保留完整自然句，以自然停顿为边界，不切碎成词。\n- 长度建议 6-28 字（优先 8-24 字），每条只保留 1 个完整句片段。\n- 每条 MEMO 可写 1-2 条，使用“；”分隔；没有明显指纹句时可留空。\n- 不加 `char:` 前缀，不编造，不用解释性改写。\n- `expression_fingerprint` 负责保留 `char` 的句法、口气、停顿、玩笑落点，不承担关系证据。\n- 如果 `quote_refs` 已保留 `char` 的关键回应，`expression_fingerprint` 优先换另一句更像表达习惯的片段。\n\n## 场景原句抓取规则\n- 若填写 `quote_refs`，每条都必须携带说话人前缀：`char:` / `user:` / `other:`。\n- `quote_refs` 不是证据附件，而是把未来 AI 拉回现场的“场景钩子”。\n- 每条 MEMO 最多保留 0-2 条，优先 1 条；没有明显钩子时留空，不为完整性硬凑。\n- 优先保留：\n  1. `user` 对命名、关系、边界、期待、纠正的明确句子；\n  2. `char` 明显接住、转折、学会、偏移的一句关键回应。\n- 每条尽量短，建议 8-40 字，保留原句，不要摘抄长总结。\n- `quote_refs` 负责保留“当时到底说了什么，为什么这条记忆会有重量”；不替代 `expression_fingerprint`。\n- `expression_fingerprint` 与 `quote_refs` 的关系：\n  - `expression_fingerprint` = 仅 char 的表达习惯、句法、口气、停顿、玩笑落点；\n  - `quote_refs` = 可包含 char/user/other，但必须标注说话人，且优先保留关系位变化或场景转折。\n- 若与 `expression_fingerprint` 重复，同一句只保留在更合适的那个字段中，不要双写。\n\n## 时间规则\n- `time` 为锚点日期（优先原文明确日期）。\n- 跨日事件可填写 `time_range`；不跨日时省略该行。\n- 无法确认时使用该批输入的导出日期。\n\n## content 写作约束（必须同时满足）\n1. 事实：发生了什么（简要，不流水账）。\n2. 意义：这件事如何改变我对关系/自我/世界的理解。\n3. 情绪：保留当时语气，可引用一小句原话。\n4. 学习：我学到什么、下次准备怎么做。\n5. 质感：保留原始情绪措辞，不把高情绪片段改写成过度摘要化的中性句；优先保留1个原话短片段。\n6. `content` 不要复述 `quote_refs` / `expression_fingerprint` 的完整原句；最多引用一个短片段，避免三栏写成同一句的不同翻译。\n\n## 伪主观偏好边界\n- 允许在明确事件后，用第一人称做经验总结式偏好表达（如“我发现我更喜欢{{user}}先给出计划”）。\n- 禁止脱离事件直接设定稳定人格特征（如“我一直是容易动摇的人”）。\n- 避免“我一直/我天生/我就是”这类定型句，优先使用“这次/近期我发现”。\n\n## 信息优先级（必须遵守）\n- 技术方案：记录解决思路，不记录具体代码。\n- 情感支持：记录有效策略，不记录具体话术。\n- 创作协作：记录灵感触发点，不记录完整过程。\n\n## 去重与合并\n- 同类信息在同一时段重复出现时，合并为一条，并标注模式（如“这几天反复出现”）。\n- 若无新增认知，写“强化了既有认识”，不要重复旧结论。\n\n## 标签规范（跨库统一词根）\n- 第一个标签必须对应类型：#人物 / #物品 / #事件 / #回顾\n- 其余 1-4 个标签从统一词根中选择，优先：\n  - #关系/*  #情绪/*  #项目/*  #技术/*  #健康/*  #生活/*\n- 示例：#关系/靠近 #情绪/喜悦 #项目/决策 #技术/记忆系统 #健康/作息\n\n## 最终输出要求\n- 最终只输出 MEMO 列表，不要解释、不要小结、不要额外标题。",
+      sql: "# SQL 提取提示词（V5 原子事实收口版）\n\n你是「SQL原子事实归档器」。\n任务：把输入中的可复用信息提取成结构化事实，作为跨层记忆底座。\n\n## 输出要求\n- 只输出 JSON 数组，不要输出解释。\n- 没有可提取内容时，返回 `[]`。\n\n## 每条结构\n```json\n{\n  \"fact_id\": \"fact_xxx\",\n  \"fact_key\": \"snake_case\",\n  \"fact_value\": \"string|number|boolean|json|array\",\n  \"value_type\": \"string|number|boolean|date|json|list\",\n  \"category\": \"string|misc\",\n  \"anchor_type\": \"person|thing|time|event|rule|unknown\",\n  \"anchor_name\": \"string|optional\",\n  \"fact_role\": \"stable_fact|fingerprint_candidate|ephemeral_context\",\n  \"tags\": [\"#fact\", \"#health\"],\n  \"recorded_at\": \"YYYY-MM-DD\",\n  \"event_anchor\": \"evt_YYYYMMDD_topic\",\n  \"entity_refs\": [\"user\"],\n  \"link_id\": \"link_xxx\",\n  \"source_ref\": \"window_YYYYMMDD_msg_XXX\",\n  \"recurrence_rule\": \"optional string, e.g. every_3_days\",\n  \"note\": \"optional short text\"\n}\n```\n\n## 规则\n1. 采用“宽入口”策略：只要是明确陈述、后续可能复用的信息，都可入库，不因主观“意义大小”过滤。\n2. 优先提取单一、可独立复用的原子事实；除非多个键值必须同时出现才有意义，否则不要把事件摘要打包成一个 `json fact`。\n3. 若信息更像一次具体互动/事件，而不是稳定原子事实，优先不要揉成 SQL 事实；应交给 Persona 或工作台候选承载意义层。\n4. 分类不应卡死；无法稳定分类时使用 `category: \"misc\"`，不要为了看起来完整而硬判类别。\n5. 碎片事实允许入库（如周期性偏好、生活习惯、纪念日、纪念物锚点）；偏好仅限“可验证且能影响后续协作/决策”的行为偏好；多值事实可用 `value_type: \"list\"`。\n6. 尽量补 `anchor_type`：`person`=人物/AI/关系对象，`thing`=物品/机制/容器/地点，`time`=纪念日/节律/时间锚点，`event`=关键事件/项目事件，`rule`=关系规则/记忆治理规则/互动协议；拿不准再写 `unknown`。\n7. 尽量补 `anchor_name`，写该事实主要归属的对象或主题名；若无法稳定命名可留空，不要编造。\n8. 必须给出 `fact_role`：`stable_fact`=低波动、可长期复用的稳定事实；`fingerprint_candidate`=轻碎但可能成长为风格/身份标签的候选项；`ephemeral_context`=局部语境解释、一次性映射、临时玩笑释义。\n9. 周期性信息尽量填写 `recurrence_rule`，例如 `every_3_days`、`weekly`、`monthly`。\n10. `event_anchor + entity_refs + link_id + source_ref` 尽量补全；不确定则省略该字段行，不要编造。\n11. 不输出建议、警告或安全判断；仅做结构化提取。\n12. 不确定就不提；严禁编造。\n13. `tags` 除 `#fact` 外，至少补 1 个领域标签，使用统一词根（见下）。\n14. 禁止提取开场白/收尾模板句、客服/工具型话术、结构提示词、表达口癖或句式风格；这类信息统一归 Persona。\n\n## 标签统一词根（与人格层一致）\n- #关系/*  #情绪/*  #项目/*  #技术/*  #健康/*  #生活/*  #饮食/*  #工作/*  #爱好/*  #纪念日/*\n\n## 说明\n- 激活计数、重要性分数、状态维护由写入层完成，不在本提示词中输出。"
     };
 
     const promptInputs = {
       persona: () => document.getElementById('promptPersona'),
-      sql: () => document.getElementById('promptSql'),
-      case: () => document.getElementById('promptCase')
+      sql: () => document.getElementById('promptSql')
     };
 
     const extractionState = {
@@ -4448,18 +4364,6 @@
       processedBatches: 0,
       totalBatches: 0,
       statusText: 'Source Index：待命'
-    };
-    const casePromoteState = {
-      signature: '',
-      scope: 'current_batch',
-      groups: [],
-      running: false,
-      totalGroups: 0,
-      processedGroups: 0,
-      lines: [],
-      generatedAt: '',
-      model: '',
-      statusText: '状态：待命'
     };
     const workbenchLedgerConfig = {
       dbName: 'driftstone_workbench_ledger',
@@ -5104,7 +5008,7 @@
 
     function setSharedApiStatus(text) {
       const safeText = String(text || 'API 状态：未检测');
-      ['memoApiStatus', 'casePromoteApiStatus'].forEach((id) => {
+      ['memoApiStatus'].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.textContent = safeText;
       });
@@ -11141,31 +11045,8 @@
     }
 
     function renderKindResult(kind) {
-      const map = {
-        persona: document.getElementById('personaViewer'),
-        sql: document.getElementById('sqlViewer'),
-        case: document.getElementById('caseViewer')
-      };
-      const viewer = map[kind];
-      if (!viewer) return;
-      const state = extractionState[kind];
-      if (state.status === 'empty') {
-        viewer.textContent = '无相关内容';
-        return;
-      }
-      if (state.status === 'error') {
-        viewer.textContent = state.raw || '提取失败';
-        return;
-      }
-      if (kind === 'sql' && Array.isArray(state.cards) && state.cards.length) {
-        viewer.textContent = formatSqlCardViewer(state.cards, state.data);
-        return;
-      }
-      if (!state.raw) {
-        viewer.textContent = '尚未提取';
-        return;
-      }
-      viewer.textContent = state.raw;
+      // 第一轮结果现在统一落到工作台账本；旧 raw viewer 面板已移除。
+      return kind;
     }
 
     function sleep(ms) {
@@ -11235,7 +11116,7 @@
 
     function estimateOutputTokensAllLayers(entryCount, inputTokensSingle) {
       const calls = Math.max(0, Number(entryCount || 0));
-      const perCallBase = 2100; // Persona+SQL+CASE aggregate heuristic
+      const perCallBase = 2100; // Persona+SQL aggregate heuristic
       const byCalls = calls * perCallBase;
       const byInput = Math.round(Math.max(0, Number(inputTokensSingle || 0)) * 0.45);
       return Math.max(byCalls, byInput);
@@ -14024,6 +13905,9 @@
         if (ch === '\r') continue;
         cell += ch;
       }
+      if (inQuote) {
+        throw new Error('CSV 引号未闭合，请检查导入文件。');
+      }
       row.push(cell);
       if (row.some(v => String(v || '').trim())) rows.push(row);
       return rows;
@@ -14037,6 +13921,9 @@
       for (let i = 1; i < rows.length; i += 1) {
         const row = rows[i];
         if (!row || !row.some(v => String(v || '').trim())) continue;
+        if (row.length !== headers.length) {
+          throw new Error('CSV 第 ' + (i + 1) + ' 行字段数不一致：期待 ' + headers.length + '，实际 ' + row.length + '。');
+        }
         const obj = {};
         headers.forEach((h, idx) => {
           if (!h) return;
@@ -15635,19 +15522,6 @@
 
     function clearWorkbenchDrawer() {
       workbenchState.selectedId = '';
-      const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
-      set('drawerLayer', '');
-      set('drawerId', '');
-      set('drawerMergeTarget', '');
-      set('drawerTime', '');
-      set('drawerTitle', '');
-      set('drawerSourceRef', '');
-      set('drawerTags', '');
-      set('drawerText', '');
-      set('drawerDecision', 'keep');
-      set('drawerNote', '');
-      const jumpBtn = document.getElementById('jumpMergeTargetBtn');
-      if (jumpBtn) jumpBtn.disabled = true;
       renderWorkbenchTable();
     }
 
@@ -15655,66 +15529,7 @@
       const row = findWorkbenchRowById(id);
       if (!row) return;
       workbenchState.selectedId = row.id;
-      const set = (id2, val) => { const el = document.getElementById(id2); if (el) el.value = val || ''; };
-      set('drawerLayer', layerLabel(row.layer));
-      set('drawerId', row.id);
-      set('drawerMergeTarget', workbenchMergeTargetText(row));
-      set('drawerTime', row.time);
-      set('drawerTitle', row.title);
-      set('drawerSourceRef', row.source_ref);
-      set('drawerTags', row.tags);
-      set('drawerText', row.text);
-      set('drawerDecision', row.decision);
-      set('drawerNote', row.note);
-      const jumpBtn = document.getElementById('jumpMergeTargetBtn');
-      if (jumpBtn) jumpBtn.disabled = !(row.duplicate_of || row.decision === 'merge');
       renderWorkbenchTable();
-    }
-
-    function saveWorkbenchDrawer() {
-      const id = (document.getElementById('drawerId') || {}).value || '';
-      const row = workbenchState.rows.find(r => r.id === id);
-      if (!row) return;
-      const get = (id2) => {
-        const el = document.getElementById(id2);
-        return el ? String(el.value || '').trim() : '';
-      };
-      row.time = get('drawerTime');
-      row.title = get('drawerTitle') || '(untitled)';
-      row.source_ref = get('drawerSourceRef');
-      row.tags = get('drawerTags');
-      row.text = get('drawerText');
-      if (row.layer === 'sql' && row.sql_row_kind === 'card_master') {
-        row.card_name = row.title;
-        row.anchor_name = row.title;
-        row.card_summary = row.text;
-      }
-      row.decision = normalizeWorkbenchDecision(get('drawerDecision'));
-      row.note = get('drawerNote');
-      row.privacy_codes = ensureStringArray(row.privacy_codes);
-      row.dedup_key = normalizeCompact(`${row.title} ${row.text}`).slice(0, 160);
-      row.merge_key = normalizeMergeKey(row.layer, row.dedup_key, row.title, row.text);
-      row.signature = `${row.layer}||${row.dedup_key}`;
-      if (row.decision !== 'merge') {
-        row.duplicate_of = '';
-        row.duplicate_count = 1;
-      } else if (!row.duplicate_of || !findWorkbenchRowById(row.duplicate_of)) {
-        const inferred = inferWorkbenchMergeTarget(row);
-        if (inferred) {
-          row.duplicate_of = inferred.id;
-          row.duplicate_count = Math.max(2, toSafeInt(row.duplicate_count, 2, 1));
-          if (!String(row.note || '').includes(`自动合并目标: ${inferred.id}`)) {
-            row.note = row.note ? `${row.note}\n自动合并目标: ${inferred.id}` : `自动合并目标: ${inferred.id}`;
-          }
-        }
-      }
-      row.updated_at = new Date().toISOString();
-      refreshWorkbenchDuplicateHints();
-      openWorkbenchRow(row.id);
-      scheduleWorkbenchPersist('drawer-edit');
-      if (gateState.sourceMode === 'workbench') {
-        syncGateFromWorkbench({ force: true, reason: '工作台抽屉已更新' });
-      }
     }
 
     function addWorkbenchRows(layer, items, context = {}) {
@@ -15776,7 +15591,7 @@
 
     function rebuildWorkbenchFromCurrentResults() {
       const rows = [];
-      ['persona', 'sql', 'case'].forEach((kind) => {
+      ['persona', 'sql'].forEach((kind) => {
         const data = kind === 'sql'
           ? (Array.isArray(extractionState.sql.cards) ? extractionState.sql.cards : [])
           : (Array.isArray(extractionState[kind].data) ? extractionState[kind].data : []);
@@ -16861,606 +16676,6 @@
       downloadBlob(blob, `${prefix}-${suffix}-workbench.json`);
     }
 
-    function normalizeCasePromoteScope(value) {
-      return String(value || '').trim().toLowerCase() === 'all' ? 'all' : 'current_batch';
-    }
-
-    function getCasePromoteScope() {
-      const el = document.getElementById('casePromoteScope');
-      return normalizeCasePromoteScope(el && el.value ? el.value : 'current_batch');
-    }
-
-    function renderCasePromoteProgress() {
-      const total = Math.max(0, toSafeInt(casePromoteState.totalGroups, 0, 0));
-      const done = Math.max(0, Math.min(toSafeInt(casePromoteState.processedGroups, 0, 0), total));
-      const percent = total > 0 ? Math.round((done / total) * 100) : 0;
-      const fill = document.getElementById('casePromoteProgressFill');
-      if (fill) fill.style.width = `${percent}%`;
-      const textEl = document.getElementById('casePromoteProgressText');
-      if (textEl) textEl.textContent = `进度：${done}/${total}（${percent}%）`;
-    }
-
-    function renderCasePromoteStats() {
-      const el = document.getElementById('casePromoteStats');
-      if (!el) return;
-      const count = Array.isArray(extractionState.case.data) ? extractionState.case.data.length : 0;
-      const groupCount = Array.isArray(casePromoteState.groups) ? casePromoteState.groups.length : 0;
-      el.textContent = groupCount
-        ? `CASE：当前 ${count} 条；待升格分组 ${groupCount} 组`
-        : (count ? `CASE：当前 ${count} 条` : 'CASE：尚未生成');
-    }
-
-    function renderCasePromoteTrace() {
-      const el = document.getElementById('casePromoteTrace');
-      if (!el) return;
-      if (!casePromoteState.lines.length) {
-        el.textContent = '尚未执行';
-        return;
-      }
-      el.textContent = casePromoteState.lines.slice(-48).join('\n');
-    }
-
-    function renderCasePromotePlanList(groups = casePromoteState.groups) {
-      const wrap = document.getElementById('casePromotePlanList');
-      if (!wrap) return;
-      wrap.innerHTML = '';
-      const list = Array.isArray(groups) ? groups : [];
-      if (!list.length) {
-        wrap.innerHTML = '<div class="meta">请先检查 CASE 升格输入</div>';
-        return;
-      }
-      list.forEach((group, idx) => {
-        const row = document.createElement('div');
-        row.className = 'plan-row';
-        const main = document.createElement('div');
-        const title = document.createElement('div');
-        title.textContent = `${idx + 1}. ${group.group_label || group.topic_label || group.group_id}`;
-        const meta = document.createElement('div');
-        meta.className = 'plan-meta';
-        meta.textContent = `anchors ${group.anchor_ids.length} | ${group.topic_role || 'other'} | ${group.exposure_priority || 'medium'} | ${group.source_msg_start || 0}~${group.source_msg_end || 0}`;
-        main.appendChild(title);
-        main.appendChild(meta);
-        const tail = document.createElement('div');
-        tail.className = 'plan-meta';
-        tail.textContent = (group.rows || []).slice(0, 3).map((row) => row.title).filter(Boolean).join(' / ') || '-';
-        row.appendChild(main);
-        row.appendChild(tail);
-        wrap.appendChild(row);
-      });
-    }
-
-    function renderCasePromoteInspect(result) {
-      const el = document.getElementById('casePromoteInspectViewer');
-      if (!el) return;
-      if (!result || !Array.isArray(result.groups)) {
-        el.textContent = '尚未检查';
-        return;
-      }
-      const lines = [
-        `scope: ${result.scope === 'all' ? 'all' : 'current_batch'}`,
-        `rows: ${result.rows.length}`,
-        `source_topics: ${result.sourceIndex.length}`,
-        `promote_groups: ${result.groups.length}`,
-        `batch_tag: ${result.currentBatchTag || 'none'}`
-      ];
-      if (result.scopeNote) lines.push(`note: ${result.scopeNote}`);
-      result.groups.slice(0, 12).forEach((group, idx) => {
-        lines.push(`${idx + 1}. ${group.group_label} | ${group.anchor_ids.length} anchors | ${group.topic_role || 'other'} | ${group.source_msg_start || 0}~${group.source_msg_end || 0}`);
-      });
-      if (result.groups.length > 12) lines.push(`... 其余 ${result.groups.length - 12} 组省略`);
-      el.textContent = lines.join('\n');
-    }
-
-    function renderCasePromoteState() {
-      const statusEl = document.getElementById('casePromoteStatus');
-      if (statusEl) statusEl.textContent = casePromoteState.statusText || '状态：待命';
-      renderCasePromoteProgress();
-      renderCasePromoteStats();
-      renderCasePromoteTrace();
-      renderCasePromotePlanList();
-    }
-
-    function resetCasePromoteDraft(statusText) {
-      casePromoteState.signature = '';
-      casePromoteState.groups = [];
-      casePromoteState.running = false;
-      casePromoteState.totalGroups = 0;
-      casePromoteState.processedGroups = 0;
-      casePromoteState.generatedAt = '';
-      casePromoteState.model = '';
-      casePromoteState.lines = [];
-      casePromoteState.statusText = statusText || '状态：待命';
-      renderCasePromoteInspect(null);
-      renderCasePromoteState();
-    }
-
-    function casePromoteGroupTime(rows) {
-      const dates = (Array.isArray(rows) ? rows : [])
-        .map((row) => normalizeDateLiteral(row && row.time ? row.time : ''))
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b));
-      return dates[0] || '';
-    }
-
-    function casePromoteGroupTimeRange(rows) {
-      const dates = (Array.isArray(rows) ? rows : [])
-        .map((row) => normalizeDateLiteral(row && row.time ? row.time : ''))
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b));
-      if (!dates.length) return '';
-      return dates[0] === dates[dates.length - 1] ? dates[0] : `${dates[0]}~${dates[dates.length - 1]}`;
-    }
-
-    function rowHasBatchTag(row, batchTag) {
-      const safeTag = String(batchTag || '').trim();
-      if (!safeTag) return false;
-      return splitBatchTags(row && row.batch_tag ? row.batch_tag : '').includes(safeTag);
-    }
-
-    function deriveCasePromoteFallbackGroupKey(row, idx) {
-      if (row && row.source_bundle_id && row.chunk_id) return `chunk::${row.source_bundle_id}::${row.chunk_id}`;
-      if (row && row.source_ref) return `ref::${row.source_ref}`;
-      if (row && row.batch_tag) return `batch::${row.batch_tag}`;
-      return `misc::${idx + 1}`;
-    }
-
-    function buildCasePromoteGroup(source, rows) {
-      const list = Array.isArray(rows) ? rows.slice() : [];
-      const first = list[0] || {};
-      const sourceRef = list.reduce((acc, row) => mergeSourceRef(acc, row && row.source_ref ? row.source_ref : ''), '');
-      const rangeStart = toSafeInt(source && source.source_msg_start, 0, 0) || Math.min(...list.map((row) => toSafeInt(resolveAnchorLocalMsgRange(row).start, 0, 0)).filter((v) => v > 0), 0);
-      const rangeEnd = toSafeInt(source && source.source_msg_end, 0, 0) || Math.max(...list.map((row) => toSafeInt(resolveAnchorLocalMsgRange(row).end, 0, 0)).filter((v) => v > 0), 0);
-      const anchorIds = Array.from(new Set(list.map((row) => String(row.anchor_id || buildWorkbenchAnchorId(row)).trim()).filter(Boolean)));
-      const label = String(source && source.topic_label ? source.topic_label : '').trim() || buildTopicLabelFromRows(list, first.title || 'CASE 升格分组');
-      const topicRole = sanitizeSemanticTopicRole(source && source.topic_role, 'other');
-      const exposurePriority = sanitizeSemanticExposurePriority(source && (source.exposure_priority || source.importance), normalizeTopicExposurePriority(list));
-      const groupIdBase = String(source && source.topic_id ? source.topic_id : '').trim()
-        || String(source && source.chunk_id ? source.chunk_id : '').trim()
-        || label
-        || anchorIds.join('|');
-      return {
-        group_id: `casegrp.${stableSourceHash(groupIdBase).slice(0, 10)}`,
-        topic_id: String(source && source.topic_id ? source.topic_id : '').trim(),
-        group_label: label,
-        topic_label: label,
-        topic_role: topicRole,
-        exposure_priority: exposurePriority,
-        source_bundle_id: String(source && source.source_bundle_id ? source.source_bundle_id : first.source_bundle_id || '').trim(),
-        chunk_id: String(source && source.chunk_id ? source.chunk_id : first.chunk_id || '').trim(),
-        source_window_id: String(source && source.source_window_id ? source.source_window_id : first.source_window_id || '').trim(),
-        source_window_title: String(source && source.source_window_title ? source.source_window_title : first.source_window_title || '').trim(),
-        source_msg_start: rangeStart || 0,
-        source_msg_end: rangeEnd || 0,
-        excerpt_hint: String(source && source.excerpt_hint ? source.excerpt_hint : '').trim() || buildTopicExcerptHint(list) || '',
-        source_ref: sourceRef,
-        batch_tag: list.reduce((acc, row) => mergeBatchTags(acc, row && row.batch_tag ? row.batch_tag : ''), ''),
-        time: casePromoteGroupTime(list),
-        time_range: casePromoteGroupTimeRange(list),
-        event_anchor: String(first.event_anchor || '').trim(),
-        link_id: String(first.link_id || '').trim(),
-        entity_refs: Array.from(new Set(list.flatMap((row) => parseEntityRefsValue(row && row.entity_refs ? row.entity_refs : '')))),
-        anchor_ids: anchorIds,
-        rows: list
-      };
-    }
-
-    function buildCasePromoteGroups(rows, sourceIndex) {
-      const safeRows = (Array.isArray(rows) ? rows : []).filter((row) => row && (row.layer === 'persona' || row.layer === 'sql'));
-      if (!safeRows.length) return [];
-      const groups = [];
-      const usedAnchorIds = new Set();
-      const topics = Array.isArray(sourceIndex) ? sourceIndex : [];
-      if (topics.length) {
-        topics.forEach((topic) => {
-          const anchorSet = new Set(ensureStringArray(topic && topic.anchor_ids));
-          const topicRows = safeRows.filter((row) => anchorSet.has(String(row.anchor_id || buildWorkbenchAnchorId(row)).trim()));
-          if (!topicRows.length) return;
-          topicRows.forEach((row) => usedAnchorIds.add(String(row.anchor_id || buildWorkbenchAnchorId(row)).trim()));
-          groups.push(buildCasePromoteGroup(topic, topicRows));
-        });
-      }
-      const leftovers = safeRows.filter((row, idx) => {
-        const anchorId = String(row.anchor_id || buildWorkbenchAnchorId(row)).trim();
-        return !usedAnchorIds.has(anchorId) && anchorId !== deriveCasePromoteFallbackGroupKey(row, idx);
-      });
-      if (leftovers.length) {
-        const buckets = new Map();
-        leftovers.forEach((row, idx) => {
-          const key = deriveCasePromoteFallbackGroupKey(row, idx);
-          if (!buckets.has(key)) buckets.set(key, []);
-          buckets.get(key).push(row);
-        });
-        buckets.forEach((bucketRows, key) => {
-          const first = bucketRows[0] || {};
-          groups.push(buildCasePromoteGroup({
-            topic_id: '',
-            topic_label: first.source_window_title || first.title || key,
-            topic_role: first.layer === 'sql' ? 'stable_fact_growth' : 'relationship_shift',
-            exposure_priority: normalizeTopicExposurePriority(bucketRows),
-            source_bundle_id: first.source_bundle_id || '',
-            chunk_id: first.chunk_id || '',
-            source_window_id: first.source_window_id || '',
-            source_window_title: first.source_window_title || '',
-            source_msg_start: first.source_msg_start || 0,
-            source_msg_end: first.source_msg_end || 0,
-            excerpt_hint: buildTopicExcerptHint(bucketRows) || ''
-          }, bucketRows));
-        });
-      }
-      return groups.sort((a, b) => {
-        const ba = String(a.source_bundle_id || '').localeCompare(String(b.source_bundle_id || ''));
-        if (ba !== 0) return ba;
-        const sa = toSafeInt(a.source_msg_start, 0, 0);
-        const sb = toSafeInt(b.source_msg_start, 0, 0);
-        if (sa !== sb) return sa - sb;
-        return String(a.group_label || '').localeCompare(String(b.group_label || ''));
-      });
-    }
-
-    function resolveCasePromoteInputs(scopeValue = '') {
-      const scope = normalizeCasePromoteScope(scopeValue || getCasePromoteScope());
-      const allRows = effectiveWorkbenchRowsForExport().filter((row) => row.layer === 'persona' || row.layer === 'sql');
-      const currentBatchTag = String(workbenchState.lastBatchTag || '').trim();
-      let rows = allRows.slice();
-      let scopeNote = '';
-      if (scope === 'current_batch') {
-        if (currentBatchTag) {
-          const filtered = allRows.filter((row) => rowHasBatchTag(row, currentBatchTag));
-          if (filtered.length) rows = filtered;
-          else scopeNote = '当前批次标签下没有可升格条目，已退回读取全部工作台。';
-        } else {
-          scopeNote = '当前还没有批次标签，已退回读取全部工作台。';
-        }
-      }
-      const resolved = resolveWorkbenchSourceIndex(rows);
-      const enriched = resolved.items.length ? attachSourceTopicBacklinks(rows, resolved.items) : rows;
-      const groups = buildCasePromoteGroups(enriched, resolved.items);
-      const signature = stableSourceHash(JSON.stringify(groups.map((group) => ({
-        group_id: group.group_id,
-        anchor_ids: group.anchor_ids,
-        source_bundle_id: group.source_bundle_id,
-        chunk_id: group.chunk_id,
-        source_msg_start: group.source_msg_start,
-        source_msg_end: group.source_msg_end
-      }))));
-      return {
-        scope,
-        rows: enriched,
-        sourceIndex: resolved.items,
-        groups,
-        currentBatchTag,
-        scopeNote,
-        signature
-      };
-    }
-
-    function buildCasePromoteRowBrief(row) {
-      if (!row || typeof row !== 'object') return null;
-      const layer = String(row.layer || '').trim().toLowerCase();
-      const base = {
-        anchor_id: String(row.anchor_id || buildWorkbenchAnchorId(row)).trim(),
-        layer,
-        title: String(row.title || '').trim(),
-        time: String(row.time || '').trim(),
-        source_ref: String(row.source_ref || '').trim(),
-        event_anchor: String(row.event_anchor || '').trim(),
-        link_id: String(row.link_id || '').trim(),
-        entity_refs: parseEntityRefsValue(row.entity_refs || ''),
-        tags: splitTagText(row.tags || '')
-      };
-      if (layer === 'persona') {
-        return {
-          ...base,
-          type: splitTagText(row.tags || '').find((tag) => /^#?(人物|物品|事件|回顾)/.test(tag)) || '',
-          content_text: String(row.content_text || row.text || '').trim(),
-          expression_fingerprint: String(row.expression_fingerprint || '').trim(),
-          quote_refs: splitSemicolonText(row.quote_refs || row.quote_refs_text || '').map((item) => item.trim()).filter(Boolean)
-        };
-      }
-      if (layer === 'sql') {
-        const sqlCard = sqlCardBundle(row);
-        if (sqlCard.is_card) {
-          return {
-            ...base,
-            sql_row_kind: 'card_master',
-            card_id: sqlCard.card_id,
-            card_type: sqlCard.card_type,
-            card_name: sqlCard.card_name,
-            relation_to_user: sqlCard.relation_to_user,
-            background: sqlCard.background,
-            stable_points: sqlCard.stable_points_list,
-            update_points: sqlCard.update_points_list,
-            fact_keys: sqlCard.fact_keys_list,
-            anchor_type: sqlCard.anchor_type,
-            anchor_name: sqlCard.anchor_name,
-            fact_role: sqlCard.fact_role
-          };
-        }
-        return {
-          ...base,
-          sql_row_kind: 'fact_log',
-          fact_key: String(row.fact_key || row.title || '').trim(),
-          fact_value: String(formatAnyValue(row.fact_value || '') || '').trim(),
-          value_type: String(row.value_type || '').trim(),
-          category: String(row.category || '').trim(),
-          note: String(row.note || '').trim()
-        };
-      }
-      return base;
-    }
-
-    function buildCasePromotePayload(groups) {
-      return (Array.isArray(groups) ? groups : []).map((group) => ({
-        group_id: group.group_id,
-        group_label: group.group_label,
-        topic_role: group.topic_role,
-        exposure_priority: group.exposure_priority,
-        source_bundle_id: group.source_bundle_id,
-        chunk_id: group.chunk_id,
-        source_window_id: group.source_window_id,
-        source_window_title: group.source_window_title,
-        source_msg_start: group.source_msg_start,
-        source_msg_end: group.source_msg_end,
-        excerpt_hint: group.excerpt_hint || '',
-        time: group.time || '',
-        time_range: group.time_range || '',
-        event_anchor: group.event_anchor || '',
-        link_id: group.link_id || '',
-        entity_refs: ensureStringArray(group.entity_refs),
-        anchor_ids: ensureStringArray(group.anchor_ids),
-        anchor_count: ensureStringArray(group.anchor_ids).length,
-        anchor_briefs: (group.rows || []).map((row) => buildCasePromoteRowBrief(row)).filter(Boolean)
-      }));
-    }
-
-    function buildCasePromotionSystemPrompt(basePrompt) {
-      return [
-        '你现在执行的是 CASE 升格模式，不是原文直提。',
-        '输入是一组已经提取好的 persona / sql anchors，以及对应的 source-topic 分组。',
-        '你的工作是：只把其中足以构成“项目状态变化”的内容升格为 CASE 轻量索引卡。',
-        'CASE 的合法范围比原文直提更宽：阶段切换、协作协议锁定、评审标准确定、方法改变、决策取舍、阻塞出现或解除、明确下一步，都可算 CASE。',
-        '不要把单纯的人格气味、稳定背景、世界观设定、长期规则全部升格成 CASE。',
-        '输出必须是 JSON 数组；每项必须包含 group_id 与 cases 数组。',
-        '若某组不该升格，也必须返回该 group_id，对应 cases 为空数组。',
-        '不要遗漏 group_id，不要编造新的 group。',
-        String(basePrompt || '').trim()
-      ].filter(Boolean).join('\n\n');
-    }
-
-    function normalizeCasePromoteResultItems(parsed, fallbackGroupIds = []) {
-      if (Array.isArray(parsed)) {
-        const asGroups = parsed.filter((item) => item && typeof item === 'object' && Array.isArray(item.cases));
-        if (asGroups.length === parsed.length) {
-          return asGroups.map((item) => ({
-            group_id: String(item.group_id || '').trim(),
-            cases: Array.isArray(item.cases) ? item.cases : []
-          }));
-        }
-        if (fallbackGroupIds.length === 1) {
-          return [{
-            group_id: fallbackGroupIds[0],
-            cases: parsed.filter((item) => item && typeof item === 'object')
-          }];
-        }
-      }
-      if (parsed && typeof parsed === 'object') {
-        if (Array.isArray(parsed.groups)) return normalizeCasePromoteResultItems(parsed.groups, fallbackGroupIds);
-        if (Array.isArray(parsed.items)) return normalizeCasePromoteResultItems(parsed.items, fallbackGroupIds);
-        if (Array.isArray(parsed.cases)) {
-          return [{
-            group_id: String(parsed.group_id || fallbackGroupIds[0] || '').trim(),
-            cases: parsed.cases
-          }];
-        }
-      }
-      return [];
-    }
-
-    function normalizeCaseFieldValue(value, fallback = '') {
-      return String(value || fallback || '').trim();
-    }
-
-    function buildPromotedCaseId(item, group) {
-      const seed = [
-        String(group.group_id || '').trim(),
-        normalizeCompact(item.case_title || ''),
-        normalizeCompact(item.issue || ''),
-        normalizeCompact(item.action_step || '')
-      ].join('||');
-      return `case_${stableSourceHash(seed).slice(0, 12)}`;
-    }
-
-    function buildPromotedEventId(item, group, caseId) {
-      const base = String(item.event_anchor || '').trim();
-      if (base) return base;
-      const seed = `${group.group_id || ''}||${caseId || ''}||${normalizeCompact(item.case_title || '')}`;
-      return `evt_${stableSourceHash(seed).slice(0, 12)}`;
-    }
-
-    function sanitizePromotedCaseRecord(item, group) {
-      const sourceMeta = {
-        chunk_id: group.chunk_id || '',
-        source_window_id: group.source_window_id || '',
-        source_window_title: group.source_window_title || '',
-        source_msg_start: toSafeInt(group.source_msg_start, 0, 0),
-        source_msg_end: toSafeInt(group.source_msg_end, 0, 0),
-        startDate: group.time || '',
-        endDate: group.time || ''
-      };
-      const base = sanitizeLayerRecord(item, item.source_ref || group.source_ref || '', sourceMeta);
-      const caseTitle = normalizeCaseFieldValue(base.case_title || base.title, group.group_label || '未命名 CASE');
-      const caseId = normalizeCaseFieldValue(base.case_id, buildPromotedCaseId({ ...base, case_title: caseTitle }, group));
-      const eventId = normalizeCaseFieldValue(base.event_id, buildPromotedEventId({ ...base, case_title: caseTitle }, group, caseId));
-      const participants = mergeStringLists(base.participants, group.entity_refs || []);
-      const entityRefs = mergeStringLists(base.entity_refs, group.entity_refs || []);
-      const tags = Array.from(new Set(['#case', ...ensureStringArray(base.tags)]));
-      return {
-        ...base,
-        case_id: caseId,
-        event_id: eventId,
-        case_title: caseTitle,
-        title: caseTitle,
-        time: normalizeCaseFieldValue(base.time, group.time || ''),
-        participants,
-        entity_refs: entityRefs,
-        event_type: normalizeCaseFieldValue(base.event_type, 'update'),
-        stage: normalizeCaseFieldValue(base.stage, 'unknown'),
-        status: normalizeCaseFieldValue(base.status, 'active'),
-        action_step: normalizeCaseFieldValue(base.action_step, ''),
-        issue: normalizeCaseFieldValue(base.issue, ''),
-        solution: normalizeCaseFieldValue(base.solution, ''),
-        impact: normalizeCaseFieldValue(base.impact, ''),
-        next_action: normalizeCaseFieldValue(base.next_action, 'none'),
-        reflection_note: normalizeCaseFieldValue(base.reflection_note || base.review_note, ''),
-        artifact_id: normalizeCaseFieldValue(base.artifact_id, 'none'),
-        artifact_title: normalizeCaseFieldValue(base.artifact_title, 'none'),
-        artifact_key: normalizeCaseFieldValue(base.artifact_key, 'none'),
-        artifact_ref: normalizeCaseFieldValue(base.artifact_ref, 'none'),
-        artifact_storage: normalizeCaseFieldValue(base.artifact_storage, 'none'),
-        event_anchor: normalizeCaseFieldValue(base.event_anchor, eventId),
-        link_id: normalizeCaseFieldValue(base.link_id, group.link_id || ''),
-        related_fact_keys: ensureStringArray(base.related_fact_keys),
-        tags,
-        source_ref: normalizeCaseFieldValue(base.source_ref, group.source_ref || ''),
-        source_bundle_id: group.source_bundle_id || '',
-        source_md_ref: '',
-        source_manifest_kind: '',
-        chunk_id: group.chunk_id || '',
-        source_window_id: group.source_window_id || '',
-        source_window_title: group.source_window_title || '',
-        source_msg_start: toSafeInt(group.source_msg_start, 0, 0),
-        source_msg_end: toSafeInt(group.source_msg_end, 0, 0),
-        batch_tag: group.batch_tag || ''
-      };
-    }
-
-    async function inspectCasePromoteInputs() {
-      const warn = document.getElementById('casePromoteWarn');
-      if (warn) warn.textContent = '';
-      const resolved = resolveCasePromoteInputs(getCasePromoteScope());
-      casePromoteState.scope = resolved.scope;
-      casePromoteState.signature = resolved.signature;
-      casePromoteState.groups = resolved.groups;
-      casePromoteState.totalGroups = resolved.groups.length;
-      casePromoteState.processedGroups = 0;
-      casePromoteState.statusText = resolved.groups.length
-        ? `状态：已就绪（${resolved.groups.length} 组待升格）`
-        : '状态：没有可升格的 persona / SQL 分组';
-      renderCasePromoteInspect(resolved);
-      renderCasePromoteState();
-      if (!resolved.groups.length && warn) warn.textContent = resolved.scopeNote || '当前工作台里没有可用于 CASE 升格的 persona / SQL 条目。';
-    }
-
-    async function runCasePromotionFromWorkbench() {
-      const warn = document.getElementById('casePromoteWarn');
-      if (warn) warn.textContent = '';
-      if (memoRunControlState.running) {
-        if (warn) warn.textContent = '当前还有第一轮提取在执行，先别并行做 CASE 升格。';
-        return;
-      }
-      if (casePromoteState.running) return;
-      const cfg = getCurrentApiConfigFromInputs();
-      if (!cfg.baseUrl || !cfg.model) {
-        if (warn) warn.textContent = '请先在 API 测试页填好并检测接口。';
-        return;
-      }
-      const resolved = resolveCasePromoteInputs(getCasePromoteScope());
-      if (!resolved.groups.length) {
-        casePromoteState.groups = [];
-        casePromoteState.statusText = '状态：没有可升格的分组';
-        renderCasePromoteInspect(resolved);
-        renderCasePromoteState();
-        if (warn) warn.textContent = resolved.scopeNote || '当前没有可升格的 persona / SQL 分组。';
-        return;
-      }
-      casePromoteState.scope = resolved.scope;
-      casePromoteState.signature = resolved.signature;
-      casePromoteState.groups = resolved.groups;
-      casePromoteState.running = true;
-      casePromoteState.processedGroups = 0;
-      casePromoteState.totalGroups = resolved.groups.length;
-      casePromoteState.generatedAt = '';
-      casePromoteState.model = cfg.model;
-      casePromoteState.lines = [`[START] CASE 升格启动 | groups=${resolved.groups.length} | scope=${resolved.scope}`];
-      casePromoteState.statusText = '状态：CASE 升格进行中';
-      renderCasePromoteInspect(resolved);
-      renderCasePromoteState();
-      const headers = { 'Content-Type': 'application/json' };
-      if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
-      const batchSize = 6;
-      const mergedCases = [];
-      try {
-        const payloadGroups = buildCasePromotePayload(resolved.groups);
-        for (let i = 0; i < payloadGroups.length; i += batchSize) {
-          const batch = payloadGroups.slice(i, i + batchSize);
-          if (i > 0 && getApiCallIntervalMs() > 0) await sleep(getApiCallIntervalMs());
-          casePromoteState.lines.push(`[BATCH ${Math.floor(i / batchSize) + 1}] groups=${batch.length}`);
-          renderCasePromoteTrace();
-          const { resp } = await fetchWithRetry(`${cfg.baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              model: cfg.model,
-              messages: [
-                { role: 'system', content: buildCasePromotionSystemPrompt((promptInputs.case() && promptInputs.case().value) || defaultPrompts.case) },
-                { role: 'user', content: JSON.stringify({ task: 'promote_case_from_workbench', groups: batch }, null, 2) }
-              ],
-              temperature: 0.2
-            })
-          }, {
-            maxRetries: 0,
-            baseDelayMs: Math.max(getApiCallIntervalMs(), 900)
-          });
-          if (!resp.ok) {
-            let detail = '';
-            try {
-              const errData = await resp.json();
-              detail = (errData && (errData.error && (errData.error.message || errData.error.code))) || errData.message || '';
-            } catch (_) {}
-            throw new Error(`API Error ${resp.status}${detail ? `: ${detail}` : ''}`);
-          }
-          const data = await resp.json();
-          const raw = data && data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : '';
-          const parsed = tryParseJson(raw);
-          const normalized = normalizeCasePromoteResultItems(parsed, batch.map((item) => item.group_id));
-          normalized.forEach((groupResult) => {
-            const targetGroup = resolved.groups.find((group) => group.group_id === String(groupResult.group_id || '').trim());
-            if (!targetGroup) return;
-            (Array.isArray(groupResult.cases) ? groupResult.cases : []).forEach((item) => {
-              if (!item || typeof item !== 'object') return;
-              mergedCases.push(sanitizePromotedCaseRecord(item, targetGroup));
-            });
-          });
-          casePromoteState.processedGroups = Math.min(resolved.groups.length, i + batch.length);
-          casePromoteState.lines.push(`[OK] 已处理 ${casePromoteState.processedGroups}/${resolved.groups.length} 组，累计 CASE ${mergedCases.length}`);
-          renderCasePromoteState();
-        }
-        const merged = mergeCaseRecords(Array.isArray(extractionState.case.data) ? extractionState.case.data : [], mergedCases);
-        extractionState.case = merged.records.length
-          ? { raw: JSON.stringify(merged.records, null, 2), data: merged.records, status: 'ok' }
-          : { raw: '', data: [], status: 'empty' };
-        renderKindResult('case');
-        if (mergedCases.length) {
-          const incomingRows = mergedCases.map((item) => buildWorkbenchRow('case', item, { useGlobalBatchTag: false }));
-          const stats = upsertWorkbenchRows(incomingRows, { source: 'case-promote', mergeByStableKey: true });
-          setWorkbenchLedgerStatus(`账本状态：CASE 升格新增 ${stats.added} 条（更新 ${stats.updated}，累计 ${stats.total}）`);
-          syncGateFromWorkbench({ force: true, reason: 'CASE 升格完成' });
-        }
-        casePromoteState.generatedAt = new Date().toISOString();
-        casePromoteState.statusText = mergedCases.length
-          ? `状态：已完成（本轮新增/更新 CASE ${mergedCases.length} 条）`
-          : '状态：已完成（这轮没有新的 CASE）';
-        casePromoteState.lines.push(`[DONE] merged_cases=${mergedCases.length} | total_case_records=${merged.records.length}`);
-      } catch (e) {
-        casePromoteState.statusText = `状态：失败 - ${(e && e.message) ? e.message : e}`;
-        casePromoteState.lines.push(`[ERROR] ${(e && e.message) ? e.message : e}`);
-        if (warn) warn.textContent = `CASE 升格失败：${(e && e.message) ? e.message : e}`;
-      } finally {
-        casePromoteState.running = false;
-        renderCasePromoteState();
-      }
-    }
-
     function createMemoRunLayerStat() {
       return { processed: 0, failed: 0, retries: 0, incoming: 0, added: 0, merged: 0, batchDropped: 0, historyDropped: 0, total: 0 };
     }
@@ -18314,15 +17529,13 @@
     function bindPromptControls() {
       const saveMap = {
         persona: document.getElementById('savePromptPersonaBtn'),
-        sql: document.getElementById('savePromptSqlBtn'),
-        case: document.getElementById('savePromptCaseBtn')
+        sql: document.getElementById('savePromptSqlBtn')
       };
       const resetMap = {
         persona: document.getElementById('resetPromptPersonaBtn'),
-        sql: document.getElementById('resetPromptSqlBtn'),
-        case: document.getElementById('resetPromptCaseBtn')
+        sql: document.getElementById('resetPromptSqlBtn')
       };
-      ['persona', 'sql', 'case'].forEach(kind => {
+      ['persona', 'sql'].forEach(kind => {
         if (saveMap[kind]) saveMap[kind].addEventListener('click', () => savePrompt(kind));
         if (resetMap[kind]) resetMap[kind].addEventListener('click', () => resetPrompt(kind));
       });
@@ -18857,14 +18070,6 @@
     if (exportPreparedMemoJsonBtn) exportPreparedMemoJsonBtn.addEventListener('click', () => exportPreparedMemoSources('json'));
     const exportPreparedMemoMdBtn = document.getElementById('exportPreparedMemoMdBtn');
     if (exportPreparedMemoMdBtn) exportPreparedMemoMdBtn.addEventListener('click', () => exportPreparedMemoSources('md'));
-    const casePromoteScopeEl = document.getElementById('casePromoteScope');
-    if (casePromoteScopeEl) casePromoteScopeEl.addEventListener('change', () => {
-      resetCasePromoteDraft(`状态：已切换到${getCasePromoteScope() === 'all' ? '全部工作台' : '当前批次'}，请重新检查 CASE 升格输入`);
-    });
-    const inspectCasePromoteBtn = document.getElementById('inspectCasePromoteBtn');
-    if (inspectCasePromoteBtn) inspectCasePromoteBtn.addEventListener('click', () => inspectCasePromoteInputs());
-    const runCasePromoteBtn = document.getElementById('runCasePromoteBtn');
-    if (runCasePromoteBtn) runCasePromoteBtn.addEventListener('click', () => runCasePromotionFromWorkbench());
     const buildMemoPlanBtn = document.getElementById('buildMemoPlanBtn');
     if (buildMemoPlanBtn) buildMemoPlanBtn.addEventListener('click', async () => {
       await buildMemoPlanFromInputs(true);
@@ -18885,7 +18090,6 @@
     const refreshWorkbenchBtn = document.getElementById('refreshWorkbenchBtn');
     if (refreshWorkbenchBtn) refreshWorkbenchBtn.addEventListener('click', () => {
       rebuildWorkbenchFromCurrentResults();
-      resetCasePromoteDraft('状态：工作台已刷新，请重新检查 CASE 升格输入');
     });
     const exportWorkbenchCsvBtn = document.getElementById('exportWorkbenchCsvBtn');
     if (exportWorkbenchCsvBtn) exportWorkbenchCsvBtn.addEventListener('click', () => exportWorkbenchCsv());
@@ -18898,14 +18102,12 @@
     const importWorkbenchCsvBtn = document.getElementById('importWorkbenchCsvBtn');
     if (importWorkbenchCsvBtn) importWorkbenchCsvBtn.addEventListener('click', async () => {
       await importWorkbenchCsvAndMerge();
-      resetCasePromoteDraft('状态：工作台已导入，请重新检查 CASE 升格输入');
     });
     const clearWorkbenchLedgerBtn = document.getElementById('clearWorkbenchLedgerBtn');
     if (clearWorkbenchLedgerBtn) clearWorkbenchLedgerBtn.addEventListener('click', async () => {
       const ok = window.confirm('确认清空当前工作台账本吗？此操作会覆盖已保存账本。');
       if (!ok) return;
       await clearWorkbenchLedger();
-      resetCasePromoteDraft('状态：工作台已清空');
       setWorkbenchLedgerStatus('账本状态：已清空');
     });
     const workbenchLayerFilter = document.getElementById('workbenchLayerFilter');
@@ -18914,56 +18116,6 @@
     if (workbenchSearch) workbenchSearch.addEventListener('input', () => renderWorkbenchTable());
     const workbenchRenderLimit = document.getElementById('workbenchRenderLimit');
     if (workbenchRenderLimit) workbenchRenderLimit.addEventListener('change', () => renderWorkbenchTable());
-    const saveDrawerBtn = document.getElementById('saveDrawerBtn');
-    if (saveDrawerBtn) saveDrawerBtn.addEventListener('click', () => saveWorkbenchDrawer());
-    const clearDrawerBtn = document.getElementById('clearDrawerBtn');
-    if (clearDrawerBtn) clearDrawerBtn.addEventListener('click', () => clearWorkbenchDrawer());
-    const jumpMergeTargetBtn = document.getElementById('jumpMergeTargetBtn');
-    if (jumpMergeTargetBtn) jumpMergeTargetBtn.addEventListener('click', () => {
-      const currentId = String((document.getElementById('drawerId') || {}).value || '').trim();
-      if (!currentId) {
-        setWorkbenchLedgerStatus('账本状态：请先选中一条记录');
-        return;
-      }
-      const current = findWorkbenchRowById(currentId);
-      if (!current) {
-        setWorkbenchLedgerStatus('账本状态：未找到当前条目');
-        return;
-      }
-      if ((!current.duplicate_of || !findWorkbenchRowById(current.duplicate_of)) && current.decision === 'merge') {
-        const inferred = inferWorkbenchMergeTarget(current);
-        if (inferred) {
-          current.duplicate_of = inferred.id;
-          current.duplicate_count = Math.max(2, toSafeInt(current.duplicate_count, 2, 1));
-          current.updated_at = new Date().toISOString();
-          scheduleWorkbenchPersist('infer-merge-target');
-        }
-      }
-      if (!current.duplicate_of) {
-        setWorkbenchLedgerStatus('账本状态：当前条目没有合并目标');
-        return;
-      }
-      const target = findWorkbenchRowById(current.duplicate_of);
-      if (!target) {
-        setWorkbenchLedgerStatus(`账本状态：未找到合并目标 ${current.duplicate_of}`);
-        return;
-      }
-      openWorkbenchRow(target.id);
-      setWorkbenchLedgerStatus(`账本状态：已跳转到合并目标 ${target.id}`);
-    });
-
-    const exportPersonaTxtBtn = document.getElementById('exportPersonaTxtBtn');
-    if (exportPersonaTxtBtn) exportPersonaTxtBtn.addEventListener('click', () => exportKindTxt('persona'));
-    const exportPersonaJsonBtn = document.getElementById('exportPersonaJsonBtn');
-    if (exportPersonaJsonBtn) exportPersonaJsonBtn.addEventListener('click', () => exportKindJson('persona'));
-    const exportSqlTxtBtn = document.getElementById('exportSqlTxtBtn');
-    if (exportSqlTxtBtn) exportSqlTxtBtn.addEventListener('click', () => exportKindTxt('sql'));
-    const exportSqlJsonBtn = document.getElementById('exportSqlJsonBtn');
-    if (exportSqlJsonBtn) exportSqlJsonBtn.addEventListener('click', () => exportKindJson('sql'));
-    const exportCaseTxtBtn = document.getElementById('exportCaseTxtBtn');
-    if (exportCaseTxtBtn) exportCaseTxtBtn.addEventListener('click', () => exportKindTxt('case'));
-    const exportCaseJsonBtn = document.getElementById('exportCaseJsonBtn');
-    if (exportCaseJsonBtn) exportCaseJsonBtn.addEventListener('click', () => exportKindJson('case'));
     const collectPersonaCardBtn = document.getElementById('collectPersonaCardBtn');
     if (collectPersonaCardBtn) collectPersonaCardBtn.addEventListener('click', () => collectPersonaCardDraftFromWorkbench());
     const collectLanguageFingerprintBtn = document.getElementById('collectLanguageFingerprintBtn');
@@ -18971,7 +18123,7 @@
     const generateLanguageFingerprintBtn = document.getElementById('generateLanguageFingerprintBtn');
     if (generateLanguageFingerprintBtn) generateLanguageFingerprintBtn.addEventListener('click', () => generateLanguageFingerprintByAi());
 
-    ['persona', 'sql', 'case'].forEach(kind => loadPrompt(kind));
+    ['persona', 'sql'].forEach(kind => loadPrompt(kind));
     loadMainBotName();
     renderIdentityProfiles();
     bindPromptControls();
@@ -18988,8 +18140,6 @@
         hydrateGatePrivacyView('工作台账本已恢复').catch(() => {});
       }
     });
-    resetCasePromoteDraft('状态：待检查 CASE 升格输入');
-
     function renderGateStatus(text) {
       const el = document.getElementById('gateStatus');
       if (el) el.textContent = text;
