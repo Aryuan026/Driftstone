@@ -51,7 +51,7 @@ A Warm card is more than a bag of user facts.
 
 It is a portable memory unit shaped to preserve what may matter later: lived context, a bounded source trail, review state, and a readable memory fragment that can travel without pretending to be a complete private memory system.
 
-Driftstone currently stops at **portable Warm cards + source evidence + review/provenance data**. It does not emit Hippocove-compatible memory state, write a Cold tree, or act as a hidden second truth layer.
+Driftstone currently stops at **portable Warm cards + source evidence + review/provenance data**.
 
 ## What do you actually get?
 
