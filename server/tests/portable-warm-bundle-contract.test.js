@@ -6,6 +6,7 @@ import {
   BUNDLE_SCHEMA,
   buildPortableWarmLedgerId,
   buildPortableWarmBundleContractPacket,
+  normalizePortableWarmBundleForRead,
   validatePortableWarmBundle
 } from '../core/portable-warm-bundle-contract.js';
 
@@ -226,6 +227,16 @@ function buildValidBundle(overrides = {}) {
     },
     ...overrides
   });
+}
+
+function buildLegacy3bBundleWithHippocoveImportPolicy(overrides = {}) {
+  const bundle = buildValidBundle(overrides);
+  bundle.warm_cards[0].hippocove_import_policy = {
+    direct_write_allowed: false,
+    state: 'review_only',
+    reason: 'Synthetic legacy 3b optional downstream policy fixture.'
+  };
+  return sealBundle(bundle);
 }
 
 function buildLedgerRow({
@@ -533,6 +544,60 @@ test('public bundle rejects private cold-tree import policy fields after reseal'
 
   assert.equal(result.ok, false);
   assert.ok(result.errors.some((item) => item.path === 'warm_cards[0].hippocove_import_policy'));
+});
+
+test('read normalization accepts legacy 3b optional Hippocove policy without relaxing current v0 writes', () => {
+  const legacyBundle = buildLegacy3bBundleWithHippocoveImportPolicy();
+  const strict = validatePortableWarmBundle(legacyBundle);
+  assert.equal(strict.ok, false);
+  assert.ok(strict.errors.some((item) => item.path === 'warm_cards[0].hippocove_import_policy'));
+
+  const normalized = normalizePortableWarmBundleForRead(legacyBundle);
+  assert.equal(normalized.ok, true);
+  assert.equal(normalized.read_compatibility.mode, 'legacy_v0_read_only_compat');
+  assert.equal(
+    normalized.read_compatibility.public_driftstone_version,
+    '3b8ace5b9f098a891889fec3cd3bb7a817daf8be'
+  );
+  assert.deepEqual(normalized.read_compatibility.stripped_fields, [
+    {
+      path: 'warm_cards[0].hippocove_import_policy',
+      field: 'hippocove_import_policy'
+    }
+  ]);
+  assert.equal(JSON.stringify(normalized.bundle).includes('hippocove_import_policy'), false);
+  assert.equal(validatePortableWarmBundle(normalized.bundle).ok, true);
+});
+
+test('legacy read normalization does not bless Hippocove direct-write authority', () => {
+  const legacyBundle = buildLegacy3bBundleWithHippocoveImportPolicy();
+  legacyBundle.warm_cards[0].hippocove_import_policy.direct_write_allowed = true;
+  const resealed = sealBundle(legacyBundle);
+
+  const normalized = normalizePortableWarmBundleForRead(resealed);
+  assert.equal(normalized.ok, false);
+  assert.equal(normalized.read_compatibility.mode, 'legacy_v0_read_only_compat');
+  assert.ok(
+    normalized.validation.errors.some((item) => item.path === 'warm_cards[0].hippocove_import_policy.direct_write_allowed')
+  );
+});
+
+test('legacy read normalization requires the original legacy bundle to be sealed except for the compat field', () => {
+  const unsealedInjection = buildValidBundle();
+  unsealedInjection.warm_cards[0].hippocove_import_policy = {
+    direct_write_allowed: false,
+    state: 'review_only',
+    reason: 'Unsealed synthetic injection must not become legacy compatibility.'
+  };
+
+  const strict = validatePortableWarmBundle(unsealedInjection);
+  assert.equal(strict.ok, false);
+  assert.ok(strict.errors.some((item) => item.path === 'manifest.manifest_digest'));
+
+  const normalized = normalizePortableWarmBundleForRead(unsealedInjection);
+  assert.equal(normalized.ok, false);
+  assert.equal(normalized.read_compatibility.mode, 'legacy_v0_rejected_non_compat_errors');
+  assert.ok(normalized.validation.errors.some((item) => item.path === 'manifest.manifest_digest'));
 });
 
 test('public bundle requires canonical conservation counts after reseal', () => {

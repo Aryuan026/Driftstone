@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -43,6 +44,44 @@ function buildGrowthDraftArtifact({ sourceFile = '/tmp/projection-source.json' }
       }
     }
   };
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+function sha256(value) {
+  return `sha256:${createHash('sha256').update(String(value || '')).digest('hex')}`;
+}
+
+function digestObject(value) {
+  return sha256(stableJson(value));
+}
+
+function resealManifest(bundle = {}) {
+  const sealed = JSON.parse(JSON.stringify(bundle));
+  sealed.manifest.manifest_digest = digestObject({
+    ...sealed,
+    manifest: {
+      ...sealed.manifest,
+      manifest_digest: ''
+    }
+  });
+  return sealed;
+}
+
+function addLegacy3bHippocoveImportPolicy(bundle = {}) {
+  const next = JSON.parse(JSON.stringify(bundle));
+  next.warm_cards[0].hippocove_import_policy = {
+    direct_write_allowed: false,
+    state: 'review_only',
+    reason: 'Synthetic legacy 3b optional downstream policy fixture.'
+  };
+  return resealManifest(next);
 }
 
 test('projection exporter writes local markdown, obsidian, and notion-ready files', async () => {
@@ -126,6 +165,38 @@ test('projection exporter blocks invalid bundles before writing projection files
 
     assert.equal(result.ok, false);
     assert.equal(result.projection_status, 'blocked_by_contract_errors');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('projection exporter strips legacy 3b Hippocove policy for read-only migration view', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'driftstone-projection-legacy-3b-'));
+  try {
+    const bundle = addLegacy3bHippocoveImportPolicy(buildPortableWarmBundle({
+      scope: {
+        owner_id: 'owner',
+        realm_id: 'realm'
+      },
+      generatedAt: '2026-08-15T00:00:00.000Z',
+      growthDraftArtifacts: [buildGrowthDraftArtifact()]
+    }));
+    const bundlePath = join(dir, 'portable_warm_bundle.json');
+    await writeFile(bundlePath, `${JSON.stringify(bundle, null, 2)}\n`, 'utf8');
+
+    const result = await exportPortableWarmProjection({
+      bundlePath,
+      outputRoot: join(dir, 'projection-output')
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.projection_status, 'projection_written');
+    assert.equal(result.validation.read_compatibility.mode, 'legacy_v0_read_only_compat');
+    const warmRows = await readFile(result.output.files.notion_warm_cards_jsonl, 'utf8');
+    const manifest = await readFile(result.output.files.projection_manifest_json, 'utf8');
+    const projectedText = `${warmRows}\n${manifest}`;
+    assert.equal(projectedText.includes('hippocove_import_policy'), false);
+    assert.equal(projectedText.includes('Synthetic legacy 3b optional downstream policy fixture.'), false);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

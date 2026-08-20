@@ -208,6 +208,11 @@ const REQUIRED_COUNT_PATHS = [
 
 const MAX_REF_STRING_LENGTH = 512;
 const SHA256_DIGEST_RE = /^sha256:[a-f0-9]{64}$/;
+const LEGACY_3B_COMPATIBILITY = {
+  mode: 'legacy_v0_read_only_compat',
+  public_driftstone_version: '3b8ace5b9f098a891889fec3cd3bb7a817daf8be',
+  stripped_field: 'hippocove_import_policy'
+};
 
 function safeText(value, fallback = '') {
   const text = String(value || '').trim();
@@ -236,6 +241,10 @@ function shortHash(value, length = 16) {
 
 function digestObject(value) {
   return sha256(stableJson(value));
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value ?? null));
 }
 
 export function buildPortableWarmLedgerId({
@@ -482,6 +491,131 @@ function validateWarmCard(card, index, errors, warnings) {
       message: 'frontend_delivery_tier is recommended so projections do not treat stable archive as default frontend recall.'
     });
   }
+}
+
+function stripLegacyReadOnlyCompatibilityFields(bundle = {}) {
+  const normalizedBundle = cloneJson(bundle);
+  const errors = [];
+  const strippedFields = [];
+  (Array.isArray(normalizedBundle?.warm_cards) ? normalizedBundle.warm_cards : []).forEach((card, index) => {
+    if (!isPlainObject(card) || !Object.prototype.hasOwnProperty.call(card, 'hippocove_import_policy')) return;
+    const path = `warm_cards[${index}].hippocove_import_policy`;
+    const policy = card.hippocove_import_policy;
+    validateRequiredObject(policy, path, errors);
+    validateAllowedKeys(policy, KEYSETS.import_policy, path, errors);
+    validateRequiredKeys(policy, REQUIRED_KEYS.import_policy, path, errors);
+    validateBooleanField(policy, 'direct_write_allowed', path, errors, false);
+    validateStringField(policy, 'state', path, errors);
+    validateStringField(policy, 'reason', path, errors);
+    strippedFields.push({
+      path,
+      field: LEGACY_3B_COMPATIBILITY.stripped_field
+    });
+    delete card.hippocove_import_policy;
+  });
+  return { bundle: normalizedBundle, errors, strippedFields };
+}
+
+function withRecomputedManifestDigest(bundle = {}) {
+  const next = cloneJson(bundle);
+  if (isPlainObject(next?.manifest)) {
+    next.manifest.manifest_digest = digestObject({
+      ...next,
+      manifest: {
+        ...next.manifest,
+        manifest_digest: ''
+      }
+    });
+  }
+  return next;
+}
+
+export function normalizePortableWarmBundleForRead(bundle = {}) {
+  const strictValidation = validatePortableWarmBundle(bundle);
+  if (strictValidation.ok) {
+    const readCompatibility = {
+      mode: 'current_contract',
+      stripped_fields: []
+    };
+    return {
+      ok: true,
+      bundle,
+      validation: {
+        ...strictValidation,
+        read_compatibility: readCompatibility
+      },
+      read_compatibility: readCompatibility
+    };
+  }
+
+  const legacy = stripLegacyReadOnlyCompatibilityFields(bundle);
+  if (!legacy.strippedFields.length) {
+    const readCompatibility = {
+      mode: 'strict_rejected',
+      stripped_fields: []
+    };
+    return {
+      ok: false,
+      bundle,
+      validation: {
+        ...strictValidation,
+        read_compatibility: readCompatibility
+      },
+      read_compatibility: readCompatibility
+    };
+  }
+
+  const strippedFieldPaths = new Set(legacy.strippedFields.map((item) => item.path));
+  const nonCompatibilityErrors = strictValidation.errors.filter((error) => !strippedFieldPaths.has(error.path));
+  const readCompatibility = {
+    ...LEGACY_3B_COMPATIBILITY,
+    disposition: 'stripped_before_read_only_inspection_or_projection',
+    current_write_contract: 'rejected_by_validatePortableWarmBundle',
+    original_manifest_digest: safeText(bundle?.manifest?.manifest_digest),
+    stripped_fields: legacy.strippedFields
+  };
+  if (nonCompatibilityErrors.length) {
+    return {
+      ok: false,
+      bundle,
+      validation: {
+        ...strictValidation,
+        read_compatibility: {
+          ...readCompatibility,
+          mode: 'legacy_v0_rejected_non_compat_errors'
+        }
+      },
+      read_compatibility: {
+        ...readCompatibility,
+        mode: 'legacy_v0_rejected_non_compat_errors'
+      }
+    };
+  }
+  if (legacy.errors.length) {
+    return {
+      ok: false,
+      bundle: legacy.bundle,
+      validation: {
+        ...strictValidation,
+        errors: [...strictValidation.errors, ...legacy.errors],
+        read_compatibility: readCompatibility
+      },
+      read_compatibility: readCompatibility
+    };
+  }
+
+  const normalizedBundle = withRecomputedManifestDigest(legacy.bundle);
+  readCompatibility.normalized_manifest_digest = safeText(normalizedBundle?.manifest?.manifest_digest);
+  const normalizedValidation = validatePortableWarmBundle(normalizedBundle);
+  return {
+    ok: normalizedValidation.ok,
+    bundle: normalizedBundle,
+    validation: {
+      ...normalizedValidation,
+      read_compatibility: readCompatibility
+    },
+    read_compatibility: readCompatibility
+  };
 }
 
 function validateSourceOccurrence(item, index, errors) {

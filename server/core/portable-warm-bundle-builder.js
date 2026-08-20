@@ -1,7 +1,12 @@
 import { createHash } from 'crypto';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { isAbsolute, join, resolve } from 'path';
-import { BUNDLE_SCHEMA, buildPortableWarmLedgerId, validatePortableWarmBundle } from './portable-warm-bundle-contract.js';
+import {
+  BUNDLE_SCHEMA,
+  buildPortableWarmLedgerId,
+  normalizePortableWarmBundleForRead,
+  validatePortableWarmBundle
+} from './portable-warm-bundle-contract.js';
 import { buildGrowthLogicalCandidateId, getGrowthDraftArtifact, listGrowthDraftArtifacts } from './growth-draft-store.js';
 import { PROJECT_ROOT, safeScopeSegment } from './path-config.js';
 import { loadLatestRuntimeReviewedPacket } from './runtime-reviewed-store.js';
@@ -620,12 +625,14 @@ function countBoundedSourceSpans(bundle = {}) {
 }
 
 function buildBundleInspection({ bundle = {}, bundleFile = '', sampleLimit = 5 } = {}) {
-  const validation = validatePortableWarmBundle(bundle);
-  const rejectedRows = Array.isArray(bundle.rejected_ledger) ? bundle.rejected_ledger : [];
-  const holdRows = Array.isArray(bundle.hold_ledger) ? bundle.hold_ledger : [];
-  const missingSourceRefCards = countCardsWithMissingSourceRefs(bundle);
-  const boundedSourceSpans = countBoundedSourceSpans(bundle);
-  const acceptedRows = Array.isArray(bundle.warm_cards) ? bundle.warm_cards.length : 0;
+  const normalized = normalizePortableWarmBundleForRead(bundle);
+  const readBundle = normalized.bundle || bundle;
+  const validation = normalized.validation;
+  const rejectedRows = Array.isArray(readBundle.rejected_ledger) ? readBundle.rejected_ledger : [];
+  const holdRows = Array.isArray(readBundle.hold_ledger) ? readBundle.hold_ledger : [];
+  const missingSourceRefCards = countCardsWithMissingSourceRefs(readBundle);
+  const boundedSourceSpans = countBoundedSourceSpans(readBundle);
+  const acceptedRows = Array.isArray(readBundle.warm_cards) ? readBundle.warm_cards.length : 0;
   const ledgerCount = rejectedRows.length + holdRows.length;
   const artifactStatus = validation.ok
     ? (acceptedRows || ledgerCount ? 'valid_bundle' : 'valid_empty_bundle')
@@ -644,17 +651,18 @@ function buildBundleInspection({ bundle = {}, bundleFile = '', sampleLimit = 5 }
     artifact_status: artifactStatus,
     projection_readiness: projectionReadiness,
     validation,
-    manifest: bundle?.manifest || {},
+    read_compatibility: validation.read_compatibility,
+    manifest: readBundle?.manifest || {},
     counts: {
       ...validation.counts,
-      input_rows: Number(bundle?.conservation?.input_rows || 0),
+      input_rows: Number(readBundle?.conservation?.input_rows || 0),
       accepted_rows: acceptedRows,
       rejected_rows: rejectedRows.length,
       hold_rows: holdRows.length
     },
     source_reliability: {
       bounded_source_spans: boundedSourceSpans,
-      source_spans: Array.isArray(bundle.source_spans) ? bundle.source_spans.length : 0,
+      source_spans: Array.isArray(readBundle.source_spans) ? readBundle.source_spans.length : 0,
       warm_cards_missing_source_refs: missingSourceRefCards,
       source_complete: validation.ok && missingSourceRefCards === 0
     },

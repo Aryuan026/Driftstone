@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { tmpdir } from 'os';
-import { BUNDLE_SCHEMA, validatePortableWarmBundle } from './portable-warm-bundle-contract.js';
+import { BUNDLE_SCHEMA, normalizePortableWarmBundleForRead } from './portable-warm-bundle-contract.js';
 import { PROJECT_ROOT, safeScopeSegment } from './path-config.js';
 
 const PROJECTION_SCHEMA = 'driftstone_portable_warm_projection_v0';
@@ -579,8 +579,9 @@ export async function exportPortableWarmProjection({
     };
   }
 
-  const validation = validatePortableWarmBundle(bundle);
-  if (!validation.ok || bundle.schema !== BUNDLE_SCHEMA) {
+  const normalized = normalizePortableWarmBundleForRead(bundle);
+  const validation = normalized.validation;
+  if (!normalized.ok || normalized.bundle?.schema !== BUNDLE_SCHEMA) {
     return {
       ok: false,
       schema: 'driftstone_portable_warm_projection_export_v0',
@@ -589,6 +590,7 @@ export async function exportPortableWarmProjection({
       validation
     };
   }
+  bundle = normalized.bundle;
 
   const scope = bundle?.manifest?.scope || {};
   let root;
