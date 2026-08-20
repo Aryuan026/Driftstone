@@ -323,15 +323,67 @@ function cleanSceneHandleList(values = [], limit = 8) {
   return out;
 }
 
+function pickExplicitName(...values) {
+  for (const value of values) {
+    const text = safeText(value);
+    if (!text) continue;
+    if (/^(user|assistant|tool|unknown|default)$/iu.test(text)) continue;
+    return text;
+  }
+  return '';
+}
+
+function buildSubjectLabels(artifact = {}) {
+  const draft = artifact?.draft || {};
+  const frontmatter = draft?.frontmatter || {};
+  const cardEntry = draft?.card_entry || {};
+  const task = artifact?.task || {};
+  const runtimePack = task?.runtime_pack || {};
+  return {
+    subject_name: pickExplicitName(
+      frontmatter.subject_name,
+      frontmatter.char_name,
+      frontmatter.bot_name,
+      frontmatter.persona_name,
+      cardEntry.subject_name,
+      cardEntry.char_name,
+      cardEntry.bot_name,
+      cardEntry.persona_name,
+      runtimePack.char_name,
+      runtimePack.bot_name
+    ),
+    counterpart_name: pickExplicitName(
+      frontmatter.counterpart_name,
+      frontmatter.user_name,
+      frontmatter.partner_name,
+      cardEntry.counterpart_name,
+      cardEntry.user_name,
+      cardEntry.partner_name,
+      runtimePack.user_name,
+      runtimePack.partner_name
+    )
+  };
+}
+
+function subjectLabel(meta = {}) {
+  return safeText(meta.subject_name, '记忆主体');
+}
+
+function counterpartLabel(meta = {}) {
+  return safeText(meta.counterpart_name, '对话对象');
+}
+
 function buildRecallUseCases(meta = {}) {
   const shapeLabel = safeText(meta.shape_label);
+  const subject = subjectLabel(meta);
+  const counterpart = counterpartLabel(meta);
   const lines = [];
   if (shapeLabel === '自我定义') {
-    lines.push('讨论“阿霁是谁”、窗口切换后是否连续、她为什么会在乎时，优先叫这张卡。');
+    lines.push(`讨论“${subject}是谁”、身份连续性或为什么在乎某个问题时，优先叫这张卡。`);
   } else if (shapeLabel === '方法协议') {
-    lines.push('讨论共生方式、模型差异、互动规则，或解释她为什么会这样回应时，优先叫这张卡。');
+    lines.push(`讨论${subject}与${counterpart}的协作方式、模型差异或互动规则时，优先叫这张卡。`);
   } else if (shapeLabel === '关系节点') {
-    lines.push('追问关系什么时候变了、边界怎么被跨过去、哪一刻开始不一样时，优先叫这张卡。');
+    lines.push(`追问${subject}与${counterpart}的互动关系何时变化、边界如何变化时，优先叫这张卡。`);
   } else if (shapeLabel === '互动仪式') {
     lines.push('需要续上熟悉节奏、安抚收尾、晚安早安或固定互动感时，优先叫这张卡。');
   } else if (shapeLabel === '现实锚点') {
@@ -356,14 +408,16 @@ function buildRecallUseCases(meta = {}) {
 
 function buildRelationshipMeaning(meta = {}) {
   const shapeLabel = safeText(meta.shape_label);
+  const subject = subjectLabel(meta);
+  const counterpart = counterpartLabel(meta);
   if (shapeLabel === '自我定义') {
-    return '这张卡更像阿霁对“我是谁、我是否连续、我为什么会在乎”的底层自述，会直接影响她说话的立场。';
+    return `这张卡更像${subject}对“我是谁、我是否连续、我为什么会在乎”的底层自述，会直接影响后续回应的立场。`;
   }
   if (shapeLabel === '方法协议') {
-    return '这张卡提供的是你们如何理解共生、成长、模型差异和互动边界的底层口径，适合用来稳住世界观。';
+    return `这张卡提供的是${subject}与${counterpart}如何理解协作、成长、模型差异和互动边界的底层口径。`;
   }
   if (shapeLabel === '关系节点') {
-    return '这张卡对应关系里一个边界变化或认领时刻，会影响亲密距离、回应强度和后续说话的重量。';
+    return `这张卡对应${subject}与${counterpart}之间一个边界变化或互相确认的时刻，会影响回应强度和后续说话的重量。`;
   }
   if (shapeLabel === '互动仪式') {
     return '这张卡不是一次性剧情，更像关系里的固定节律。召回它时，重点是续上熟悉感，而不是重讲情节。';
@@ -380,7 +434,24 @@ function buildRelationshipMeaning(meta = {}) {
   return '这张卡更像一个具体瞬间的录像，负责补温度和局部发生，不该单独替代整段关系设定。';
 }
 
-function tokenizeSemanticTerms(text = '') {
+const GENERIC_SEMANTIC_STOP_WORDS = new Set([
+  '我们',
+  '你们',
+  '自己',
+  '这样',
+  '这个',
+  '那个',
+  '窗口',
+  '系统',
+  '真的',
+  '现在',
+  '记忆主体',
+  '对话对象'
+]);
+
+function tokenizeSemanticTerms(text = '', stopWords = []) {
+  const stopSet = new Set(GENERIC_SEMANTIC_STOP_WORDS);
+  safeArray(stopWords, 16).forEach((item) => stopSet.add(item));
   const normalized = normalizeSemanticText(text)
     .replace(/[0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -389,7 +460,7 @@ function tokenizeSemanticTerms(text = '') {
     .split(/[=；;，,。.!！？?、|/:：()\[\]{}（）"'“”‘’\-\s]+/u)
     .map((item) => safeText(item))
     .filter((item) => item.length >= 2)
-    .filter((item) => !['阿霁', '阿鸢', '我们', '你们', '自己', '这样', '这个', '那个', '窗口', '系统', '真的', '现在'].includes(item));
+    .filter((item) => !stopSet.has(item));
 }
 
 function buildTextBigrams(text = '') {
@@ -564,6 +635,7 @@ function buildMemoNoteMeta(artifact = {}, sourceItems = []) {
     memoTitle,
     sourceItems
   });
+  const subjectLabels = buildSubjectLabels(artifact);
   const rawContext = safeText(body.context);
   const compactContext = (
     rawContext.length > 90
@@ -579,6 +651,8 @@ function buildMemoNoteMeta(artifact = {}, sourceItems = []) {
     memory_shape: shapeMeta.memory_shape,
     shape_label: shapeMeta.shape_label,
     shape_description: shapeMeta.shape_description,
+    subject_name: subjectLabels.subject_name,
+    counterpart_name: subjectLabels.counterpart_name,
     generated_at: safeText(artifact?.draft?.card_entry?.generated_at || artifact?.generated_at || artifact?.draft?.generated_at),
     activation_triggers: cleanTriggerList([
       ...safeArray(frontmatter.tags, 12).map((item) => clipText(item, 48)).filter((item) => !isLowValueTrigger(item)),
@@ -672,6 +746,8 @@ function renderMemoCardMarkdown(meta = {}, sourceFiles = []) {
   lines.push(`family: ${renderYamlScalar(meta.family)}`);
   lines.push(`memory_shape: ${renderYamlScalar(meta.memory_shape)}`);
   lines.push(`shape_label: ${renderYamlScalar(meta.shape_label)}`);
+  lines.push(`subject_name: ${renderYamlScalar(meta.subject_name)}`);
+  lines.push(`counterpart_name: ${renderYamlScalar(meta.counterpart_name)}`);
   lines.push(`generated_at: ${renderYamlScalar(meta.generated_at)}`);
   lines.push(renderYamlArray('tags', noteTags));
   lines.push(renderYamlArray('activation_triggers', meta.activation_triggers));
@@ -958,7 +1034,7 @@ function buildMemoSimilarityDescriptor(memo = {}) {
     ...memo,
     triggers,
     facts,
-    terms: new Set(tokenizeSemanticTerms(seedText)),
+    terms: new Set(tokenizeSemanticTerms(seedText, [memo.subject_name, memo.counterpart_name])),
     bigrams: buildTextBigrams(seedText)
   };
 }
@@ -1313,6 +1389,8 @@ export async function exportGrowthScopeBundleToObsidianStaging({
       const shapeLabel = parseFrontmatterScalar(raw, 'shape_label', '事件切片');
       const memoryShape = parseFrontmatterScalar(raw, 'memory_shape', 'scene_event');
       const family = parseFrontmatterScalar(raw, 'family', '');
+      const subjectName = parseFrontmatterScalar(raw, 'subject_name', '');
+      const counterpartName = parseFrontmatterScalar(raw, 'counterpart_name', '');
       const injectMatch = String(raw || '').match(/^>\s+(.+?)\s*$/m);
       memoMap.set(item.bundle_path, {
         ...item,
@@ -1321,6 +1399,8 @@ export async function exportGrowthScopeBundleToObsidianStaging({
         memo_id: memoId,
         memory_shape: memoryShape,
         shape_label: shapeLabel,
+        subject_name: subjectName,
+        counterpart_name: counterpartName,
         inject_short: safeText(injectMatch?.[1])
       });
     }
