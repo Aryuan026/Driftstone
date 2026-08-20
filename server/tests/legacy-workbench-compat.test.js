@@ -88,6 +88,19 @@ function legacySourceRoleHarness() {
   return context;
 }
 
+function legacySqlPromptHarness() {
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext(
+    [
+      extractFunction(legacyHtml, 'buildSqlSystemPrompt'),
+      'globalThis.buildSqlSystemPrompt = buildSqlSystemPrompt;'
+    ].join('\n'),
+    context
+  );
+  return context;
+}
+
 test('legacy workbench visible buttons are uniquely identified and wired', () => {
   const staticButtons = [...legacyHtml.matchAll(/<button\b[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/button>/g)]
     .map((match) => ({
@@ -218,6 +231,16 @@ test('legacy SQL source lineage requires the exact primary speaker instead of an
   assert.equal(exactUser.ok, true);
   assert.equal(exactUser.status, 'source_role_lineage_exact');
   assert.equal(exactUser.primary_source_role, 'user');
+});
+
+test('legacy SQL prompt requires every semantic claim to mirror its exact source messages', () => {
+  const { buildSqlSystemPrompt } = legacySqlPromptHarness();
+  const prompt = buildSqlSystemPrompt('BASE PROMPT');
+  assert.match(prompt, /`source_ref` 不是“主要出处”，而是这条 fact 的完整证据清单/);
+  assert.match(prompt, /fact_value、note、recurrence_rule、因果、状态变化或结果/);
+  assert.match(prompt, /多条引用用 ` \| ` 分隔/);
+  assert.match(prompt, /同一 chunk 不能替代逐条来源/);
+  assert.match(prompt, /不能挂到更早消息的 source_ref 上/);
 });
 
 test('legacy SQL source lineage fails closed on incomplete or ambiguous physical census', () => {

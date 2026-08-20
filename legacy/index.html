@@ -7605,7 +7605,10 @@
         '## Source subject role（必填）',
         '每条 SQL fact 必须增加 `source_subject_role`，且只能是 `user`、`assistant`、`other`。',
         '`user` 表示事实主体是人类说话者；`assistant` 表示事实主体是 AI 说话者；`other` 只用于两者都不是的明确第三方、事物、时间、事件或规则。',
-        '该字段必须与 anchor_name、fact_key、entity_refs 一致；无法确定时不要输出该 fact。不要把另一位说话者的总结当作主体原话，也不要改指向邻接消息。'
+        '该字段必须与 anchor_name、fact_key、entity_refs 一致；无法确定时不要输出该 fact。不要把另一位说话者的总结当作主体原话，也不要改指向邻接消息。',
+        '## Source evidence coverage（必填）',
+        '`source_ref` 不是“主要出处”，而是这条 fact 的完整证据清单。fact_value、note、recurrence_rule、因果、状态变化或结果里用到哪条消息，就必须把那条 exact `window_*_msg_*` 引用写入 `source_ref`；多条引用用 ` | ` 分隔。',
+        '同一 chunk 不能替代逐条来源。后续消息里的修正、放弃、转变或结论，不能挂到更早消息的 source_ref 上；应补入后续 exact source_ref，或拆成另一条 fact。若无法让整条事实被所列消息完整支持，就不要输出该 fact。'
       ].filter(Boolean).join('\n\n');
     }
 

@@ -138,6 +138,14 @@ resolved also stay on HOLD; the legacy non-speaker path remains available only
 when the producer explicitly classifies the subject as `other` without
 conflicting with its anchor or entity aliases.
 
+The SQL producer contract also treats `source_ref` as the complete evidence
+set, not a representative citation. Every message used for a value, note,
+causal claim, state change, correction, or outcome must be listed explicitly;
+sharing a prepared chunk does not let a later statement inherit an earlier
+message's lineage. This strengthens new extraction behavior but does not
+retroactively certify old artifacts: semantic support still requires review,
+and source-weak historical rows remain reconciliation candidates.
+
 The front UI reads the existing shared persona workspace instead of creating a
 second identity store. If that workspace is empty or partial, Driftstone still
 allows source preparation, but persona/voice-dependent Warm-card growth stays
