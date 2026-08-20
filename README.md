@@ -127,6 +127,17 @@ The current human workflow is:
 
 If your input is a large ChatGPT `conversations.json`, the current build still uses the legacy lab's conversation exporter for preprocessing. The newer front UI is better suited to already prepared text, Markdown, or Driftstone source packages until the final UI cleanup lands.
 
+For structured ChatGPT JSON, the legacy SQL pass now checks a body-free census
+of message coordinates and speaker roles before a user- or assistant-owned fact
+can join card aggregation. A model-generated summary from the other speaker is
+not silently shifted to an adjacent message: missing, ambiguous, duplicate, or
+role-mismatched lineage stays in a local HOLD count. Existing exports are not
+rewritten; older artifacts without this census remain unverified when a later
+consumer requires exact speaker lineage. SQL facts whose subject cannot be
+resolved also stay on HOLD; the legacy non-speaker path remains available only
+when the producer explicitly classifies the subject as `other` without
+conflicting with its anchor or entity aliases.
+
 The front UI reads the existing shared persona workspace instead of creating a
 second identity store. If that workspace is empty or partial, Driftstone still
 allows source preparation, but persona/voice-dependent Warm-card growth stays

@@ -12,7 +12,19 @@ const legacyHtml = readFileSync(join(repoRoot, 'legacy', 'index.html'), 'utf8');
 function extractFunction(source, name) {
   const start = source.indexOf(`function ${name}`);
   assert.notEqual(start, -1, `${name} should exist`);
-  const braceStart = source.indexOf('{', start);
+  const argsStart = source.indexOf('(', start);
+  let argsDepth = 0;
+  let argsEnd = -1;
+  for (let index = argsStart; index < source.length; index += 1) {
+    const ch = source[index];
+    if (ch === '(') argsDepth += 1;
+    if (ch === ')') argsDepth -= 1;
+    if (argsDepth === 0) {
+      argsEnd = index;
+      break;
+    }
+  }
+  const braceStart = source.indexOf('{', argsEnd);
   assert.notEqual(braceStart, -1, `${name} should have a body`);
   let depth = 0;
   for (let index = braceStart; index < source.length; index += 1) {
@@ -33,6 +45,43 @@ function legacyCsvHarness() {
       extractFunction(legacyHtml, 'parseCsvObjects'),
       'globalThis.parseCsvRows = parseCsvRows;',
       'globalThis.parseCsvObjects = parseCsvObjects;'
+    ].join('\n'),
+    context
+  );
+  return context;
+}
+
+function legacySourceRoleHarness() {
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext(
+    [
+      'globalThis.parseFlexibleTimestamp = (value) => Number(value) || 0;',
+      'globalThis.normalizeTimestamp = (value) => Number(value) || 0;',
+      "globalThis.formatDate = () => '2025-02-01';",
+      "globalThis.buildMergedSourceBundleMeta = () => ({ source_bundle_id: 'src.synthetic', source_md_ref: 'synthetic.md', source_manifest_kind: 'merged_bundle' });",
+      "globalThis.buildSourceBundleId = (month) => `src.${month}.bundle`;",
+      "globalThis.buildSourceBundleBaseName = (month) => `memsrc_${month}`;",
+      extractFunction(legacyHtml, 'extractOpenAIContent'),
+      extractFunction(legacyHtml, 'normalizeSourceMessageRole'),
+      extractFunction(legacyHtml, 'normalizeBodyFreeSourceId'),
+      extractFunction(legacyHtml, 'normalizePositiveSourceMsgIndex'),
+      extractFunction(legacyHtml, 'normalizeMessage'),
+      extractFunction(legacyHtml, 'buildSourceMessageRoleCensus'),
+      extractFunction(legacyHtml, 'inferSqlSourceSubjectRole'),
+      extractFunction(legacyHtml, 'parseSourceRoleRef'),
+      extractFunction(legacyHtml, 'projectSqlSourceRoleLineage'),
+      extractFunction(legacyHtml, 'partitionSqlFactsBySourceRoleLineage'),
+      extractFunction(legacyHtml, 'buildMergedTimelineConversation'),
+      extractFunction(legacyHtml, 'buildMonthlyNodeConversations'),
+      extractFunction(legacyHtml, 'buildSelectedJsonPayload'),
+      'globalThis.normalizeMessage = normalizeMessage;',
+      'globalThis.buildSourceMessageRoleCensus = buildSourceMessageRoleCensus;',
+      'globalThis.projectSqlSourceRoleLineage = projectSqlSourceRoleLineage;',
+      'globalThis.partitionSqlFactsBySourceRoleLineage = partitionSqlFactsBySourceRoleLineage;',
+      'globalThis.buildMergedTimelineConversation = buildMergedTimelineConversation;',
+      'globalThis.buildMonthlyNodeConversations = buildMonthlyNodeConversations;',
+      'globalThis.buildSelectedJsonPayload = buildSelectedJsonPayload;'
     ].join('\n'),
     context
   );
@@ -128,4 +177,241 @@ test('legacy workbench CSV import fails closed on malformed input', () => {
     () => parseCsvObjects('layer,title\npersona,a,b\n'),
     /字段数不一致/
   );
+});
+
+test('legacy SQL source lineage requires the exact primary speaker instead of an adjacent message', () => {
+  const { buildSourceMessageRoleCensus, projectSqlSourceRoleLineage } = legacySourceRoleHarness();
+  const census = buildSourceMessageRoleCensus([
+    { role: 'user', content: 'private user text', source_window_id: 'window-a', source_msg_index: 11 },
+    { role: 'assistant', content: 'private assistant text', source_window_id: 'window-a', source_msg_index: 12 }
+  ]);
+  assert.equal(census.observation_complete, true);
+  assert.equal(JSON.stringify(census).includes('private user text'), false);
+
+  const assistantSummary = projectSqlSourceRoleLineage({
+    record: {
+      fact_id: 'fact-user-preference',
+      fact_key: 'user_prefers_exact_receipts',
+      anchor_name: 'A-Yuan',
+      source_window_id: 'window-a',
+      source_msg_start: 11,
+      source_msg_end: 12
+    },
+    declared_source_ref: 'window_20250201_msg_012'
+  }, census, { user_name: 'A-Yuan', bot_name: 'Companion' });
+  assert.equal(assistantSummary.ok, false);
+  assert.equal(assistantSummary.status, 'source_primary_role_mismatch');
+  assert.equal(assistantSummary.primary_source_role, 'assistant');
+  assert.equal(assistantSummary.body_included, false);
+
+  const exactUser = projectSqlSourceRoleLineage({
+    record: {
+      fact_id: 'fact-user-preference',
+      fact_key: 'user_prefers_exact_receipts',
+      anchor_name: 'A-Yuan',
+      source_window_id: 'window-a',
+      source_msg_start: 11,
+      source_msg_end: 12
+    },
+    declared_source_ref: 'window_20250201_msg_011 | window_20250201_msg_012'
+  }, census, { user_name: 'A-Yuan', bot_name: 'Companion' });
+  assert.equal(exactUser.ok, true);
+  assert.equal(exactUser.status, 'source_role_lineage_exact');
+  assert.equal(exactUser.primary_source_role, 'user');
+});
+
+test('legacy SQL source lineage fails closed on incomplete or ambiguous physical census', () => {
+  const { buildSourceMessageRoleCensus, projectSqlSourceRoleLineage } = legacySourceRoleHarness();
+  const candidate = {
+    record: {
+      fact_id: 'fact-user-preference',
+      fact_key: 'user_prefers_exact_receipts',
+      anchor_name: 'A-Yuan',
+      source_window_id: 'window-a',
+      source_msg_start: 11,
+      source_msg_end: 11
+    },
+    declared_source_ref: 'window_20250201_msg_011'
+  };
+  const missing = buildSourceMessageRoleCensus([
+    { role: 'user', source_window_id: 'window-a' }
+  ]);
+  assert.equal(missing.observation_complete, false);
+  assert.equal(projectSqlSourceRoleLineage(candidate, missing, {
+    user_name: 'A-Yuan', bot_name: 'Companion'
+  }).status, 'source_role_census_incomplete');
+
+  const duplicate = buildSourceMessageRoleCensus([
+    { role: 'user', source_window_id: 'window-a', source_msg_index: 11 },
+    { role: 'assistant', source_window_id: 'window-a', source_msg_index: 11 }
+  ]);
+  assert.equal(duplicate.observation_complete, false);
+  assert.equal(duplicate.duplicate_count, 1);
+  const repeated = buildSourceMessageRoleCensus([
+    { role: 'user', source_window_id: 'window-a', source_msg_index: 11 },
+    { role: 'user', source_window_id: 'window-a', source_msg_index: 11 }
+  ]);
+  assert.equal(repeated.observation_complete, false);
+  assert.equal(repeated.duplicate_count, 1);
+
+  const multiWindow = buildSourceMessageRoleCensus([
+    { role: 'user', source_window_id: 'window-a', source_msg_index: 11 },
+    { role: 'user', source_window_id: 'window-b', source_msg_index: 11 }
+  ]);
+  const noWindowCandidate = {
+    record: { ...candidate.record, source_window_id: '' },
+    declared_source_ref: candidate.declared_source_ref
+  };
+  assert.equal(projectSqlSourceRoleLineage(noWindowCandidate, multiWindow, {
+    user_name: 'A-Yuan', bot_name: 'Companion'
+  }).status, 'source_window_ambiguous');
+});
+
+test('legacy SQL source lineage holds invalid facts before card aggregation', () => {
+  const { buildSourceMessageRoleCensus, partitionSqlFactsBySourceRoleLineage } = legacySourceRoleHarness();
+  const census = buildSourceMessageRoleCensus([
+    { role: 'user', source_window_id: 'window-a', source_msg_index: 11 },
+    { role: 'assistant', source_window_id: 'window-a', source_msg_index: 12 }
+  ]);
+  const base = {
+    fact_key: 'user_prefers_exact_receipts',
+    anchor_name: 'A-Yuan',
+    source_window_id: 'window-a',
+    source_msg_start: 11,
+    source_msg_end: 12
+  };
+  const partition = partitionSqlFactsBySourceRoleLineage([
+    { record: { ...base, fact_id: 'fact-valid' }, declared_source_ref: 'window_20250201_msg_011' },
+    { record: { ...base, fact_id: 'fact-invalid' }, declared_source_ref: 'window_20250201_msg_012' }
+  ], census, { user_name: 'A-Yuan', bot_name: 'Companion' });
+  assert.deepEqual(Array.from(partition.accepted, (item) => item.fact_id), ['fact-valid']);
+  assert.equal(partition.holds.length, 1);
+  assert.equal(partition.holds[0].fact_id, 'fact-invalid');
+  assert.equal(partition.holds[0].status, 'source_primary_role_mismatch');
+  assert.equal(partition.holds[0].body_included, false);
+  assert.equal(Object.hasOwn(partition.holds[0], 'fact_value'), false);
+});
+
+test('legacy SQL source lineage holds unknown subjects and preserves explicit other facts', () => {
+  const { buildSourceMessageRoleCensus, projectSqlSourceRoleLineage } = legacySourceRoleHarness();
+  const census = buildSourceMessageRoleCensus([
+    { role: 'assistant', source_window_id: 'window-a', source_msg_index: 12 }
+  ]);
+  const generic = {
+    record: {
+      fact_id: 'fact-weather',
+      fact_key: 'weather_state',
+      anchor_name: 'weather',
+      source_window_id: 'window-a',
+      source_msg_start: 12,
+      source_msg_end: 12
+    },
+    declared_source_ref: 'window_20250201_msg_012'
+  };
+  const unknown = projectSqlSourceRoleLineage(generic, census, {
+    user_name: 'A-Yuan', bot_name: 'Companion'
+  });
+  assert.equal(unknown.ok, false);
+  assert.equal(unknown.status, 'source_subject_role_unknown');
+  const explicitOther = projectSqlSourceRoleLineage({
+    ...generic,
+    record: { ...generic.record, source_subject_role: 'other' }
+  }, null, { user_name: 'A-Yuan', bot_name: 'Companion' });
+  assert.equal(explicitOther.ok, true);
+  assert.equal(explicitOther.status, 'source_subject_role_other');
+  const conflict = projectSqlSourceRoleLineage({
+    ...generic,
+    record: {
+      ...generic.record,
+      fact_key: 'user_weather_state',
+      anchor_name: 'A-Yuan',
+      source_subject_role: 'other'
+    }
+  }, census, { user_name: 'A-Yuan', bot_name: 'Companion' });
+  assert.equal(conflict.ok, false);
+  assert.equal(conflict.status, 'source_subject_role_conflict');
+});
+
+test('legacy SQL source census stays process-local and gates before card aggregation', () => {
+  const checkpointSource = extractFunction(legacyHtml, 'cloneMemoTaskForCheckpoint');
+  assert.match(checkpointSource, /delete safeEntry\._source_message_census/);
+  const runSource = extractFunction(legacyHtml, 'runExtraction');
+  const gateIndex = runSource.indexOf('partitionSqlFactsBySourceRoleLineage');
+  const aggregateIndex = runSource.indexOf('deriveSqlCardsFromFacts');
+  assert.ok(gateIndex >= 0);
+  assert.ok(aggregateIndex > gateIndex);
+  assert.equal(extractFunction(legacyHtml, 'buildPreparedMemoSourceJson').includes('_source_message_census'), false);
+  assert.equal(extractFunction(legacyHtml, 'buildPreparedMemoSourceMarkdown').includes('_source_message_census'), false);
+});
+
+test('legacy SQL source lineage projections reject body-shaped identifiers', () => {
+  const { buildSourceMessageRoleCensus, projectSqlSourceRoleLineage } = legacySourceRoleHarness();
+  const census = buildSourceMessageRoleCensus([
+    { role: 'user', content: 'private body', source_window_id: 'window-a', source_msg_index: 11 }
+  ]);
+  const projection = projectSqlSourceRoleLineage({
+    record: {
+      fact_id: 'PRIVATE BODY',
+      fact_key: 'user_prefers_exact_receipts',
+      anchor_name: 'A-Yuan',
+      source_window_id: 'window-a',
+      source_msg_start: 11,
+      source_msg_end: 11
+    },
+    declared_source_ref: 'PRIVATE BODY_msg_011'
+  }, census, { user_name: 'A-Yuan', bot_name: 'Companion' });
+  assert.equal(projection.ok, false);
+  assert.equal(projection.status, 'source_ref_invalid');
+  assert.equal(projection.fact_id, '');
+  assert.equal(JSON.stringify(projection).includes('PRIVATE BODY'), false);
+  assert.equal(JSON.stringify(census).includes('private body'), false);
+  const badWindow = projectSqlSourceRoleLineage({
+    record: {
+      fact_id: 'fact-user-preference',
+      fact_key: 'user_prefers_exact_receipts',
+      anchor_name: 'A-Yuan',
+      source_window_id: 'PRIVATE BODY',
+      source_msg_start: 11,
+      source_msg_end: 11
+    },
+    declared_source_ref: 'window_20250201_msg_011'
+  }, census, { user_name: 'A-Yuan', bot_name: 'Companion' });
+  assert.equal(badWindow.status, 'source_window_invalid');
+  assert.equal(JSON.stringify(badWindow).includes('PRIVATE BODY'), false);
+});
+
+test('legacy JSON export preserves an inexact source role across reimport', () => {
+  const {
+    normalizeMessage,
+    buildMergedTimelineConversation,
+    buildMonthlyNodeConversations,
+    buildSelectedJsonPayload,
+    buildSourceMessageRoleCensus
+  } = legacySourceRoleHarness();
+  const missingRole = normalizeMessage({
+    content: { parts: ['assistant-looking summary'] },
+    source_window_id: 'window-a',
+    source_msg_index: 12
+  });
+  assert.equal(missingRole.role, 'assistant');
+  assert.equal(missingRole._source_role_exact, false);
+  const source = {
+    id: 'window-a',
+    title: 'Synthetic',
+    month: '2025-02',
+    messages: [missingRole]
+  };
+  const payload = buildSelectedJsonPayload([source]);
+  assert.equal(payload[0].messages[0].source_role_exact, false);
+  const reparsed = normalizeMessage(payload[0].messages[0]);
+  assert.equal(reparsed._source_role_exact, false);
+  const census = buildSourceMessageRoleCensus([reparsed]);
+  assert.equal(census.observation_complete, false);
+  assert.equal(census.invalid_count, 1);
+  const mergedPayload = buildSelectedJsonPayload([buildMergedTimelineConversation([source])]);
+  assert.equal(mergedPayload[0].messages[0].source_role_exact, false);
+  assert.equal(normalizeMessage(mergedPayload[0].messages[0])._source_role_exact, false);
+  const monthlyPayload = buildSelectedJsonPayload(buildMonthlyNodeConversations([source]));
+  assert.equal(monthlyPayload[0].messages[0].source_role_exact, false);
+  assert.equal(normalizeMessage(monthlyPayload[0].messages[0])._source_role_exact, false);
 });

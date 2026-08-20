@@ -2315,8 +2315,212 @@
       return '';
     }
 
+    function normalizeSourceMessageRole(value) {
+      const raw = String(value || '').trim().toLowerCase();
+      if (!raw) return '';
+      if (raw === 'user' || raw === 'human') return 'user';
+      if (raw === 'assistant' || raw === 'char' || raw === 'bot' || raw === 'model') return 'assistant';
+      if (raw === 'system') return 'system';
+      if (raw === 'tool' || raw === 'function') return 'tool';
+      return 'other';
+    }
+
+    function normalizeBodyFreeSourceId(value, maxLength = 256) {
+      const raw = String(value || '').trim();
+      if (!raw || raw.length > maxLength || !/^[A-Za-z0-9._:@/-]+$/.test(raw)) return '';
+      return raw;
+    }
+
+    function buildSourceMessageRoleCensus(messages, fallbackWindowId = '', fallbackFirstIndex = 0) {
+      const rows = [];
+      const seen = new Set();
+      let duplicateCount = 0;
+      let invalidCount = 0;
+      (Array.isArray(messages) ? messages : []).forEach((message, index) => {
+        const windowId = normalizeBodyFreeSourceId(
+          message && message.source_window_id ? message.source_window_id : fallbackWindowId || ''
+        );
+        const explicitIndex = Number(message && message.source_msg_index);
+        const fallbackBase = Number(fallbackFirstIndex);
+        const fallbackIndex = Number.isFinite(fallbackBase) && fallbackBase > 0 ? fallbackBase + index : 0;
+        const msgIndex = Number.isFinite(explicitIndex) && explicitIndex > 0
+          ? Math.floor(explicitIndex)
+          : (Number.isFinite(fallbackIndex) && fallbackIndex > 0 ? Math.floor(fallbackIndex) : 0);
+        const role = normalizeSourceMessageRole(message && message.role);
+        const roleExact = !(
+          message
+          && (message._source_role_exact === false || message.source_role_exact === false)
+        );
+        if (!windowId || !msgIndex || !role || !roleExact) {
+          invalidCount += 1;
+          return;
+        }
+        const key = `${windowId}\u0000${msgIndex}`;
+        if (seen.has(key)) {
+          duplicateCount += 1;
+          return;
+        }
+        seen.add(key);
+        rows.push({ source_window_id: windowId, source_msg_index: msgIndex, role });
+      });
+      rows.sort((a, b) => {
+        const byWindow = a.source_window_id.localeCompare(b.source_window_id);
+        return byWindow || a.source_msg_index - b.source_msg_index;
+      });
+      return {
+        schema_version: 'driftstone.source_message_role_census.v1',
+        observation_complete: invalidCount === 0 && duplicateCount === 0 && rows.length > 0,
+        message_count: rows.length,
+        window_count: new Set(rows.map((row) => row.source_window_id)).size,
+        duplicate_count: duplicateCount,
+        invalid_count: invalidCount,
+        messages: rows,
+        body_included: false
+      };
+    }
+
+    function inferSqlSourceSubjectRole(item, identity = {}) {
+      const safe = item && typeof item === 'object' ? item : {};
+      const normalizeIdentity = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const explicitRaw = String(safe.source_subject_role || '').trim().toLowerCase();
+      const explicit = ['user', 'assistant', 'other'].includes(explicitRaw) ? explicitRaw : '';
+      if (explicitRaw && !explicit) return 'invalid';
+      const anchor = normalizeIdentity(safe.anchor_name);
+      const userName = normalizeIdentity(identity.user_name);
+      const botName = normalizeIdentity(identity.bot_name);
+      let inferred = '';
+      if (anchor && userName && anchor === userName) inferred = 'user';
+      if (anchor && botName && anchor === botName) inferred = inferred && inferred !== 'assistant' ? 'ambiguous' : 'assistant';
+      const factKey = String(safe.fact_key || '').trim().toLowerCase();
+      if (/^user[_-]/.test(factKey)) inferred = inferred && inferred !== 'user' ? 'ambiguous' : 'user';
+      if (/^(assistant|ai|char|bot)[_-]/.test(factKey)) inferred = inferred && inferred !== 'assistant' ? 'ambiguous' : 'assistant';
+      const refs = Array.isArray(safe.entity_refs) ? safe.entity_refs : [];
+      const hasUser = refs.some((value) => normalizeIdentity(value) === 'user');
+      const hasAssistant = refs.some((value) => ['assistant', 'char', 'bot'].includes(normalizeIdentity(value)));
+      if (hasUser) inferred = inferred && inferred !== 'user' ? 'ambiguous' : 'user';
+      if (hasAssistant) inferred = inferred && inferred !== 'assistant' ? 'ambiguous' : 'assistant';
+      if (inferred === 'ambiguous') return 'ambiguous';
+      if (explicit && inferred && explicit !== inferred) return 'conflict';
+      return explicit || inferred || 'unknown';
+    }
+
+    function parseSourceRoleRef(value) {
+      const raw = String(value || '').trim();
+      if (!raw || raw.length > 256) return { ok: false, raw: '', scope: '', msg: 0 };
+      const match = raw.match(/^([A-Za-z0-9._:@/-]+)_msg_(\d+)$/i);
+      const msg = match ? Number(match[2]) : 0;
+      return {
+        ok: Boolean(match && String(match[1] || '').trim() && Number.isFinite(msg) && msg > 0),
+        raw,
+        scope: match ? String(match[1] || '').trim() : '',
+        msg: Number.isFinite(msg) && msg > 0 ? Math.floor(msg) : 0
+      };
+    }
+
+    function projectSqlSourceRoleLineage(candidate, census, identity = {}) {
+      const safeCandidate = candidate && typeof candidate === 'object' ? candidate : {};
+      const record = safeCandidate.record && typeof safeCandidate.record === 'object' ? safeCandidate.record : {};
+      const subjectRole = inferSqlSourceSubjectRole(record, identity);
+      const declaredWindowId = String(record.source_window_id || '').trim();
+      const base = {
+        schema_version: 'driftstone.sql_source_role_lineage.v1',
+        ok: false,
+        status: '',
+        fact_id: normalizeBodyFreeSourceId(record.fact_id, 128),
+        subject_role: subjectRole,
+        source_window_id: normalizeBodyFreeSourceId(record.source_window_id),
+        source_msg_start: Number.isFinite(Number(record.source_msg_start)) ? Math.floor(Number(record.source_msg_start)) : 0,
+        source_msg_end: Number.isFinite(Number(record.source_msg_end)) ? Math.floor(Number(record.source_msg_end)) : 0,
+        primary_source_msg_index: 0,
+        primary_source_role: '',
+        body_included: false
+      };
+      if (subjectRole === 'ambiguous') return { ...base, status: 'source_subject_role_ambiguous' };
+      if (subjectRole === 'conflict') return { ...base, status: 'source_subject_role_conflict' };
+      if (subjectRole === 'invalid') return { ...base, status: 'source_subject_role_invalid' };
+      if (subjectRole === 'unknown') return { ...base, status: 'source_subject_role_unknown' };
+      if (subjectRole === 'other') return { ...base, ok: true, status: 'source_subject_role_other' };
+      if (declaredWindowId && !base.source_window_id) return { ...base, status: 'source_window_invalid' };
+      if (!census || census.schema_version !== 'driftstone.source_message_role_census.v1' || census.observation_complete !== true) {
+        return { ...base, status: 'source_role_census_incomplete' };
+      }
+      const rows = Array.isArray(census.messages) ? census.messages : [];
+      const windows = Array.from(new Set(rows.map((row) => String(row && row.source_window_id || '').trim()).filter(Boolean)));
+      let windowId = base.source_window_id;
+      if (!windowId) {
+        if (windows.length !== 1) return { ...base, status: 'source_window_ambiguous' };
+        windowId = windows[0];
+      }
+      if (!windows.includes(windowId)) return { ...base, status: 'source_window_mismatch' };
+      const windowRows = rows.filter((row) => row.source_window_id === windowId);
+      const windowIndexes = windowRows.map((row) => Number(row.source_msg_index)).filter((value) => Number.isFinite(value) && value > 0);
+      const rangeStart = base.source_msg_start > 0 ? base.source_msg_start : Math.min(...windowIndexes);
+      const rangeEnd = base.source_msg_end > 0 ? base.source_msg_end : Math.max(...windowIndexes);
+      if (!Number.isFinite(rangeStart) || !Number.isFinite(rangeEnd) || rangeStart <= 0 || rangeEnd < rangeStart) {
+        return { ...base, source_window_id: windowId, status: 'source_message_range_invalid' };
+      }
+      if (!windowIndexes.includes(rangeStart) || !windowIndexes.includes(rangeEnd)) {
+        return { ...base, source_window_id: windowId, source_msg_start: rangeStart, source_msg_end: rangeEnd, status: 'source_message_range_mismatch' };
+      }
+      const refParts = String(safeCandidate.declared_source_ref || '')
+        .split(/\s*\|\s*/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      if (!refParts.length) return { ...base, source_window_id: windowId, status: 'source_primary_ref_missing' };
+      const parsedRefs = refParts.map(parseSourceRoleRef);
+      if (parsedRefs.some((ref) => !ref.ok)) return { ...base, source_window_id: windowId, status: 'source_ref_invalid' };
+      const uniqueRefs = new Set(parsedRefs.map((ref) => `${ref.scope}\u0000${ref.msg}`));
+      if (uniqueRefs.size !== parsedRefs.length) return { ...base, source_window_id: windowId, status: 'source_ref_duplicate' };
+      const primary = parsedRefs[0];
+      const projected = {
+        ...base,
+        source_window_id: windowId,
+        source_msg_start: rangeStart,
+        source_msg_end: rangeEnd,
+        primary_source_msg_index: primary.msg
+      };
+      for (const ref of parsedRefs) {
+        if (ref.msg < rangeStart || ref.msg > rangeEnd) {
+          return { ...projected, status: 'source_ref_outside_range' };
+        }
+        const matches = rows.filter((row) => row.source_window_id === windowId && Number(row.source_msg_index) === ref.msg);
+        if (matches.length !== 1) return { ...projected, status: 'source_ref_not_exact' };
+      }
+      const primaryRow = rows.find((row) => row.source_window_id === windowId && Number(row.source_msg_index) === primary.msg);
+      projected.primary_source_role = primaryRow ? String(primaryRow.role || '') : '';
+      if (projected.primary_source_role !== subjectRole) return { ...projected, status: 'source_primary_role_mismatch' };
+      return { ...projected, ok: true, status: 'source_role_lineage_exact' };
+    }
+
+    function partitionSqlFactsBySourceRoleLineage(candidates, census, identity = {}) {
+      const accepted = [];
+      const holds = [];
+      (Array.isArray(candidates) ? candidates : []).forEach((candidate) => {
+        const projection = projectSqlSourceRoleLineage(candidate, census, identity);
+        if (projection.ok) {
+          accepted.push({
+            ...candidate.record,
+            source_window_id: projection.source_window_id || String(candidate.record && candidate.record.source_window_id || '').trim(),
+            source_msg_start: projection.source_msg_start || Number(candidate.record && candidate.record.source_msg_start || 0),
+            source_msg_end: projection.source_msg_end || Number(candidate.record && candidate.record.source_msg_end || 0)
+          });
+        }
+        else holds.push(projection);
+      });
+      return { accepted, holds };
+    }
+
     function normalizeMessage(msg, nodeId = '') {
-      const role = (msg && msg.author && msg.author.role) || (msg && msg.role) || 'assistant';
+      const rawRole = (msg && msg.author && msg.author.role) || (msg && msg.role) || '';
+      const normalizedSourceRole = normalizeSourceMessageRole(rawRole);
+      const role = normalizedSourceRole || 'assistant';
+      const sourceRoleMarkedInexact = Boolean(
+        msg
+        && (
+          msg.source_role_exact === false
+          || (msg.metadata && msg.metadata.source_role_exact === false)
+        )
+      );
       const content = extractOpenAIContent(msg && msg.content);
       const rawTs = msg && msg.create_time !== undefined && msg.create_time !== null
         ? msg.create_time
@@ -2343,6 +2547,10 @@
         || (msg && msg.metadata && (msg.metadata.source_msg_index || msg.metadata.sourceMsgIndex))
         || 0;
       const out = { role, content: normalized, ts };
+      Object.defineProperty(out, '_source_role_exact', {
+        value: Boolean(normalizedSourceRole) && !sourceRoleMarkedInexact,
+        enumerable: false
+      });
       if (nodeId) out.source_node_id = nodeId;
       if (sourceWindowId) out.source_window_id = sourceWindowId;
       if (sourceWindowTitle) out.source_window_title = sourceWindowTitle;
@@ -3199,6 +3407,7 @@
             role: String(msg && msg.role ? msg.role : 'assistant'),
             content: String(msg && msg.content ? msg.content : ''),
             ts: ts || 0,
+            _source_role_exact: Boolean(msg && msg._source_role_exact !== false && msg.source_role_exact !== false),
             source_window_id: sourceWindowId,
             source_window_title: sourceWindowTitle,
             source_msg_index: normalizePositiveSourceMsgIndex(msg && msg.source_msg_index) || (msgIdx + 1),
@@ -3230,6 +3439,7 @@
           role: m.role,
           content: m.content,
           ts: m.ts,
+          _source_role_exact: m._source_role_exact,
           source_window_id: m.source_window_id,
           source_window_title: m.source_window_title,
           source_msg_index: m.source_msg_index
@@ -3272,6 +3482,7 @@
           role: m.role,
           content: m.content,
           ts: m.ts,
+          _source_role_exact: m._source_role_exact,
           source_window_id: m.source_window_id,
           source_window_title: m.source_window_title,
           source_msg_index: normalizePositiveSourceMsgIndex(m.source_msg_index) || undefined
@@ -3386,6 +3597,7 @@
           title: c.title || `Conversation ${idx + 1}`,
           messages: (c.messages || []).map(m => {
             const msg = { role: m.role, content: m.content, ts: m.ts };
+            if (m._source_role_exact === false || m.source_role_exact === false) msg.source_role_exact = false;
             if (m.source_window_id) msg.source_window_id = m.source_window_id;
             if (m.source_window_title) msg.source_window_title = m.source_window_title;
             const msgIndex = normalizePositiveSourceMsgIndex(m.source_msg_index);
@@ -3546,6 +3758,7 @@
             role: msg.role,
             content: msg.content,
             ts: msg.ts,
+            _source_role_exact: Boolean(msg && msg._source_role_exact !== false && msg.source_role_exact !== false),
             source_window_id: msgWindowId,
             source_window_title: msgWindowTitle,
             source_msg_index: normalizePositiveSourceMsgIndex(msg.source_msg_index) || (msgIdx + 1),
@@ -3608,6 +3821,7 @@
             role: m.role,
             content: m.content,
             ts: m.ts,
+            _source_role_exact: m._source_role_exact,
             source_window_id: m.source_window_id,
             source_window_title: m.source_window_title,
             source_msg_index: m.source_msg_index
@@ -4286,7 +4500,7 @@
 
     const extractionState = {
       persona: { raw: '', data: [], status: 'idle' },
-      sql: { raw: '', data: [], cards: [], status: 'idle' },
+      sql: { raw: '', data: [], cards: [], source_lineage_holds: [], status: 'idle' },
       case: { raw: '', data: [], status: 'idle' }
     };
     const gateState = {
@@ -5302,6 +5516,7 @@
                 role: m.role,
                 content: m.content,
                 ts: m.ts,
+                _source_role_exact: m._source_role_exact,
                 source_window_id: m.source_window_id,
                 source_window_title: m.source_window_title,
                 source_msg_index: normalizePositiveSourceMsgIndex(m.source_msg_index) || undefined
@@ -5351,6 +5566,11 @@
                 });
                 if (!text) return;
                 const safeTitle = title.replace(/[\\/:*?"<>|]/g, '_');
+                const sourceMessageCensus = buildSourceMessageRoleCensus(
+                  chunk.messages,
+                  convId,
+                  (chunk.start_index || 0) + 1
+                );
                 out.push({
                   name: `${file.name}::${safeTitle}::part-${String(chunkIdx + 1).padStart(3, '0')}`,
                   text,
@@ -5364,7 +5584,8 @@
                   source_msg_start: chunkSource.source_msg_start,
                   source_msg_end: chunkSource.source_msg_end,
                   source_start_date: range.startDate || '',
-                  source_end_date: range.endDate || range.startDate || ''
+                  source_end_date: range.endDate || range.startDate || '',
+                  _source_message_census: sourceMessageCensus
                 });
               });
             });
@@ -7375,6 +7596,16 @@
         fillPersonaPlaceholders((basePrompt || '').trim()),
         buildPersonaRuntimeGateBlock(),
         buildPersonaLanguageFingerprintBlock()
+      ].filter(Boolean).join('\n\n');
+    }
+
+    function buildSqlSystemPrompt(basePrompt) {
+      return [
+        String(basePrompt || '').trim(),
+        '## Source subject role（必填）',
+        '每条 SQL fact 必须增加 `source_subject_role`，且只能是 `user`、`assistant`、`other`。',
+        '`user` 表示事实主体是人类说话者；`assistant` 表示事实主体是 AI 说话者；`other` 只用于两者都不是的明确第三方、事物、时间、事件或规则。',
+        '该字段必须与 anchor_name、fact_key、entity_refs 一致；无法确定时不要输出该 fact。不要把另一位说话者的总结当作主体原话，也不要改指向邻接消息。'
       ].filter(Boolean).join('\n\n');
     }
 
@@ -12288,7 +12519,8 @@
               source_msg_start: toSafeInt(entry.source_msg_start, 0, 0),
               source_msg_end: toSafeInt(entry.source_msg_end, 0, 0),
               source_start_date: entry.source_start_date || '',
-              source_end_date: entry.source_end_date || entry.source_start_date || ''
+              source_end_date: entry.source_end_date || entry.source_start_date || '',
+              _source_message_census: entry._source_message_census
             };
             out.push(isMemoSourceTraceModeEnabled() ? normalized : stripMemoTraceFields(normalized));
           });
@@ -15253,7 +15485,7 @@
     }
 
     function createMemoRunLayerStat() {
-      return { processed: 0, failed: 0, retries: 0, incoming: 0, added: 0, merged: 0, batchDropped: 0, historyDropped: 0, total: 0 };
+      return { processed: 0, failed: 0, retries: 0, incoming: 0, added: 0, merged: 0, lineageHeld: 0, batchDropped: 0, historyDropped: 0, total: 0 };
     }
 
     function createMemoRunTraceStats() {
@@ -15371,6 +15603,7 @@
     function cloneMemoTaskForCheckpoint(task) {
       const safeTask = task && typeof task === 'object' ? task : {};
       const safeEntry = safeTask.entry && typeof safeTask.entry === 'object' ? { ...safeTask.entry } : {};
+      delete safeEntry._source_message_census;
       return { ...safeTask, entry: safeEntry };
     }
 
@@ -15680,7 +15913,7 @@
     function formatTraceSummary(kind, stat, totalEntries) {
       if (kind === 'sql') {
         const cardCount = Array.isArray(extractionState.sql.cards) ? extractionState.sql.cards.length : 0;
-        return `SQL 进度 ${stat.processed}/${totalEntries} | 失败 ${stat.failed} | 重试 ${stat.retries} | 入 raw ${stat.incoming} 追加 raw ${stat.added} | 当前 fact/card ${stat.total}/${cardCount}`;
+        return `SQL 进度 ${stat.processed}/${totalEntries} | 失败 ${stat.failed} | 重试 ${stat.retries} | 来源HOLD ${stat.lineageHeld || 0} | 入 raw ${stat.incoming} 追加 raw ${stat.added} | 当前 fact/card ${stat.total}/${cardCount}`;
       }
       return `${kind.toUpperCase()} 进度 ${stat.processed}/${totalEntries} | 失败 ${stat.failed} | 重试 ${stat.retries} | 入 ${stat.incoming} 追加 ${stat.added} | 当前累计 ${stat.total}`;
     }
@@ -15731,13 +15964,14 @@
       stat.incoming += Number(s.incoming || 0);
       stat.added += Number(s.added || 0);
       stat.merged += Number(s.merged || 0);
+      stat.lineageHeld += Number(s.lineageHeld || 0);
       stat.batchDropped += Number(s.batchDropped || 0);
       stat.historyDropped += Number(s.historyDropped || 0);
       stat.total = Number(s.total || stat.total || 0);
       if (kind === 'sql') {
         const cardCount = Array.isArray(extractionState.sql.cards) ? extractionState.sql.cards.length : 0;
         memoRunTraceState.lines.push(
-          `[SQL ${entryIndex}/${totalEntries}] ${entryName} | 入raw${Number(s.incoming || 0)} 追加raw${Number(s.added || 0)} 成卡${cardCount} 重试${retryCount} 累计fact${stat.total}`
+          `[SQL ${entryIndex}/${totalEntries}] ${entryName} | 入raw${Number(s.incoming || 0)} 追加raw${Number(s.added || 0)} 来源HOLD${Number(s.lineageHeld || 0)} 成卡${cardCount} 重试${retryCount} 累计fact${stat.total}`
         );
       } else {
         memoRunTraceState.lines.push(
@@ -15924,13 +16158,15 @@
       }
       const promptEl = promptInputs[kind]();
       const rawPrompt = promptEl ? promptEl.value.trim() : '';
-      const systemPrompt = kind === 'persona' ? buildPersonaSystemPrompt(rawPrompt) : rawPrompt;
+      const systemPrompt = kind === 'persona'
+        ? buildPersonaSystemPrompt(rawPrompt)
+        : (kind === 'sql' ? buildSqlSystemPrompt(rawPrompt) : rawPrompt);
       const modelInputText = kind === 'persona'
         ? buildPersonaInputText(inputText, { sourceRef, sourceMeta })
         : inputText;
       if (!append) {
         extractionState[kind] = kind === 'sql'
-          ? { raw: '处理中...', data: [], cards: [], status: 'running' }
+          ? { raw: '处理中...', data: [], cards: [], source_lineage_holds: [], status: 'running' }
           : { raw: '处理中...', data: [], status: 'running' };
         renderKindResult(kind);
       }
@@ -15971,9 +16207,9 @@
         const raw = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
         if (normalizeNoRelated(kind, raw)) {
           const existing = (append && Array.isArray(extractionState[kind].data)) ? extractionState[kind].data : [];
-          if (!append || !(extractionState[kind].data && extractionState[kind].data.length)) {
+          if (!append) {
             extractionState[kind] = kind === 'sql'
-              ? { raw: '', data: [], cards: [], status: 'empty' }
+              ? { raw: '', data: [], cards: [], source_lineage_holds: [], status: 'empty' }
               : { raw: '', data: [], status: 'empty' };
             renderKindResult(kind);
           }
@@ -16023,17 +16259,40 @@
         } else {
           errorStage = `${kind}_json_parse`;
           const parsed = tryParseJson(raw);
-          let incoming = normalizeParsedArray(kind, parsed);
-          if (!incoming.length && raw.trim()) incoming = [{ raw: raw.trim() }];
-          incoming = incoming.map(item => kind === 'sql'
-            ? sanitizeSqlRecord(item, sourceRef, sourceMeta)
-            : sanitizeLayerRecord(item, sourceRef, sourceMeta));
+          let rawIncoming = normalizeParsedArray(kind, parsed);
+          if (!rawIncoming.length && raw.trim()) rawIncoming = [{ raw: raw.trim() }];
+          let incoming;
+          let sourceLineageHolds = [];
+          let currentLineageHeld = 0;
+          if (kind === 'sql') {
+            const candidates = rawIncoming.map((item) => {
+              const rawItem = item && typeof item === 'object' ? item : {};
+              return {
+                record: sanitizeSqlRecord(item, sourceRef, sourceMeta),
+                declared_source_ref: String(rawItem.source_ref || '').trim()
+              };
+            });
+            const partition = partitionSqlFactsBySourceRoleLineage(
+              candidates,
+              sourceMeta && sourceMeta._source_message_census,
+              { user_name: getMainUserName(), bot_name: getMainBotName() }
+            );
+            incoming = partition.accepted;
+            currentLineageHeld = partition.holds.length;
+            const existingHolds = append && Array.isArray(extractionState[kind].source_lineage_holds)
+              ? extractionState[kind].source_lineage_holds
+              : [];
+            sourceLineageHolds = existingHolds.concat(partition.holds);
+          } else {
+            incoming = rawIncoming.map((item) => sanitizeLayerRecord(item, sourceRef, sourceMeta));
+          }
           const existing = (append && Array.isArray(extractionState[kind].data)) ? extractionState[kind].data : [];
           const merged = append ? existing.concat(incoming) : incoming;
           const nextState = merged.length
             ? { raw: JSON.stringify(merged, null, 2), data: merged, status: 'ok' }
-            : { raw: '', data: [], status: 'empty' };
+            : { raw: '', data: [], status: kind === 'sql' && sourceLineageHolds.length ? 'held' : 'empty' };
           if (kind === 'sql') {
+            nextState.source_lineage_holds = sourceLineageHolds;
             nextState.cards = merged.length
               ? deriveSqlCardsFromFacts(merged).map((card) => ({
                   ...(card || {}),
@@ -16047,10 +16306,11 @@
             ok: true,
             stats: {
               kind,
-              incoming: incoming.length,
+              incoming: rawIncoming.length,
               added: incoming.length,
               merged: 0,
               total: merged.length,
+              lineageHeld: currentLineageHeld,
               batchDropped: 0,
               historyDropped: 0
             },
@@ -16059,12 +16319,19 @@
         }
       } catch (e) {
         const msg = `提取失败：${(e && e.message) ? e.message : e}`;
-        if (append && extractionState[kind] && Array.isArray(extractionState[kind].data) && extractionState[kind].data.length) {
+        const hasRetainedState = Boolean(
+          extractionState[kind]
+          && (
+            (Array.isArray(extractionState[kind].data) && extractionState[kind].data.length)
+            || (kind === 'sql' && Array.isArray(extractionState[kind].source_lineage_holds) && extractionState[kind].source_lineage_holds.length)
+          )
+        );
+        if (append && hasRetainedState) {
           const warn = document.getElementById('memoRunWarn');
           if (warn) warn.textContent = `${kind.toUpperCase()} 存在片段失败，已保留已完成结果。最近错误：${msg}`;
         } else {
           extractionState[kind] = kind === 'sql'
-            ? { raw: msg, data: [], cards: [], status: 'error' }
+            ? { raw: msg, data: [], cards: [], source_lineage_holds: [], status: 'error' }
             : { raw: msg, data: [], status: 'error' };
           renderKindResult(kind);
         }
@@ -16283,6 +16550,7 @@
           source_window_title: task.entry.source_window_title || '',
           source_msg_start: toSafeInt(task.entry.source_msg_start, 0, 0),
           source_msg_end: toSafeInt(task.entry.source_msg_end, 0, 0),
+          _source_message_census: task.entry._source_message_census,
           startDate: task.entry.source_start_date || '',
           endDate: task.entry.source_end_date || task.entry.source_start_date || ''
         };
@@ -16354,7 +16622,7 @@
         warn.textContent = `检测到 ${hugeInfo.count} 个超大片段（≥${hugeInfo.thresholdChars.toLocaleString()} 字，最大 ${hugeInfo.maxChars.toLocaleString()} 字）。建议改用“分片提取”，否则会更慢且更易截断。`;
       }
       extractionState[kind] = kind === 'sql'
-        ? { raw: '', data: [], cards: [], status: 'idle' }
+        ? { raw: '', data: [], cards: [], source_lineage_holds: [], status: 'idle' }
         : { raw: '', data: [], status: 'idle' };
       renderKindResult(kind);
       if (kind === 'persona') {
@@ -16394,7 +16662,7 @@
       }
       ['persona', 'sql'].forEach(kind => {
         extractionState[kind] = kind === 'sql'
-          ? { raw: '', data: [], cards: [], status: 'idle' }
+          ? { raw: '', data: [], cards: [], source_lineage_holds: [], status: 'idle' }
           : { raw: '', data: [], status: 'idle' };
         renderKindResult(kind);
       });
