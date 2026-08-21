@@ -2406,13 +2406,15 @@
 
     function parseSourceRoleRef(value) {
       const raw = String(value || '').trim();
-      if (!raw || raw.length > 256) return { ok: false, raw: '', scope: '', msg: 0 };
+      if (!raw || raw.length > 256) return { ok: false, raw: '', scope: '', window_token: '', msg: 0 };
       const match = raw.match(/^([A-Za-z0-9._:@/-]+)_msg_(\d+)$/i);
       const msg = match ? Number(match[2]) : 0;
+      const exactWindowMatch = raw.match(/^window_(?:\d{8}|unknown)_([A-Za-z0-9._:@/-]+)_msg_(\d+)$/i);
       return {
         ok: Boolean(match && String(match[1] || '').trim() && Number.isFinite(msg) && msg > 0),
         raw,
         scope: match ? String(match[1] || '').trim() : '',
+        window_token: exactWindowMatch ? String(exactWindowMatch[1] || '').trim() : '',
         msg: Number.isFinite(msg) && msg > 0 ? Math.floor(msg) : 0
       };
     }
@@ -2439,7 +2441,6 @@
       if (subjectRole === 'conflict') return { ...base, status: 'source_subject_role_conflict' };
       if (subjectRole === 'invalid') return { ...base, status: 'source_subject_role_invalid' };
       if (subjectRole === 'unknown') return { ...base, status: 'source_subject_role_unknown' };
-      if (subjectRole === 'other') return { ...base, ok: true, status: 'source_subject_role_other' };
       if (declaredWindowId && !base.source_window_id) return { ...base, status: 'source_window_invalid' };
       if (!census || census.schema_version !== 'driftstone.source_message_role_census.v1' || census.observation_complete !== true) {
         return { ...base, status: 'source_role_census_incomplete' };
@@ -2469,6 +2470,7 @@
       if (!refParts.length) return { ...base, source_window_id: windowId, status: 'source_primary_ref_missing' };
       const parsedRefs = refParts.map(parseSourceRoleRef);
       if (parsedRefs.some((ref) => !ref.ok)) return { ...base, source_window_id: windowId, status: 'source_ref_invalid' };
+      if (parsedRefs.some((ref) => !ref.window_token)) return { ...base, source_window_id: windowId, status: 'source_ref_window_unbound' };
       const uniqueRefs = new Set(parsedRefs.map((ref) => `${ref.scope}\u0000${ref.msg}`));
       if (uniqueRefs.size !== parsedRefs.length) return { ...base, source_window_id: windowId, status: 'source_ref_duplicate' };
       const primary = parsedRefs[0];
@@ -2480,6 +2482,9 @@
         primary_source_msg_index: primary.msg
       };
       for (const ref of parsedRefs) {
+        if (ref.window_token && ref.window_token !== windowId) {
+          return { ...projected, status: 'source_ref_window_mismatch' };
+        }
         if (ref.msg < rangeStart || ref.msg > rangeEnd) {
           return { ...projected, status: 'source_ref_outside_range' };
         }
@@ -2488,6 +2493,7 @@
       }
       const primaryRow = rows.find((row) => row.source_window_id === windowId && Number(row.source_msg_index) === primary.msg);
       projected.primary_source_role = primaryRow ? String(primaryRow.role || '') : '';
+      if (subjectRole === 'other') return { ...projected, ok: true, status: 'source_subject_role_other' };
       if (projected.primary_source_role !== subjectRole) return { ...projected, status: 'source_primary_role_mismatch' };
       return { ...projected, ok: true, status: 'source_role_lineage_exact' };
     }
@@ -3320,7 +3326,8 @@
         appendBranchInfoLines(lines, conv);
         conv.messages.filter(m => m.content).forEach(m => {
           const marker = [];
-          if (m.source_window_title || m.source_window_id) marker.push(`window="${m.source_window_title || m.source_window_id}"`);
+          if (m.source_window_id) marker.push(`window_id="${m.source_window_id}"`);
+          if (m.source_window_title) marker.push(`window_title="${m.source_window_title}"`);
           const msgIndex = normalizePositiveSourceMsgIndex(m.source_msg_index);
           if (msgIndex > 0) marker.push(`msg=${msgIndex}`);
           if (m.ts) marker.push(`time="${formatDateTime(m.ts)}"`);
@@ -3511,6 +3518,131 @@
         start = nextStart;
       }
       return out;
+    }
+
+    function partitionMessagesByExactSourceWindow(messages, meta = {}) {
+      const list = Array.isArray(messages) ? messages.filter(m => m && m.content) : [];
+      const explicitWindowIdCount = list.filter(message => String(message && message.source_window_id || '').trim()).length;
+      const explicitMessageIndexCount = list.filter(message => normalizePositiveSourceMsgIndex(message && message.source_msg_index)).length;
+      const hasNoExplicitCoordinates = explicitWindowIdCount === 0 && explicitMessageIndexCount === 0;
+      if (!hasNoExplicitCoordinates && (explicitWindowIdCount !== list.length || explicitMessageIndexCount !== list.length)) {
+        return { ok: false, status: 'source_window_geometry_invalid', groups: [] };
+      }
+      const declaredRanges = Array.isArray(meta.source_window_ranges) ? meta.source_window_ranges : [];
+      const rangesById = new Map();
+      for (const rawRange of declaredRanges) {
+        const sourceWindowId = String(rawRange && rawRange.source_window_id || '').trim();
+        const sourceWindowTitle = String(rawRange && rawRange.source_window_title || '').trim();
+        const startMsgIndex = normalizePositiveSourceMsgIndex(rawRange && rawRange.start_msg_index);
+        const endMsgIndex = normalizePositiveSourceMsgIndex(rawRange && rawRange.end_msg_index);
+        const messageCount = toSafeInt(rawRange && rawRange.message_count, 0, 0);
+        if (
+          !sourceWindowId
+          || normalizeBodyFreeSourceId(sourceWindowId, 160) !== sourceWindowId
+          || !startMsgIndex
+          || endMsgIndex < startMsgIndex
+          || !messageCount
+          || rangesById.has(sourceWindowId)
+        ) {
+          return { ok: false, status: 'source_window_geometry_invalid', groups: [] };
+        }
+        rangesById.set(sourceWindowId, {
+          source_window_id: sourceWindowId,
+          source_window_title: sourceWindowTitle,
+          start_msg_index: startMsgIndex,
+          end_msg_index: endMsgIndex,
+          message_count: messageCount
+        });
+      }
+      const declaredCount = toSafeInt(meta.source_window_count, 0, 0);
+      if (declaredCount && rangesById.size && declaredCount !== rangesById.size) {
+        return { ok: false, status: 'source_window_geometry_invalid', groups: [] };
+      }
+      const explicitIds = new Set(list.map(m => String(m && m.source_window_id || '').trim()).filter(Boolean));
+      const isMultiWindow = declaredCount > 1 || rangesById.size > 1 || explicitIds.size > 1;
+      const singleCandidates = new Set([...rangesById.keys(), ...explicitIds]);
+      if (!isMultiWindow && singleCandidates.size === 0) {
+        const fallbackWindowId = String(meta.fallback_window_id || '').trim();
+        if (fallbackWindowId && normalizeBodyFreeSourceId(fallbackWindowId, 160) === fallbackWindowId) {
+          singleCandidates.add(fallbackWindowId);
+        }
+      }
+      if (!isMultiWindow && singleCandidates.size !== 1) {
+        return { ok: false, status: 'source_window_geometry_invalid', groups: [] };
+      }
+      const singleWindowId = isMultiWindow ? '' : Array.from(singleCandidates)[0];
+      const groupsById = new Map();
+      for (const message of list) {
+        const explicitWindowId = String(message && message.source_window_id || '').trim();
+        const sourceWindowId = explicitWindowId || singleWindowId;
+        const declared = rangesById.get(sourceWindowId);
+        if (
+          !sourceWindowId
+          || normalizeBodyFreeSourceId(sourceWindowId, 160) !== sourceWindowId
+          || (isMultiWindow && !explicitWindowId)
+          || (rangesById.size && !declared)
+        ) {
+          return { ok: false, status: 'source_window_geometry_invalid', groups: [] };
+        }
+        if (!groupsById.has(sourceWindowId)) {
+          groupsById.set(sourceWindowId, {
+            source_window_id: sourceWindowId,
+            source_window_title: String(declared && declared.source_window_title || message && message.source_window_title || meta.fallback_window_title || '').trim(),
+            messages: [],
+            message_indexes: new Set()
+          });
+        }
+        const group = groupsById.get(sourceWindowId);
+        const explicitWindowTitle = String(message && message.source_window_title || '').trim();
+        if (explicitWindowTitle && group.source_window_title && explicitWindowTitle !== group.source_window_title) {
+          return { ok: false, status: 'source_window_geometry_invalid', groups: [] };
+        }
+        if (!group.source_window_title && explicitWindowTitle) group.source_window_title = explicitWindowTitle;
+        const sourceMsgIndex = normalizePositiveSourceMsgIndex(message && message.source_msg_index)
+          || (isMultiWindow ? 0 : group.messages.length + 1);
+        if (!sourceMsgIndex || group.message_indexes.has(sourceMsgIndex)) {
+          return { ok: false, status: 'source_window_geometry_invalid', groups: [] };
+        }
+        if (declared && (sourceMsgIndex < declared.start_msg_index || sourceMsgIndex > declared.end_msg_index)) {
+          return { ok: false, status: 'source_window_geometry_invalid', groups: [] };
+        }
+        group.message_indexes.add(sourceMsgIndex);
+        group.messages.push({
+          ...message,
+          source_window_id: sourceWindowId,
+          source_window_title: group.source_window_title,
+          source_msg_index: sourceMsgIndex
+        });
+      }
+      if ((declaredCount && groupsById.size !== declaredCount) || (rangesById.size && groupsById.size !== rangesById.size)) {
+        return { ok: false, status: 'source_window_geometry_invalid', groups: [] };
+      }
+      for (const group of groupsById.values()) {
+        const orderedIndexes = group.messages.map(message => normalizePositiveSourceMsgIndex(message && message.source_msg_index));
+        const firstIndex = orderedIndexes[0] || 0;
+        if (!firstIndex || orderedIndexes.some((value, index) => value !== firstIndex + index)) {
+          return { ok: false, status: 'source_window_geometry_invalid', groups: [] };
+        }
+      }
+      for (const [sourceWindowId, declared] of rangesById.entries()) {
+        const group = groupsById.get(sourceWindowId);
+        if (!group || group.messages.length !== declared.message_count) {
+          return { ok: false, status: 'source_window_geometry_invalid', groups: [] };
+        }
+        const indexes = Array.from(group.message_indexes);
+        if (Math.min(...indexes) !== declared.start_msg_index || Math.max(...indexes) !== declared.end_msg_index) {
+          return { ok: false, status: 'source_window_geometry_invalid', groups: [] };
+        }
+      }
+      return {
+        ok: true,
+        status: 'source_window_geometry_exact',
+        groups: Array.from(groupsById.values()).map(group => ({
+          source_window_id: group.source_window_id,
+          source_window_title: group.source_window_title,
+          messages: group.messages
+        }))
+      };
     }
 
     function collectChunkSourceRanges(messages, fallbackWindowId = '', fallbackWindowTitle = '', fallbackStartIndex = 0) {
@@ -5472,6 +5604,46 @@
       return { text: body, meta };
     }
 
+    function projectPreparedTextSourceGeometry(text, meta = {}) {
+      const sourceWindowId = String(meta.source_window_id || '').trim();
+      const sourceWindowTitle = String(meta.source_window_title || '').trim();
+      const sourceMsgStart = normalizePositiveSourceMsgIndex(meta.source_msg_start);
+      const sourceMsgEnd = normalizePositiveSourceMsgIndex(meta.source_msg_end);
+      const isPreparedChunk = Boolean(String(meta.chunk_id || '').trim() || sourceWindowId || sourceMsgStart || sourceMsgEnd);
+      if (!isPreparedChunk) return { ok: true, status: 'source_window_geometry_not_applicable' };
+      if (!sourceWindowId || !sourceMsgStart || sourceMsgEnd < sourceMsgStart) {
+        return { ok: false, status: 'source_window_geometry_invalid' };
+      }
+      const markerPattern = /^\[SRC\s+([^\]]+)\]\s*$/gm;
+      const markers = [];
+      let match;
+      while ((match = markerPattern.exec(String(text || ''))) !== null) {
+        const rawMarker = String(match[1] || '');
+        const windowIdMatch = rawMarker.match(/(?:^|\s)window_id="([^"]+)"/);
+        const windowTitleMatch = rawMarker.match(/(?:^|\s)window_title="([^"]*)"/);
+        const msgMatch = rawMarker.match(/(?:^|\s)msg=(\d+)/);
+        markers.push({
+          source_window_id: String(windowIdMatch && windowIdMatch[1] || '').trim(),
+          source_window_title: String(windowTitleMatch && windowTitleMatch[1] || '').trim(),
+          source_msg_index: normalizePositiveSourceMsgIndex(msgMatch && msgMatch[1])
+        });
+      }
+      const expectedMarkerCount = sourceMsgEnd - sourceMsgStart + 1;
+      if (markers.length !== expectedMarkerCount) return { ok: false, status: 'source_window_geometry_invalid' };
+      if (markers.some(marker => (
+        marker.source_window_id !== sourceWindowId
+        || (sourceWindowTitle && marker.source_window_title && marker.source_window_title !== sourceWindowTitle)
+        || marker.source_msg_index < sourceMsgStart
+        || marker.source_msg_index > sourceMsgEnd
+      ))) {
+        return { ok: false, status: 'source_window_geometry_invalid' };
+      }
+      if (markers.some((marker, index) => marker.source_msg_index !== sourceMsgStart + index)) {
+        return { ok: false, status: 'source_window_geometry_invalid' };
+      }
+      return { ok: true, status: 'source_window_geometry_exact' };
+    }
+
     async function readJsonText(file, lowerName) {
       if (!lowerName.endsWith('.json')) return '';
       return file.text();
@@ -5484,6 +5656,10 @@
         const parsed = parseExtractMetaBlock(await file.text());
         const text = String(parsed.text || '').trim();
         if (!text) return [];
+        const geometry = projectPreparedTextSourceGeometry(text, parsed.meta);
+        if (!geometry.ok) {
+          throw createImportError('MEMO_SOURCE_GEOMETRY_INVALID', geometry.status);
+        }
         return [{
           name: file.name,
           text,
@@ -5522,15 +5698,28 @@
                 source_msg_index: normalizePositiveSourceMsgIndex(m.source_msg_index) || undefined
               }));
               if (!convMessages.length) return;
-              const chunks = strategy === 'chunk'
-                ? splitMessagesByCharBudget(convMessages, targetChars, overlapChars)
-                : [{
-                    start_index: 0,
-                    end_index: Math.max(0, convMessages.length - 1),
-                    message_count: convMessages.length,
-                    approx_chars: convMessages.reduce((s, m) => s + (m.content ? m.content.length : 0), 0),
-                    messages: convMessages
-                  }];
+              const partition = partitionMessagesByExactSourceWindow(convMessages, {
+                fallback_window_id: convId,
+                fallback_window_title: title,
+                source_window_count: conv.source_window_count,
+                source_window_ranges: conv.source_window_ranges
+              });
+              if (!partition.ok) {
+                throw createImportError('MEMO_SOURCE_GEOMETRY_INVALID', partition.status);
+              }
+              const chunks = [];
+              partition.groups.forEach((group) => {
+                const groupChunks = strategy === 'chunk'
+                  ? splitMessagesByCharBudget(group.messages, targetChars, overlapChars)
+                  : [{
+                      start_index: 0,
+                      end_index: Math.max(0, group.messages.length - 1),
+                      message_count: group.messages.length,
+                      approx_chars: group.messages.reduce((s, m) => s + (m.content ? m.content.length : 0), 0),
+                      messages: group.messages
+                    }];
+                groupChunks.forEach(chunk => chunks.push(chunk));
+              });
               chunks.forEach((chunk, chunkIdx) => {
                 const part = `${String(chunkIdx + 1).padStart(3, '0')}/${String(chunks.length).padStart(3, '0')}`;
                 const chunkTitle = `${title} [part ${part}]`;
@@ -5542,13 +5731,15 @@
                   title,
                   strategy,
                   part: chunkIdx + 1,
-                  startIndex: chunk.start_index || 0,
-                  endIndex: chunk.end_index || 0,
+                  startIndex: chunkSource.source_msg_start,
+                  endIndex: chunkSource.source_msg_end,
                   sourceWindowRanges: chunkSource.source_window_ranges
                 });
-                const sourceRef = range.startCompact
-                  ? `window_${range.startCompact}_msg_${String((chunk.start_index || 0) + 1).padStart(3, '0')}`
-                  : `${file.name}#${convId}#${part}`;
+                const sourceWindowToken = normalizeBodyFreeSourceId(chunkSource.source_window_id, 160);
+                if (!sourceWindowToken) {
+                  throw createImportError('MEMO_SOURCE_GEOMETRY_INVALID', 'source_window_geometry_invalid');
+                }
+                const sourceRef = `window_${range.startCompact || 'unknown'}_${sourceWindowToken}_msg_${String(chunkSource.source_msg_start).padStart(3, '0')}`;
                 const text = buildConversationChunkText(chunkTitle, chunk.messages, {
                   sourceRef,
                   sourceBundleId: conv.source_bundle_id || '',
@@ -5569,7 +5760,7 @@
                 const sourceMessageCensus = buildSourceMessageRoleCensus(
                   chunk.messages,
                   convId,
-                  (chunk.start_index || 0) + 1
+                  chunkSource.source_msg_start
                 );
                 out.push({
                   name: `${file.name}::${safeTitle}::part-${String(chunkIdx + 1).padStart(3, '0')}`,
@@ -5593,7 +5784,8 @@
           }
           const fallback = JSON.stringify(json, null, 2).trim();
           return fallback ? [{ name: file.name, text: fallback }] : [];
-        } catch (_) {
+        } catch (error) {
+          if (error && error.code === 'MEMO_SOURCE_GEOMETRY_INVALID') throw error;
           const text = raw.trim();
           return text ? [{ name: file.name, text }] : [];
         }
@@ -7607,6 +7799,7 @@
         '`user` 表示事实主体是人类说话者；`assistant` 表示事实主体是 AI 说话者；`other` 只用于两者都不是的明确第三方、事物、时间、事件或规则。',
         '该字段必须与 anchor_name、fact_key、entity_refs 一致；无法确定时不要输出该 fact。不要把另一位说话者的总结当作主体原话，也不要改指向邻接消息。',
         '## Source evidence coverage（必填）',
+        '当前输入 `[EXTRACT_META]` 中的 `source_ref_hint` 是唯一可写的新引用 scope；必须完整保留其中的 exact window token，只替换 `_msg_` 后的物理消息序号。旧示例 `window_YYYYMMDD_msg_XXX` 仅供历史读取兼容，不得用于本轮新输出。',
         '`source_ref` 不是“主要出处”，而是这条 fact 的完整证据清单。fact_value、note、recurrence_rule、因果、状态变化或结果里用到哪条消息，就必须把那条 exact `window_*_msg_*` 引用写入 `source_ref`；多条引用用 ` | ` 分隔。',
         '同一 chunk 不能替代逐条来源。后续消息里的修正、放弃、转变或结论，不能挂到更早消息的 source_ref 上；应补入后续 exact source_ref，或拆成另一条 fact。若无法让整条事实被所列消息完整支持，就不要输出该 fact。'
       ].filter(Boolean).join('\n\n');

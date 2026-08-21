@@ -88,6 +88,46 @@ function legacySourceRoleHarness() {
   return context;
 }
 
+function legacyMemoGeometryHarness(options = {}) {
+  const strategy = options.strategy || 'window';
+  const targetChars = Number(options.targetChars || 20000);
+  const overlapChars = Number(options.overlapChars || 0);
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext(
+    [
+      `globalThis.getMemoJsonStrategy = () => ${JSON.stringify(strategy)};`,
+      `globalThis.getMemoChunkParams = () => ({ targetChars: ${targetChars}, overlapChars: ${overlapChars} });`,
+      "globalThis.parseOpenAIJson = (value) => value;",
+      "globalThis.getMessageDateRange = () => ({ startDate: '2025-02-01', endDate: '2025-02-01', startCompact: '20250201', endCompact: '20250201' });",
+      "globalThis.slugifySourceToken = (value) => String(value || 'conversation').replace(/[^A-Za-z0-9]+/g, '-');",
+      "globalThis.stableSourceHash = (value) => String(value.length).padStart(10, '0');",
+      "globalThis.buildExportText = (conversations) => conversations.flatMap((conversation) => conversation.messages || []).map((message) => `[SRC window_id=\"${message.source_window_id}\" window_title=\"${message.source_window_title || ''}\" msg=${message.source_msg_index}]\n${String(message.role || 'assistant').toUpperCase()}:\n${message.content}`).join('\\n');",
+      extractFunction(legacyHtml, 'createImportError'),
+      extractFunction(legacyHtml, 'normalizeSourceMessageRole'),
+      extractFunction(legacyHtml, 'normalizeBodyFreeSourceId'),
+      extractFunction(legacyHtml, 'normalizePositiveSourceMsgIndex'),
+      extractFunction(legacyHtml, 'buildSourceMessageRoleCensus'),
+      extractFunction(legacyHtml, 'toSafeInt'),
+      extractFunction(legacyHtml, 'estimateMessageSize'),
+      extractFunction(legacyHtml, 'splitMessagesByCharBudget'),
+      extractFunction(legacyHtml, 'partitionMessagesByExactSourceWindow'),
+      extractFunction(legacyHtml, 'collectChunkSourceRanges'),
+      extractFunction(legacyHtml, 'buildMemoChunkId'),
+      extractFunction(legacyHtml, 'buildConversationChunkText'),
+      extractFunction(legacyHtml, 'parseExtractMetaBlock'),
+      extractFunction(legacyHtml, 'projectPreparedTextSourceGeometry'),
+      extractFunction(legacyHtml, 'readJsonText'),
+      extractFunction(legacyHtml, 'readMemoFileEntries').replace(/^function /, 'async function '),
+      'globalThis.partitionMessagesByExactSourceWindow = partitionMessagesByExactSourceWindow;',
+      'globalThis.projectPreparedTextSourceGeometry = projectPreparedTextSourceGeometry;',
+      'globalThis.readMemoFileEntries = readMemoFileEntries;'
+    ].join('\n'),
+    context
+  );
+  return context;
+}
+
 function legacySqlPromptHarness() {
   const context = {};
   vm.createContext(context);
@@ -210,7 +250,7 @@ test('legacy SQL source lineage requires the exact primary speaker instead of an
       source_msg_start: 11,
       source_msg_end: 12
     },
-    declared_source_ref: 'window_20250201_msg_012'
+    declared_source_ref: 'window_20250201_window-a_msg_012'
   }, census, { user_name: 'A-Yuan', bot_name: 'Companion' });
   assert.equal(assistantSummary.ok, false);
   assert.equal(assistantSummary.status, 'source_primary_role_mismatch');
@@ -226,11 +266,25 @@ test('legacy SQL source lineage requires the exact primary speaker instead of an
       source_msg_start: 11,
       source_msg_end: 12
     },
-    declared_source_ref: 'window_20250201_msg_011 | window_20250201_msg_012'
+    declared_source_ref: 'window_20250201_window-a_msg_011 | window_20250201_window-a_msg_012'
   }, census, { user_name: 'A-Yuan', bot_name: 'Companion' });
   assert.equal(exactUser.ok, true);
   assert.equal(exactUser.status, 'source_role_lineage_exact');
   assert.equal(exactUser.primary_source_role, 'user');
+  const legacyUnbound = projectSqlSourceRoleLineage({
+    ...exactUser,
+    record: {
+      fact_id: 'fact-legacy-unbound',
+      fact_key: 'user_prefers_exact_receipts',
+      anchor_name: 'A-Yuan',
+      source_window_id: 'window-a',
+      source_msg_start: 11,
+      source_msg_end: 11
+    },
+    declared_source_ref: 'window_20250201_msg_011'
+  }, census, { user_name: 'A-Yuan', bot_name: 'Companion' });
+  assert.equal(legacyUnbound.ok, false);
+  assert.equal(legacyUnbound.status, 'source_ref_window_unbound');
 });
 
 test('legacy SQL prompt requires every semantic claim to mirror its exact source messages', () => {
@@ -241,6 +295,8 @@ test('legacy SQL prompt requires every semantic claim to mirror its exact source
   assert.match(prompt, /多条引用用 ` \| ` 分隔/);
   assert.match(prompt, /同一 chunk 不能替代逐条来源/);
   assert.match(prompt, /不能挂到更早消息的 source_ref 上/);
+  assert.match(prompt, /source_ref_hint.*exact window token/);
+  assert.match(prompt, /旧示例 `window_YYYYMMDD_msg_XXX`.*不得用于本轮新输出/);
 });
 
 test('legacy SQL source lineage fails closed on incomplete or ambiguous physical census', () => {
@@ -304,8 +360,8 @@ test('legacy SQL source lineage holds invalid facts before card aggregation', ()
     source_msg_end: 12
   };
   const partition = partitionSqlFactsBySourceRoleLineage([
-    { record: { ...base, fact_id: 'fact-valid' }, declared_source_ref: 'window_20250201_msg_011' },
-    { record: { ...base, fact_id: 'fact-invalid' }, declared_source_ref: 'window_20250201_msg_012' }
+    { record: { ...base, fact_id: 'fact-valid' }, declared_source_ref: 'window_20250201_window-a_msg_011' },
+    { record: { ...base, fact_id: 'fact-invalid' }, declared_source_ref: 'window_20250201_window-a_msg_012' }
   ], census, { user_name: 'A-Yuan', bot_name: 'Companion' });
   assert.deepEqual(Array.from(partition.accepted, (item) => item.fact_id), ['fact-valid']);
   assert.equal(partition.holds.length, 1);
@@ -329,7 +385,7 @@ test('legacy SQL source lineage holds unknown subjects and preserves explicit ot
       source_msg_start: 12,
       source_msg_end: 12
     },
-    declared_source_ref: 'window_20250201_msg_012'
+    declared_source_ref: 'window_20250201_window-a_msg_012'
   };
   const unknown = projectSqlSourceRoleLineage(generic, census, {
     user_name: 'A-Yuan', bot_name: 'Companion'
@@ -339,7 +395,7 @@ test('legacy SQL source lineage holds unknown subjects and preserves explicit ot
   const explicitOther = projectSqlSourceRoleLineage({
     ...generic,
     record: { ...generic.record, source_subject_role: 'other' }
-  }, null, { user_name: 'A-Yuan', bot_name: 'Companion' });
+  }, census, { user_name: 'A-Yuan', bot_name: 'Companion' });
   assert.equal(explicitOther.ok, true);
   assert.equal(explicitOther.status, 'source_subject_role_other');
   const conflict = projectSqlSourceRoleLineage({
@@ -437,4 +493,272 @@ test('legacy JSON export preserves an inexact source role across reimport', () =
   const monthlyPayload = buildSelectedJsonPayload(buildMonthlyNodeConversations([source]));
   assert.equal(monthlyPayload[0].messages[0].source_role_exact, false);
   assert.equal(normalizeMessage(monthlyPayload[0].messages[0])._source_role_exact, false);
+});
+
+test('legacy memo producer emits exact single-window chunks with complete source conservation', async () => {
+  const { readMemoFileEntries } = legacyMemoGeometryHarness();
+  const buildMessages = (sourceWindowId, sourceWindowTitle, start, count) => Array.from({ length: count }, (_, index) => ({
+    role: index % 2 ? 'assistant' : 'user',
+    content: `${sourceWindowId}-${start + index}`,
+    ts: 1,
+    source_window_id: sourceWindowId,
+    source_window_title: sourceWindowTitle,
+    source_msg_index: start + index
+  }));
+  const messagesA = buildMessages('window-a', 'Shared title', 918, 37);
+  const messagesB = buildMessages('window-b', 'Shared title', 201, 27);
+  const conversation = {
+    id: 'month-bundle-202502',
+    title: '2025-02 · 2 windows',
+    source_bundle_id: 'src.2025-02.bundle',
+    source_window_count: 2,
+    source_window_ranges: [
+      { source_window_id: 'window-a', source_window_title: 'Shared title', start_msg_index: 918, end_msg_index: 954, message_count: 37 },
+      { source_window_id: 'window-b', source_window_title: 'Shared title', start_msg_index: 201, end_msg_index: 227, message_count: 27 }
+    ],
+    messages: messagesA.concat(messagesB)
+  };
+  const before = JSON.stringify(conversation);
+  const entries = await readMemoFileEntries({
+    name: 'memsrc_2025-02_bundle.json',
+    text: async () => JSON.stringify([conversation])
+  });
+  assert.equal(entries.length, 2);
+  assert.deepEqual(Array.from(entries, entry => entry.source_window_id), ['window-a', 'window-b']);
+  assert.deepEqual(Array.from(entries, entry => [entry.source_msg_start, entry.source_msg_end]), [[918, 954], [201, 227]]);
+  assert.deepEqual(Array.from(entries, entry => entry._source_message_census.message_count), [37, 27]);
+  assert.equal(entries.reduce((sum, entry) => sum + entry._source_message_census.message_count, 0), 64);
+  assert.equal(entries[0].source_ref, 'window_20250201_window-a_msg_918');
+  assert.equal(entries[1].source_ref, 'window_20250201_window-b_msg_201');
+  assert.equal(entries.every(entry => entry._source_message_census.window_count === 1), true);
+  const coordinates = entries.flatMap(entry => Array.from(
+    entry._source_message_census.messages,
+    row => `${row.source_window_id}:${row.source_msg_index}`
+  ));
+  assert.equal(new Set(coordinates).size, 64);
+  entries.forEach((entry) => {
+    const markerIndexes = [...entry.text.matchAll(/^\[SRC\s+[^\]]*msg=(\d+)[^\]]*\]$/gm)].map(match => Number(match[1]));
+    assert.equal(markerIndexes.length, entry._source_message_census.message_count);
+    assert.equal(markerIndexes.every(index => index >= entry.source_msg_start && index <= entry.source_msg_end), true);
+    assert.equal(entry.text.includes(`window_id="${entry.source_window_id}"`), true);
+    assert.equal(entry.text.includes('window_title="Shared title"'), true);
+  });
+  assert.equal(JSON.stringify(conversation), before);
+});
+
+test('legacy memo char splitting never crosses an exact source window', async () => {
+  const { readMemoFileEntries } = legacyMemoGeometryHarness({ strategy: 'chunk', targetChars: 1000, overlapChars: 0 });
+  const messages = [];
+  for (const sourceWindowId of ['window-a', 'window-b']) {
+    for (let index = 1; index <= 6; index += 1) {
+      messages.push({
+        role: 'user',
+        content: `${sourceWindowId}-${index}-${'x'.repeat(420)}`,
+        ts: index,
+        source_window_id: sourceWindowId,
+        source_window_title: 'Same display title',
+        source_msg_index: index
+      });
+    }
+  }
+  const entries = await readMemoFileEntries({
+    name: 'two-windows.json',
+    text: async () => JSON.stringify([{
+      id: 'month-bundle',
+      title: 'Two windows',
+      source_window_count: 2,
+      source_window_ranges: [
+        { source_window_id: 'window-a', source_window_title: 'Same display title', start_msg_index: 1, end_msg_index: 6, message_count: 6 },
+        { source_window_id: 'window-b', source_window_title: 'Same display title', start_msg_index: 1, end_msg_index: 6, message_count: 6 }
+      ],
+      messages
+    }])
+  });
+  assert.ok(entries.length > 2);
+  assert.equal(entries.every(entry => entry._source_message_census.window_count === 1), true);
+  assert.equal(entries.every(entry => (
+    entry._source_message_census.messages.every(row => row.source_window_id === entry.source_window_id)
+  )), true);
+  assert.deepEqual([...new Set(entries.map(entry => entry.source_window_id))], ['window-a', 'window-b']);
+  assert.equal(entries.reduce((sum, entry) => sum + entry._source_message_census.message_count, 0), 12);
+});
+
+test('legacy memo producer fails closed when a multi-window message lacks exact geometry', async () => {
+  const { readMemoFileEntries } = legacyMemoGeometryHarness();
+  const file = {
+    name: 'invalid-month.json',
+    text: async () => JSON.stringify([{
+      id: 'month-bundle',
+      title: 'Invalid month',
+      source_window_count: 2,
+      source_window_ranges: [
+        { source_window_id: 'window-a', source_window_title: 'A', start_msg_index: 1, end_msg_index: 1, message_count: 1 },
+        { source_window_id: 'window-b', source_window_title: 'B', start_msg_index: 1, end_msg_index: 1, message_count: 1 }
+      ],
+      messages: [
+        { role: 'user', content: 'exact', source_window_id: 'window-a', source_window_title: 'A', source_msg_index: 1 },
+        { role: 'assistant', content: 'missing id', source_window_title: 'B', source_msg_index: 1 }
+      ]
+    }])
+  };
+  await assert.rejects(() => readMemoFileEntries(file), error => error && error.code === 'MEMO_SOURCE_GEOMETRY_INVALID');
+});
+
+test('legacy memo producer rejects partial window and message coordinates', async () => {
+  const { readMemoFileEntries } = legacyMemoGeometryHarness();
+  const read = (messages) => readMemoFileEntries({
+    name: 'partial-coordinates.json',
+    text: async () => JSON.stringify([{ id: 'ordinary-window', title: 'Ordinary', messages }])
+  });
+  await assert.rejects(() => read([
+    { role: 'user', content: 'first', source_window_id: 'window-a', source_msg_index: 1 },
+    { role: 'assistant', content: 'second', source_msg_index: 2 }
+  ]), error => error && error.code === 'MEMO_SOURCE_GEOMETRY_INVALID');
+  await assert.rejects(() => read([
+    { role: 'user', content: 'first', source_window_id: 'window-a', source_msg_index: 1 },
+    { role: 'assistant', content: 'second', source_window_id: 'window-a' }
+  ]), error => error && error.code === 'MEMO_SOURCE_GEOMETRY_INVALID');
+  const raw = await read([
+    { role: 'user', content: 'first' },
+    { role: 'assistant', content: 'second' }
+  ]);
+  assert.equal(raw.length, 1);
+  assert.equal(raw[0].source_window_id, 'ordinary-window');
+  assert.deepEqual(Array.from(raw[0]._source_message_census.messages, row => row.source_msg_index), [1, 2]);
+});
+
+test('legacy memo producer rejects gapped and out-of-order physical message indexes', async () => {
+  const { readMemoFileEntries } = legacyMemoGeometryHarness();
+  const read = (indexes) => readMemoFileEntries({
+    name: 'invalid-index-order.json',
+    text: async () => JSON.stringify([{
+      id: 'window-a',
+      title: 'Window A',
+      source_window_count: 1,
+      source_window_ranges: [{
+        source_window_id: 'window-a',
+        source_window_title: 'Window A',
+        start_msg_index: 1,
+        end_msg_index: 3,
+        message_count: indexes.length
+      }],
+      messages: indexes.map(index => ({
+        role: 'user',
+        content: `message-${index}`,
+        source_window_id: 'window-a',
+        source_window_title: 'Window A',
+        source_msg_index: index
+      }))
+    }])
+  });
+  for (const indexes of [[1, 3], [2, 1, 3]]) {
+    await assert.rejects(
+      () => read(indexes),
+      error => error && error.code === 'MEMO_SOURCE_GEOMETRY_INVALID'
+    );
+  }
+});
+
+test('legacy memo source refs bind the exact window even at the same date and message index', async () => {
+  const { readMemoFileEntries } = legacyMemoGeometryHarness();
+  const { parseSourceRoleRef, buildSourceMessageRoleCensus, projectSqlSourceRoleLineage } = legacySourceRoleHarness();
+  const entries = await readMemoFileEntries({
+    name: 'same-coordinate.json',
+    text: async () => JSON.stringify([{
+      id: 'month-bundle',
+      title: 'Same coordinate',
+      source_window_count: 2,
+      source_window_ranges: [
+        { source_window_id: 'window-a', source_window_title: 'Same', start_msg_index: 1, end_msg_index: 1, message_count: 1 },
+        { source_window_id: 'window-b', source_window_title: 'Same', start_msg_index: 1, end_msg_index: 1, message_count: 1 }
+      ],
+      messages: [
+        { role: 'user', content: 'a', ts: 1, source_window_id: 'window-a', source_window_title: 'Same', source_msg_index: 1 },
+        { role: 'user', content: 'b', ts: 1, source_window_id: 'window-b', source_window_title: 'Same', source_msg_index: 1 }
+      ]
+    }])
+  });
+  assert.deepEqual(Array.from(entries, entry => entry.source_ref), [
+    'window_20250201_window-a_msg_001',
+    'window_20250201_window-b_msg_001'
+  ]);
+  assert.notEqual(entries[0].source_ref, entries[1].source_ref);
+  assert.equal(parseSourceRoleRef(entries[0].source_ref).ok, true);
+  assert.equal(parseSourceRoleRef(entries[0].source_ref).window_token, 'window-a');
+  assert.equal(parseSourceRoleRef('window_20250201_msg_001').ok, true);
+  assert.equal(parseSourceRoleRef('window_20250201_msg_001').window_token, '');
+  const census = buildSourceMessageRoleCensus([
+    { role: 'user', source_window_id: 'window-b', source_msg_index: 1 }
+  ]);
+  const mismatch = projectSqlSourceRoleLineage({
+    record: {
+      fact_id: 'fact-window-mismatch',
+      fact_key: 'user_preference',
+      anchor_name: 'A-Yuan',
+      source_window_id: 'window-b',
+      source_msg_start: 1,
+      source_msg_end: 1
+    },
+    declared_source_ref: entries[0].source_ref
+  }, census, { user_name: 'A-Yuan', bot_name: 'Companion' });
+  assert.equal(mismatch.status, 'source_ref_window_mismatch');
+});
+
+test('legacy mixed prepared chunks remain invalid instead of being migrated', async () => {
+  const { readMemoFileEntries } = legacyMemoGeometryHarness();
+  const mixed = [
+    '[EXTRACT_META]',
+    'chunk_id_hint: chunk.legacy.mixed',
+    'source_window_id_hint: window-a',
+    'source_window_title_hint: Window A',
+    'source_msg_start_hint: 10',
+    'source_msg_end_hint: 11',
+    '[/EXTRACT_META]',
+    '',
+    '[SRC window="Window A" msg=10]',
+    'USER:',
+    'first',
+    '[SRC window="Window B" msg=20]',
+    'ASSISTANT:',
+    'second'
+  ].join('\n');
+  await assert.rejects(
+    () => readMemoFileEntries({ name: 'legacy-mixed.md', text: async () => mixed }),
+    error => error && error.code === 'MEMO_SOURCE_GEOMETRY_INVALID'
+  );
+  assert.equal(mixed.includes('Window B'), true);
+});
+
+test('legacy prepared chunk geometry rejects duplicate, missing, and out-of-order markers', async () => {
+  const { readMemoFileEntries } = legacyMemoGeometryHarness();
+  const prepared = (indexes) => [
+    '[EXTRACT_META]',
+    'chunk_id_hint: chunk.legacy.geometry',
+    'source_window_id_hint: window-a',
+    'source_window_title_hint: Window A',
+    'source_msg_start_hint: 1',
+    'source_msg_end_hint: 3',
+    '[/EXTRACT_META]',
+    '',
+    ...indexes.flatMap(index => [
+      `[SRC window_id="window-a" window_title="Window A" msg=${index}]`,
+      'USER:',
+      `message-${index}`
+    ])
+  ].join('\n');
+  for (const indexes of [[1, 1, 3], [1, 3], [1, 3, 2]]) {
+    await assert.rejects(
+      () => readMemoFileEntries({ name: 'legacy-geometry.md', text: async () => prepared(indexes) }),
+      error => error && error.code === 'MEMO_SOURCE_GEOMETRY_INVALID'
+    );
+  }
+  const exact = await readMemoFileEntries({ name: 'legacy-exact.md', text: async () => prepared([1, 2, 3]) });
+  assert.equal(exact.length, 1);
+  assert.equal(exact[0].source_msg_start, 1);
+  assert.equal(exact[0].source_msg_end, 3);
+  const crossWindow = prepared([1, 2, 3]).replace(/window_id="window-a"/, 'window_id="window-b"');
+  await assert.rejects(
+    () => readMemoFileEntries({ name: 'legacy-cross-window.md', text: async () => crossWindow }),
+    error => error && error.code === 'MEMO_SOURCE_GEOMETRY_INVALID'
+  );
 });

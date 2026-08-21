@@ -146,6 +146,14 @@ message's lineage. This strengthens new extraction behavior but does not
 retroactively certify old artifacts: semantic support still requires review,
 and source-weak historical rows remain reconciliation candidates.
 
+New structured-history preparation also keeps every extraction chunk inside
+one exact source window. Month bundles may contain many windows, but they are
+partitioned before character-budget splitting; the chunk header, source
+markers, message range, and role census therefore describe the same physical
+window. A multi-window record with missing coordinates stays unprocessed.
+Older mixed-window chunks are not rewritten or silently upgraded and must be
+regenerated from their structured source before they can be treated as exact.
+
 The front UI reads the existing shared persona workspace instead of creating a
 second identity store. If that workspace is empty or partial, Driftstone still
 allows source preparation, but persona/voice-dependent Warm-card growth stays
