@@ -146,6 +146,14 @@ message's lineage. This strengthens new extraction behavior but does not
 retroactively certify old artifacts: semantic support still requires review,
 and source-weak historical rows remain reconciliation candidates.
 
+The same closed geometry now protects every newly reviewed Persona row that
+chooses to carry a `source_ref`. A nonempty reference must resolve to the one
+physical window and contiguous message range of the prepared chunk before the
+row can be merged or written; cross-window, out-of-range, malformed, duplicate,
+or legacy-unbound references stay in a body-free HOLD projection. Persona rows
+may still omit `source_ref` instead of inventing one. Existing reviewed exports
+remain read-only and are neither rewritten nor retroactively certified.
+
 New structured-history preparation also keeps every extraction chunk inside
 one exact source window. Month bundles may contain many windows, but they are
 partitioned before character-budget splitting; the chunk header, source

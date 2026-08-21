@@ -2419,6 +2419,115 @@
       };
     }
 
+    function projectReviewedSourceRefGeometry(value, sourceMeta = null) {
+      const raw = String(value || '').trim();
+      const safeMeta = sourceMeta && typeof sourceMeta === 'object' ? sourceMeta : {};
+      const declaredWindowId = String(safeMeta.source_window_id || '').trim();
+      const sourceWindowId = normalizeBodyFreeSourceId(declaredWindowId);
+      const sourceMsgStart = Number.isFinite(Number(safeMeta.source_msg_start))
+        ? Math.floor(Number(safeMeta.source_msg_start))
+        : 0;
+      const sourceMsgEnd = Number.isFinite(Number(safeMeta.source_msg_end))
+        ? Math.floor(Number(safeMeta.source_msg_end))
+        : 0;
+      const base = {
+        schema_version: 'driftstone.reviewed_source_ref_geometry.v1',
+        ok: false,
+        status: '',
+        source_window_id: sourceWindowId,
+        source_msg_start: sourceMsgStart,
+        source_msg_end: sourceMsgEnd,
+        source_ref_count: 0,
+        primary_source_msg_index: 0,
+        body_included: false
+      };
+      if (!raw) return { ...base, ok: true, status: 'source_ref_blank' };
+      if (!declaredWindowId || !sourceWindowId) return { ...base, status: 'source_window_invalid' };
+      if (sourceMsgStart <= 0 || sourceMsgEnd < sourceMsgStart) {
+        return { ...base, status: 'source_message_range_invalid' };
+      }
+      const sourceRefHint = parseSourceRoleRef(safeMeta.source_ref);
+      if (
+        !sourceRefHint.ok
+        || !sourceRefHint.window_token
+        || sourceRefHint.window_token !== sourceWindowId
+        || sourceRefHint.msg !== sourceMsgStart
+      ) {
+        return { ...base, status: 'source_ref_hint_invalid' };
+      }
+      const census = safeMeta._source_message_census;
+      if (!census || census.schema_version !== 'driftstone.source_message_role_census.v1' || census.observation_complete !== true) {
+        return { ...base, status: 'source_census_incomplete' };
+      }
+      const rows = Array.isArray(census.messages) ? census.messages : [];
+      if (Number(census.message_count) !== rows.length || Number(census.window_count) !== 1) {
+        return { ...base, status: 'source_census_incomplete' };
+      }
+      const windowIds = Array.from(new Set(rows.map((row) => String(row && row.source_window_id || '').trim()).filter(Boolean)));
+      if (windowIds.length !== 1 || windowIds[0] !== sourceWindowId) {
+        return { ...base, status: 'source_window_mismatch' };
+      }
+      const indexes = rows
+        .map((row) => Number(row && row.source_msg_index))
+        .filter((index) => Number.isFinite(index) && index > 0)
+        .map((index) => Math.floor(index))
+        .sort((a, b) => a - b);
+      const expectedCount = sourceMsgEnd - sourceMsgStart + 1;
+      if (
+        indexes.length !== expectedCount
+        || indexes.some((index, offset) => index !== sourceMsgStart + offset)
+      ) {
+        return { ...base, status: 'source_message_range_mismatch' };
+      }
+      const refParts = raw.split(/\s*\|\s*/).map((part) => part.trim()).filter(Boolean);
+      const parsedRefs = refParts.map(parseSourceRoleRef);
+      if (!parsedRefs.length || parsedRefs.some((ref) => !ref.ok)) return { ...base, status: 'source_ref_invalid' };
+      if (parsedRefs.some((ref) => !ref.window_token)) return { ...base, status: 'source_ref_window_unbound' };
+      const uniqueRefs = new Set(parsedRefs.map((ref) => `${ref.scope}\u0000${ref.msg}`));
+      if (uniqueRefs.size !== parsedRefs.length) return { ...base, status: 'source_ref_duplicate' };
+      const projected = {
+        ...base,
+        source_ref_count: parsedRefs.length,
+        primary_source_msg_index: parsedRefs[0].msg
+      };
+      for (const ref of parsedRefs) {
+        if (ref.window_token !== sourceWindowId) return { ...projected, status: 'source_ref_window_mismatch' };
+        if (ref.scope !== sourceRefHint.scope) return { ...projected, status: 'source_ref_scope_mismatch' };
+        if (ref.msg < sourceMsgStart || ref.msg > sourceMsgEnd) {
+          return { ...projected, status: 'source_ref_outside_range' };
+        }
+        const matches = rows.filter((row) => (
+          String(row && row.source_window_id || '').trim() === sourceWindowId
+          && Number(row && row.source_msg_index) === ref.msg
+        ));
+        if (matches.length !== 1) return { ...projected, status: 'source_ref_not_exact' };
+      }
+      return { ...projected, ok: true, status: 'source_ref_geometry_exact' };
+    }
+
+    function partitionReviewedRowsBySourceRefGeometry(candidates, sourceMeta = null) {
+      const accepted = [];
+      const holds = [];
+      (Array.isArray(candidates) ? candidates : []).forEach((candidate) => {
+        const safeCandidate = candidate && typeof candidate === 'object' ? candidate : {};
+        const record = safeCandidate.record && typeof safeCandidate.record === 'object' ? safeCandidate.record : {};
+        const declaredSourceRef = String(safeCandidate.declared_source_ref || '').trim();
+        const projection = projectReviewedSourceRefGeometry(declaredSourceRef, sourceMeta);
+        if (!projection.ok) {
+          holds.push(projection);
+          return;
+        }
+        const next = { ...record, source_ref: declaredSourceRef };
+        if (projection.status === 'source_ref_geometry_exact') {
+          next.source_window_id = projection.source_window_id;
+          next.source_msg_start = projection.source_msg_start;
+          next.source_msg_end = projection.source_msg_end;
+        }
+        accepted.push(next);
+      });
+      return { accepted, holds };
+    }
+
     function projectSqlSourceRoleLineage(candidate, census, identity = {}) {
       const safeCandidate = candidate && typeof candidate === 'object' ? candidate : {};
       const record = safeCandidate.record && typeof safeCandidate.record === 'object' ? safeCandidate.record : {};
@@ -7769,6 +7878,15 @@
       ].join('\n');
     }
 
+    function buildPersonaSourceRefGateBlock() {
+      return [
+        '## Source evidence geometry',
+        '- `source_ref` 可以省略；没有足够把握时请整行省略，不要猜测或补造。',
+        '- 如果填写，只能沿用当前输入 `source_ref` / `source_ref_hint` 的 exact window token，并把 `_msg_` 后序号限定在当前片段的物理消息范围内。',
+        '- 多条证据用 ` | ` 分隔；不要引用另一个窗口、范围外消息或旧式无 window token 的引用。'
+      ].join('\n');
+    }
+
     function buildPersonaLanguageFingerprintBlock() {
       const charName = getMainBotName();
       const body = stripFingerprintRuntimeGate(getMainLanguageFingerprint());
@@ -7787,6 +7905,7 @@
       return [
         fillPersonaPlaceholders((basePrompt || '').trim()),
         buildPersonaRuntimeGateBlock(),
+        buildPersonaSourceRefGateBlock(),
         buildPersonaLanguageFingerprintBlock()
       ].filter(Boolean).join('\n\n');
     }
@@ -14580,7 +14699,7 @@
       addWorkbenchRows(kind, newItems, {
         entryName: entry && entry.name ? entry.name : '',
         entryIndex,
-        source_ref: entry && entry.source_ref ? entry.source_ref : '',
+        source_ref: kind === 'persona' ? '' : (entry && entry.source_ref ? entry.source_ref : ''),
         source_bundle_id: entry && entry.source_bundle_id ? entry.source_bundle_id : '',
         source_md_ref: entry && entry.source_md_ref ? entry.source_md_ref : '',
         source_manifest_kind: entry && entry.source_manifest_kind ? entry.source_manifest_kind : '',
@@ -16111,7 +16230,7 @@
         const cardCount = Array.isArray(extractionState.sql.cards) ? extractionState.sql.cards.length : 0;
         return `SQL 进度 ${stat.processed}/${totalEntries} | 失败 ${stat.failed} | 重试 ${stat.retries} | 来源HOLD ${stat.lineageHeld || 0} | 入 raw ${stat.incoming} 追加 raw ${stat.added} | 当前 fact/card ${stat.total}/${cardCount}`;
       }
-      return `${kind.toUpperCase()} 进度 ${stat.processed}/${totalEntries} | 失败 ${stat.failed} | 重试 ${stat.retries} | 入 ${stat.incoming} 追加 ${stat.added} | 当前累计 ${stat.total}`;
+      return `${kind.toUpperCase()} 进度 ${stat.processed}/${totalEntries} | 失败 ${stat.failed} | 重试 ${stat.retries} | 来源HOLD ${stat.lineageHeld || 0} | 入 ${stat.incoming} 追加 ${stat.added} | 当前累计 ${stat.total}`;
     }
 
     function renderMemoRunTrace() {
@@ -16171,7 +16290,7 @@
         );
       } else {
         memoRunTraceState.lines.push(
-          `[${kind.toUpperCase()} ${entryIndex}/${totalEntries}] ${entryName} | 入${Number(s.incoming || 0)} 追加${Number(s.added || 0)} 重试${retryCount} 累计${stat.total}`
+          `[${kind.toUpperCase()} ${entryIndex}/${totalEntries}] ${entryName} | 入${Number(s.incoming || 0)} 追加${Number(s.added || 0)} 来源HOLD${Number(s.lineageHeld || 0)} 重试${retryCount} 累计${stat.total}`
         );
       }
       renderMemoRunTrace();
@@ -16425,28 +16544,43 @@
         }
         if (kind === 'persona') {
           errorStage = 'persona_parse';
-          const parsedPersona = parseMemoBlocks(raw).map(item => sanitizeLayerRecord(item, sourceRef, sourceMeta));
-          if (raw.trim() && !parsedPersona.length) {
+          const rawPersona = parseMemoBlocks(raw);
+          if (raw.trim() && !rawPersona.length) {
             const preview = raw.replace(/\s+/g, ' ').trim().slice(0, 220);
             const suffix = raw.trim().length > preview.length ? '...' : '';
             errorStage = 'persona_parse_format';
             throw new Error(`Persona 输出格式未识别（需使用【MEMO｜类型｜对象名】）。预览：${preview}${suffix}`);
           }
+          const candidates = rawPersona.map((item) => ({
+            record: sanitizeLayerRecord(item, '', sourceMeta),
+            declared_source_ref: String(item && item.source_ref || '').trim()
+          }));
+          const partition = partitionReviewedRowsBySourceRefGeometry(candidates, {
+            ...(sourceMeta || {}),
+            source_ref: sourceRef
+          });
+          const parsedPersona = partition.accepted;
+          const currentLineageHeld = partition.holds.length;
+          const existingHolds = append && Array.isArray(extractionState[kind].source_lineage_holds)
+            ? extractionState[kind].source_lineage_holds
+            : [];
+          const sourceLineageHolds = existingHolds.concat(partition.holds);
           const existing = (append && Array.isArray(extractionState[kind].data)) ? extractionState[kind].data : [];
           const merged = append ? existing.concat(parsedPersona) : parsedPersona;
           errorStage = 'persona_merge';
           extractionState[kind] = merged.length
-            ? { raw: formatPersonaRaw(merged), data: merged, status: 'ok' }
-            : { raw: '', data: [], status: 'empty' };
+            ? { raw: formatPersonaRaw(merged), data: merged, source_lineage_holds: sourceLineageHolds, status: 'ok' }
+            : { raw: '', data: [], source_lineage_holds: sourceLineageHolds, status: sourceLineageHolds.length ? 'held' : 'empty' };
           renderKindResult(kind);
           return {
             ok: true,
             stats: {
               kind,
-              incoming: parsedPersona.length,
+              incoming: rawPersona.length,
               added: parsedPersona.length,
               merged: 0,
               total: merged.length,
+              lineageHeld: currentLineageHeld,
               batchDropped: 0,
               historyDropped: 0
             },
@@ -16519,7 +16653,7 @@
           extractionState[kind]
           && (
             (Array.isArray(extractionState[kind].data) && extractionState[kind].data.length)
-            || (kind === 'sql' && Array.isArray(extractionState[kind].source_lineage_holds) && extractionState[kind].source_lineage_holds.length)
+            || (Array.isArray(extractionState[kind].source_lineage_holds) && extractionState[kind].source_lineage_holds.length)
           )
         );
         if (append && hasRetainedState) {

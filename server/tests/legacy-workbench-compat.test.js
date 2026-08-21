@@ -70,6 +70,8 @@ function legacySourceRoleHarness() {
       extractFunction(legacyHtml, 'buildSourceMessageRoleCensus'),
       extractFunction(legacyHtml, 'inferSqlSourceSubjectRole'),
       extractFunction(legacyHtml, 'parseSourceRoleRef'),
+      extractFunction(legacyHtml, 'projectReviewedSourceRefGeometry'),
+      extractFunction(legacyHtml, 'partitionReviewedRowsBySourceRefGeometry'),
       extractFunction(legacyHtml, 'projectSqlSourceRoleLineage'),
       extractFunction(legacyHtml, 'partitionSqlFactsBySourceRoleLineage'),
       extractFunction(legacyHtml, 'buildMergedTimelineConversation'),
@@ -77,11 +79,26 @@ function legacySourceRoleHarness() {
       extractFunction(legacyHtml, 'buildSelectedJsonPayload'),
       'globalThis.normalizeMessage = normalizeMessage;',
       'globalThis.buildSourceMessageRoleCensus = buildSourceMessageRoleCensus;',
+      'globalThis.projectReviewedSourceRefGeometry = projectReviewedSourceRefGeometry;',
+      'globalThis.partitionReviewedRowsBySourceRefGeometry = partitionReviewedRowsBySourceRefGeometry;',
       'globalThis.projectSqlSourceRoleLineage = projectSqlSourceRoleLineage;',
       'globalThis.partitionSqlFactsBySourceRoleLineage = partitionSqlFactsBySourceRoleLineage;',
       'globalThis.buildMergedTimelineConversation = buildMergedTimelineConversation;',
       'globalThis.buildMonthlyNodeConversations = buildMonthlyNodeConversations;',
       'globalThis.buildSelectedJsonPayload = buildSelectedJsonPayload;'
+    ].join('\n'),
+    context
+  );
+  return context;
+}
+
+function legacyPersonaPromptHarness() {
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext(
+    [
+      extractFunction(legacyHtml, 'buildPersonaSourceRefGateBlock'),
+      'globalThis.buildPersonaSourceRefGateBlock = buildPersonaSourceRefGateBlock;'
     ].join('\n'),
     context
   );
@@ -285,6 +302,95 @@ test('legacy SQL source lineage requires the exact primary speaker instead of an
   }, census, { user_name: 'A-Yuan', bot_name: 'Companion' });
   assert.equal(legacyUnbound.ok, false);
   assert.equal(legacyUnbound.status, 'source_ref_window_unbound');
+});
+
+test('legacy reviewed-row source refs stay inside the exact prepared source geometry', () => {
+  const {
+    buildSourceMessageRoleCensus,
+    projectReviewedSourceRefGeometry,
+    partitionReviewedRowsBySourceRefGeometry
+  } = legacySourceRoleHarness();
+  const sourceMeta = {
+    source_ref: 'window_20250201_window-a_msg_524',
+    source_window_id: 'window-a',
+    source_msg_start: 524,
+    source_msg_end: 526,
+    _source_message_census: buildSourceMessageRoleCensus([
+      { role: 'user', source_window_id: 'window-a', source_msg_index: 524 },
+      { role: 'assistant', source_window_id: 'window-a', source_msg_index: 525 },
+      { role: 'user', source_window_id: 'window-a', source_msg_index: 526 }
+    ])
+  };
+
+  const blank = projectReviewedSourceRefGeometry('', sourceMeta);
+  assert.equal(blank.ok, true);
+  assert.equal(blank.status, 'source_ref_blank');
+  assert.equal(blank.source_ref_count, 0);
+
+  const exact = projectReviewedSourceRefGeometry(
+    'window_20250201_window-a_msg_524 | window_20250201_window-a_msg_526',
+    sourceMeta
+  );
+  assert.equal(exact.ok, true);
+  assert.equal(exact.status, 'source_ref_geometry_exact');
+  assert.equal(exact.source_window_id, 'window-a');
+  assert.equal(exact.source_msg_start, 524);
+  assert.equal(exact.source_msg_end, 526);
+  assert.equal(exact.source_ref_count, 2);
+  assert.equal(exact.body_included, false);
+
+  const outside = projectReviewedSourceRefGeometry('window_20250201_window-a_msg_318', sourceMeta);
+  assert.equal(outside.ok, false);
+  assert.equal(outside.status, 'source_ref_outside_range');
+  const crossWindow = projectReviewedSourceRefGeometry('window_20250201_window-b_msg_524', sourceMeta);
+  assert.equal(crossWindow.ok, false);
+  assert.equal(crossWindow.status, 'source_ref_window_mismatch');
+  const crossScope = projectReviewedSourceRefGeometry('window_19990101_window-a_msg_524', sourceMeta);
+  assert.equal(crossScope.ok, false);
+  assert.equal(crossScope.status, 'source_ref_scope_mismatch');
+  const invalid = projectReviewedSourceRefGeometry('PRIVATE BODY', sourceMeta);
+  assert.equal(invalid.ok, false);
+  assert.equal(invalid.status, 'source_ref_invalid');
+  assert.equal(JSON.stringify(invalid).includes('PRIVATE BODY'), false);
+
+  const partition = partitionReviewedRowsBySourceRefGeometry([
+    { record: { memo_id: 'blank', source_ref: '' }, declared_source_ref: '' },
+    { record: { memo_id: 'exact' }, declared_source_ref: 'window_20250201_window-a_msg_525' },
+    { record: { memo_id: 'outside' }, declared_source_ref: 'window_20250201_window-a_msg_296' },
+    { record: { memo_id: 'cross' }, declared_source_ref: 'window_20250201_window-b_msg_525' }
+  ], sourceMeta);
+  assert.deepEqual(Array.from(partition.accepted, (row) => row.memo_id), ['blank', 'exact']);
+  assert.equal(partition.accepted[0].source_ref, '');
+  assert.equal(partition.accepted[1].source_window_id, 'window-a');
+  assert.equal(partition.accepted[1].source_msg_start, 524);
+  assert.equal(partition.accepted[1].source_msg_end, 526);
+  assert.deepEqual(Array.from(partition.holds, (hold) => hold.status), [
+    'source_ref_outside_range',
+    'source_ref_window_mismatch'
+  ]);
+  assert.equal(partition.holds.every((hold) => hold.body_included === false), true);
+  assert.equal(JSON.stringify(partition.holds).includes('PRIVATE BODY'), false);
+});
+
+test('legacy Persona source refs require exact current geometry before reviewed-row writes', () => {
+  const prompt = legacyPersonaPromptHarness().buildPersonaSourceRefGateBlock();
+  assert.match(prompt, /`source_ref` 可以省略/);
+  assert.match(prompt, /exact window token/);
+  assert.match(prompt, /当前片段的物理消息范围/);
+
+  const runSource = extractFunction(legacyHtml, 'runExtraction');
+  const personaStart = runSource.indexOf("if (kind === 'persona')");
+  const personaSource = runSource.slice(personaStart, runSource.indexOf('} else {', personaStart));
+  const gateIndex = personaSource.indexOf('partitionReviewedRowsBySourceRefGeometry');
+  const mergeIndex = personaSource.indexOf('formatPersonaRaw(merged)');
+  assert.ok(gateIndex >= 0);
+  assert.ok(mergeIndex > gateIndex);
+  assert.match(personaSource, /source_lineage_holds/);
+  assert.match(personaSource, /lineageHeld: currentLineageHeld/);
+  assert.match(personaSource, /source_ref: sourceRef/);
+
+  const writeSource = extractFunction(legacyHtml, 'appendWorkbenchFromExtraction');
+  assert.match(writeSource, /source_ref: kind === 'persona' \? '' :/);
 });
 
 test('legacy SQL prompt requires every semantic claim to mirror its exact source messages', () => {
